@@ -131,6 +131,7 @@ orbit ALL=(root) NOPASSWD: /usr/sbin/a2enmod, /usr/sbin/a2ensite
 orbit ALL=(root) NOPASSWD: /usr/bin/apt-get
 orbit ALL=(root) NOPASSWD: /usr/bin/mysql, /usr/bin/mariadb
 orbit ALL=(root) NOPASSWD: /usr/bin/certbot
+orbit ALL=(root) NOPASSWD: /usr/bin/test, /bin/test
 orbit ALL=(root) NOPASSWD: /bin/rm, /usr/bin/rm
 orbit ALL=(root) NOPASSWD: /usr/bin/pkill, /bin/pkill
 orbit ALL=(root) NOPASSWD: /usr/bin/fuser, /bin/fuser
