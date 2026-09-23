@@ -69,31 +69,49 @@ export function defaultDbName(serverName) {
 }
 
 /**
- * Legt DB + App-User an (root-Passwort oder sudo mysql).
+ * Legt DB + App-User an.
+ * Standard: sudo mysql (auth_socket / systemd) — kein root-Passwort nötig.
+ * Nur wenn ein root-Passwort gesetzt ist: TCP-Login als root.
  */
 export async function provisionMysqlDatabase(opts) {
   const dbName = safeIdent(opts.dbName);
   const appUser = safeIdent(opts.appUser || 'orbit');
   const appPass = String(opts.appPassword || randomBytes(10).toString('base64url'));
+  const passSql = appPass.replace(/'/g, "''");
   const sql = [
     `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
-    `CREATE USER IF NOT EXISTS '${appUser}'@'localhost' IDENTIFIED BY '${appPass.replace(/'/g, "''")}';`,
+    `CREATE USER IF NOT EXISTS '${appUser}'@'localhost' IDENTIFIED BY '${passSql}';`,
+    `ALTER USER '${appUser}'@'localhost' IDENTIFIED BY '${passSql}';`,
     `GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${appUser}'@'localhost';`,
     'FLUSH PRIVILEGES;',
   ].join(' ');
 
-  if (opts.rootPassword !== undefined && opts.rootPassword !== null) {
+  const rootPw = opts.rootPassword == null ? '' : String(opts.rootPassword).trim();
+
+  if (rootPw) {
     const conn = await mysql.createConnection({
       host: '127.0.0.1',
       user: 'root',
-      password: String(opts.rootPassword),
+      password: rootPw,
     });
-    for (const stmt of sql.split(';').filter(Boolean)) {
-      await conn.query(stmt);
+    try {
+      for (const stmt of sql.split(';').filter(Boolean)) {
+        await conn.query(stmt);
+      }
+    } finally {
+      await conn.end();
     }
-    await conn.end();
   } else {
-    await exec('sudo', ['-n', 'mysql', '-e', sql], { timeout: 30_000 });
+    try {
+      await exec('sudo', ['-n', 'mysql', '-e', sql], { timeout: 30_000 });
+    } catch (err) {
+      const msg = String(err?.stderr || err?.message || err);
+      throw new Error(
+        `MySQL per sudo fehlgeschlagen (${msg.slice(0, 180)}). `
+        + 'Root nutzt oft auth_socket — leer lassen reicht, wenn orbit sudo mysql darf. '
+        + 'Sonst root-Passwort eintragen.',
+      );
+    }
   }
 
   const dsn = `mysql://${encodeURIComponent(appUser)}:${encodeURIComponent(appPass)}@127.0.0.1/${dbName}?charset=utf8mb4`;

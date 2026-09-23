@@ -230,7 +230,9 @@ export default function Setup({ onDone, userName = '' }) {
           dbUser: dbMode === 'create' ? (dbUser.trim() || undefined) : undefined,
           dbPassword: dbMode === 'create' ? (dbPassword.trim() || undefined) : undefined,
           mysqlConnection: dbMode === 'reuse' ? mysqlConnection.trim() : undefined,
-          mysqlRootPassword: dbMode === 'create' ? mysqlRootPassword : undefined,
+          mysqlRootPassword: dbMode === 'create' && mysqlRootPassword.trim()
+            ? mysqlRootPassword.trim()
+            : undefined,
           startServer: autoStart,
           serversRoot: !dataPath.trim() && serversRoot.trim() ? serversRoot.trim() : undefined,
           dataPath: dataPath.trim() || undefined,
@@ -644,8 +646,19 @@ export default function Setup({ onDone, userName = '' }) {
                     {dbPassword && showDbPassword && (
                       <p className="db-pass-preview mono">{dbPassword}</p>
                     )}
-                    <label className="field"><span>MySQL root-Passwort (optional)</span>
-                      <input type="password" value={mysqlRootPassword} onChange={(e) => setMysqlRootPassword(e.target.value)} placeholder="Leer = sudo mysql auf dem Host" autoComplete="new-password" />
+                    <label className="field">
+                      <span>MySQL root-Passwort</span>
+                      <input
+                        type="password"
+                        value={mysqlRootPassword}
+                        onChange={(e) => setMysqlRootPassword(e.target.value)}
+                        placeholder="Meist leer lassen"
+                        autoComplete="new-password"
+                      />
+                      <span className="field-hint">
+                        Leer lassen: Orbit legt DB/User per <code>sudo mysql</code> an (ohne root-Passwort).
+                        Nur ausfüllen, wenn root ein TCP-Passwort braucht.
+                      </span>
                     </label>
                   </>
                 )}
