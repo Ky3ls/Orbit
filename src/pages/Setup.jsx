@@ -617,20 +617,27 @@ export default function Setup({ onDone, userName = '' }) {
                 <div className="setup-step-num">7</div>
                 <h1>Datenbank</h1>
                 <p className="lede">
-                  Standard: neue Datenbank + User. Die Connection landet automatisch in der server.cfg.
+                  MySQL erkennen: läuft es schon, legt Orbit nur DB + User an.
+                  Fehlt MySQL komplett, kann es hier installiert werden — bestehende Dienste werden nicht angefasst.
                 </p>
-                {!preflight?.mysql?.running && (
+                {preflight?.mysql?.running ? (
+                  <p className="setup-port-hint ok" style={{ marginBottom: 12 }}>
+                    MySQL/MariaDB läuft ({preflight.mysql.service || 'ok'}) — nur DB/User werden angelegt.
+                  </p>
+                ) : (
                   <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-                    <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>MariaDB fehlt oder läuft nicht.</p>
+                    <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+                      Kein laufender MySQL/MariaDB-Dienst gefunden.
+                    </p>
                     <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={installMysql}>
-                      MariaDB installieren
+                      MySQL/MariaDB installieren oder starten
                     </button>
                   </div>
                 )}
                 <div className="deploy-list" style={{ marginBottom: 16 }}>
                   <button type="button" className={`deploy-card${dbMode === 'create' ? ' on' : ''}`} onClick={() => { setDbMode('create'); setCreateDatabase(true); }}>
                     <div className="deploy-card-top"><b>Neue Datenbank</b><span className="deploy-tag">STANDARD</span></div>
-                    <span>Orbit legt DB + User an und schreibt mysql_connection_string in die server.cfg.</span>
+                    <span>Neue DB + User in der vorhandenen MySQL — deine anderen Datenbanken bleiben unberührt.</span>
                   </button>
                   <button type="button" className={`deploy-card${dbMode === 'reuse' ? ' on' : ''}`} onClick={() => { setDbMode('reuse'); setCreateDatabase(false); }}>
                     <div className="deploy-card-top"><b>Vorhandene Connection</b></div>
