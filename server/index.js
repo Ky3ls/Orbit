@@ -100,7 +100,7 @@ import { refreshInstanceMonitors } from './instanceMonitor.js';
 import { pollOrbitLogDrops } from './fxLogTail.js';
 import { resolveConsoleSettings } from './consoleSettings.js';
 import { fxCommandReady } from './rcon.js';
-import { sendSupervisorCommand, stopFxProcess, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
+import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
 import { logLine, runtime, pushSeries, setLogHook, snapshot } from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -802,16 +802,23 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const port = Number(body.port);
     const exceptDataPath = str(body.dataPath, 512);
-    // Optional: FX freigeben wenn Owner und freePort gesetzt
     if (body.freePort === true && me.role === 'owner') {
       try {
-        await stopFxProcess(settingMap(db), logLine, { stopAll: true });
-        await new Promise((r) => setTimeout(r, 800));
-      } catch { /* */ }
+        await forceFreeGamePort(settingMap(db), logLine, port);
+        logLine('ok', `Port ${port} freigegeben (FX gestoppt).`);
+      } catch (err) {
+        logLine('warn', `Port freigeben: ${err.message}`);
+      }
+      // bis zu 3s warten bis frei
+      for (let i = 0; i < 8; i += 1) {
+        const probe = await checkPortInUse(port, '127.0.0.1');
+        if (!probe.inUse) break;
+        await new Promise((r) => setTimeout(r, 400));
+      }
     }
     const check = await checkPortInUse(port, '127.0.0.1');
     const conflict = orbitPortConflict(db, port, { ignoreInactive: true, exceptDataPath });
-    return json(res, 200, { ...check, orbitConflict: conflict });
+    return json(res, 200, { ...check, orbitConflict: conflict, freed: body.freePort === true });
   }
 
   if (method === 'GET' && pathname === '/api/txadmin/detect') {
@@ -994,11 +1001,10 @@ async function handleApi(req, res, url) {
     // Vor Port-Check: laufenden FX stoppen (sonst „Port belegt“ nach Reset)
     if (!migratingTxAdmin && me.role === 'owner') {
       try {
-        await stopFxProcess(settingMap(db), logLine, { stopAll: true });
+        await forceFreeGamePort(settingMap(db), logLine, port);
       } catch (err) {
         logLine('warn', `Setup: FX stop vor Port-Check — ${err.message}`);
       }
-      // kurz warten bis Port frei
       for (let i = 0; i < 8; i += 1) {
         const probe = await checkPortInUse(port, '127.0.0.1');
         if (!probe.inUse) break;
@@ -2153,16 +2159,7 @@ async function handleApi(req, res, url) {
     } catch { /* */ }
 
     try {
-      await stopFxProcess(settings, logLine, { stopAll: true });
-    } catch (err) {
-      logLine('warn', `Reset: FX stop — ${err.message}`);
-    }
-    const lastPort = Number(settings.fivemPort) || 30120;
-    for (let i = 0; i < 12; i += 1) {
-      const probe = await checkPortInUse(lastPort, '127.0.0.1');
-      if (!probe.inUse) break;
-      await new Promise((r) => setTimeout(r, 400));
-    }
+      await forceFreeGamePort(settings, logLine, Number(settings.fivemPort) || 30120);
 
     const deleted = [];
     const failed = [];

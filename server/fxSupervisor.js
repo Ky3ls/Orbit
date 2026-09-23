@@ -250,9 +250,10 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
   if (opts.stopAll) {
     const keys = [...instances.keys()];
     for (const k of keys) {
-      await stopFxProcess(settings, logLine, { instanceId: k });
+      await stopFxProcess(settings, logLine, { instanceId: k, killOrphans: false });
     }
-    await killOrphanFxServers(logLine);
+    const port = Number(settings?.fivemPort) || 30120;
+    await killOrphanFxServers(logLine, port);
     return { ok: true };
   }
   const key = resolveInstanceKey(settings, opts.instanceId);
@@ -294,34 +295,72 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
   return { ok: true, instanceId: key };
 }
 
-/** FXServer-Prozesse die nicht mehr im Supervisor hängen (nach Panel-Restart). */
-export async function killOrphanFxServers(logLine = () => {}) {
+/** FXServer-Prozesse die nicht mehr im Supervisor hängen (nach Panel-Restart / Wipe). */
+export async function killOrphanFxServers(logLine = () => {}, portHint = 0) {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const exec = promisify(execFile);
+  const tryExec = async (bin, args) => {
+    try {
+      await exec(bin, args, { timeout: 15_000 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // 1) direkte PIDs
+  let pids = [];
+  try {
+    const { stdout } = await exec('pgrep', ['-f', 'cfx-server/FXServer'], { timeout: 5000 });
+    pids = String(stdout || '').trim().split(/\s+/).filter(Boolean);
+  } catch { /* keine */ }
+  for (const pid of pids) {
+    const n = Number(pid);
+    if (!Number.isInteger(n) || n <= 1) continue;
+    try {
+      process.kill(n, 'SIGTERM');
+      logLine('info', `FX SIGTERM pid=${n}`);
+    } catch { /* */ }
+  }
+  if (pids.length) await new Promise((r) => setTimeout(r, 800));
+  for (const pid of pids) {
+    const n = Number(pid);
+    try {
+      process.kill(n, 0);
+      process.kill(n, 'SIGKILL');
+      logLine('warn', `FX SIGKILL pid=${n}`);
+    } catch { /* tot */ }
+  }
+
+  // 2) sudo pkill (falls Rechte/User anders)
+  await tryExec('sudo', ['-n', 'pkill', '-f', 'cfx-server/FXServer']);
+  await new Promise((r) => setTimeout(r, 400));
+  await tryExec('sudo', ['-n', 'pkill', '-9', '-f', 'cfx-server/FXServer']);
+
+  // 3) Port freischießen
+  const port = Number(portHint) || 30120;
+  if (port > 0 && port < 65536) {
+    await tryExec('sudo', ['-n', 'fuser', '-k', `${port}/tcp`]);
+    await tryExec('sudo', ['-n', 'fuser', '-k', `${port}/udp`]);
+  }
+  await new Promise((r) => setTimeout(r, 400));
+}
+
+/**
+ * Stoppt alle FX-Instanzen + Orphans. Optional Port erzwingen.
+ */
+export async function forceFreeGamePort(settings, logLine = () => {}, port = 30120) {
+  await stopFxProcess(settings, logLine, { stopAll: true });
+  await killOrphanFxServers(logLine, port);
+  // nochmal Port
   const { execFile } = await import('node:child_process');
   const { promisify } = await import('node:util');
   const exec = promisify(execFile);
   try {
-    const { stdout } = await exec('pgrep', ['-f', 'cfx-server/FXServer'], { timeout: 5000 });
-    const pids = String(stdout || '').trim().split(/\s+/).filter(Boolean);
-    for (const pid of pids) {
-      try {
-        process.kill(Number(pid), 'SIGTERM');
-        logLine('info', `FX-Orphan SIGTERM pid=${pid}`);
-      } catch { /* */ }
-    }
-    if (pids.length) {
-      await new Promise((r) => setTimeout(r, 1500));
-      for (const pid of pids) {
-        try {
-          process.kill(Number(pid), 0);
-          process.kill(Number(pid), 'SIGKILL');
-          logLine('warn', `FX-Orphan SIGKILL pid=${pid}`);
-        } catch { /* schon tot */ }
-      }
-      await new Promise((r) => setTimeout(r, 500));
-    }
-  } catch {
-    /* pgrep exit 1 = keine Treffer */
-  }
+    await exec('sudo', ['-n', 'fuser', '-k', `${Number(port) || 30120}/tcp`], { timeout: 10_000 });
+  } catch { /* */ }
+  await new Promise((r) => setTimeout(r, 600));
 }
 
 export async function restartFxProcess(settings, logLine, opts = {}) {

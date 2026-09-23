@@ -122,6 +122,8 @@ orbit ALL=(root) NOPASSWD: /usr/bin/apt-get
 orbit ALL=(root) NOPASSWD: /usr/bin/mysql, /usr/bin/mariadb
 orbit ALL=(root) NOPASSWD: /usr/bin/certbot
 orbit ALL=(root) NOPASSWD: /bin/rm, /usr/bin/rm
+orbit ALL=(root) NOPASSWD: /usr/bin/pkill, /bin/pkill
+orbit ALL=(root) NOPASSWD: /usr/bin/fuser, /bin/fuser
 orbit ALL=(root) NOPASSWD: /bin/bash /opt/orbit/scripts/uninstall-orbit.sh, /usr/bin/bash /opt/orbit/scripts/uninstall-orbit.sh
 SUDOEOF
 chmod 440 /etc/sudoers.d/orbit
