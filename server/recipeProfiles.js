@@ -4,7 +4,7 @@ export const RECIPE_PACKS = {
   blank: {
     title: 'Minimal',
     profile: 'blank',
-    ensures: ['oxmysql', 'sessionmanager', 'hardcap', 'chat'],
+    ensures: ['oxmysql'],
     zips: [{ name: 'oxmysql', url: 'https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip', dest: '[standalone]/oxmysql' }],
     clones: [],
     cfgBlock: '',
@@ -13,7 +13,8 @@ export const RECIPE_PACKS = {
     title: 'ESX Legacy (Profil)',
     profile: 'esx',
     // FiveM startet Ressourcen in [core]/ und [esx_addons]/ per Ordner-ensure
-    ensures: ['oxmysql', 'ox_lib', '[core]', '[esx_addons]', 'hardcap', 'chat'],
+    // sessionmanager/hardcap/chat = Citizen-Systemressourcen (nicht unter resources/)
+    ensures: ['oxmysql', 'ox_lib', '[core]', '[esx_addons]'],
     zips: [
       { name: 'oxmysql', url: 'https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip', dest: '[standalone]/oxmysql' },
       { name: 'ox_lib', url: 'https://github.com/overextended/ox_lib/releases/latest/download/ox_lib.zip', dest: '[standalone]/ox_lib' },
@@ -41,7 +42,7 @@ setr inventory:framework "esx"
   qb: {
     title: 'QBCore (Profil)',
     profile: 'qb',
-    ensures: ['oxmysql', 'qb-core', 'qb-multicharacter', 'hardcap', 'chat'],
+    ensures: ['oxmysql', 'qb-core', 'qb-multicharacter'],
     zips: [
       { name: 'oxmysql', url: 'https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip', dest: '[standalone]/oxmysql' },
     ],

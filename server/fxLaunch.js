@@ -29,12 +29,25 @@ export function resolveFxLaunch(settings, opts = {}) {
     throw new Error(`FXServer nicht gefunden unter ${fxRoot} (alpine/opt/cfx-server/).`);
   }
 
+  // onesync + license VOR +exec (interne ConVars / früh gesetzt)
   const fxArgs = [
     '--library-path', libPath, '--',
     binary,
     '+set', 'citizen_dir', citizen,
-    '+exec', 'server.cfg',
   ];
+
+  const onesync = settings.onesync === 'off' || settings.onesync === 'legacy' ? settings.onesync : 'on';
+  if (onesync !== 'off') {
+    fxArgs.push('+set', 'onesync', onesync === 'legacy' ? 'legacy' : 'on');
+  }
+
+  const license = String(settings.svLicenseKey || settings.licenseKey || '').trim()
+    || readLicenseFromCfg(cfgFile);
+  if (license) {
+    fxArgs.push('+set', 'sv_licenseKey', license);
+  }
+
+  fxArgs.push('+exec', 'server.cfg');
 
   if (opts.db) {
     fxArgs.push(...orbitFxLaunchExtras(opts.db));
@@ -52,6 +65,16 @@ export function resolveFxLaunch(settings, opts = {}) {
     command: loader,
     args: fxArgs,
   };
+}
+
+function readLicenseFromCfg(cfgFile) {
+  try {
+    const raw = fs.readFileSync(cfgFile, 'utf8');
+    const m = raw.match(/^\s*(?:set\s+)?sv_licenseKey\s+"([^"]+)"/mi);
+    return m?.[1]?.trim() || '';
+  } catch {
+    return '';
+  }
 }
 
 export function orbitControlMode(settings) {

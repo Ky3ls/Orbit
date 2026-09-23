@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
-import fs from 'node:fs';
 import { orbitControlMode, resolveFxLaunch } from './fxLaunch.js';
-import { appendOrbitFxLog, orbitLogFile } from './fxLogTail.js';
+import { appendOrbitFxLog, markFxConsoleEof } from './fxLogTail.js';
 
 const MAX_BACKOFF_SEC = 120;
 /** Nach so vielen Sekunden stabil → Crash-Zähler zurücksetzen */
@@ -80,45 +79,19 @@ function settingsKey(settings) {
 
 function attachStreams(proc, logLine, key, dataPath) {
   const prefix = `[FX:${key}] `;
-  const onData = (chunk, level = 'info') => {
+  // Nur in Datei schreiben — Panel liest per pollFxConsole (kein Doppel-Dump, live nach Restart)
+  const onData = (chunk) => {
     const text = String(chunk);
     for (const line of text.split(/\r?\n/)) {
       const trimmed = line.trimEnd();
       if (!trimmed) continue;
-      const lv = /(error|failed|fatal)/i.test(trimmed) ? 'bad' : /(warn|warning)/i.test(trimmed) ? 'warn' : level;
       const out = `${prefix}${trimmed.slice(0, 480)}`;
-      logLine(lv, out);
       if (dataPath) appendOrbitFxLog(dataPath, out);
+      else logLine('info', out);
     }
   };
-  proc.stdout?.on('data', (c) => onData(c, 'info'));
-  proc.stderr?.on('data', (c) => onData(c, 'warn'));
-  // Line-buffering: FX flush't unter Pipe sonst erst spät
-  try {
-    proc.stdout?.setEncoding?.('utf8');
-    proc.stderr?.setEncoding?.('utf8');
-  } catch { /* */ }
-}
-
-/** Letzte FX-Logzeilen in die Panel-Konsole laden (nach Orbit-Restart sichtbar). */
-export function hydrateConsoleFromFxLog(dataPath, logLine, key = '1', maxLines = 400) {
-  if (!dataPath) return 0;
-  try {
-    const file = orbitLogFile(dataPath);
-    if (!fs.existsSync(file)) return 0;
-    const raw = fs.readFileSync(file, 'utf8');
-    const lines = raw.split(/\n/).filter(Boolean);
-    const slice = lines.slice(-Math.max(50, maxLines));
-    const prefix = `[FX:${key}] `;
-    for (const line of slice) {
-      const text = line.startsWith('[FX:') ? line : `${prefix}${line}`;
-      const lv = /(error|failed|fatal)/i.test(text) ? 'bad' : /(warn|warning)/i.test(text) ? 'warn' : 'info';
-      logLine(lv, text.slice(0, 500));
-    }
-    return slice.length;
-  } catch {
-    return 0;
-  }
+  proc.stdout?.on('data', onData);
+  proc.stderr?.on('data', onData);
 }
 
 /**
@@ -141,8 +114,7 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   }
 
   const launch = resolveFxLaunch(settings, { db: opts.db });
-  // Vorherige Start-Logs sichtbar halten (Orbit-Restart löscht sonst den RAM-Buffer)
-  hydrateConsoleFromFxLog(launch.dataPath, logLine, key, 500);
+  markFxConsoleEof(launch.dataPath);
   // System-Resource vor Start syncen
   try {
     const { getDb } = await import('./db.js');

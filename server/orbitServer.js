@@ -3,7 +3,7 @@ import path from 'node:path';
 import { FX_SERVER_ROOT, ORBIT_SERVERS_ROOT } from './config.js';
 import { resolveCustomDataPath, resolveOrbitServersRoot } from './serverPathPolicy.js';
 
-const DEFAULT_ENSURES = ['oxmysql', 'sessionmanager', 'hardcap', 'chat'];
+const DEFAULT_ENSURES = ['oxmysql'];
 
 export function slugifyServerName(name) {
   const base = String(name || '')
@@ -28,7 +28,7 @@ function uniqueSlug(root, slug) {
 
 function renderOrbitCfg({ name, project, port, maxClients, locale, tags, onesync }) {
   const ensures = DEFAULT_ENSURES.map((r) => `ensure ${r}`).join('\n');
-  const os = onesync === 'off' ? '## set onesync off' : onesync === 'legacy' ? 'set onesync legacy' : 'set onesync on';
+  // onesync nur als Kommentar — wird per FX-Launch +set gesetzt (sonst: internal ConVar warning)
   return [
     '# Orbit Game Server — generiert vom Panel',
     `endpoint_add_tcp "0.0.0.0:${port}"`,
@@ -39,12 +39,11 @@ function renderOrbitCfg({ name, project, port, maxClients, locale, tags, onesync
     `sets sv_projectName "${String(project || name).replace(/"/g, '')}"`,
     `sets tags "${String(tags || 'roleplay').replace(/"/g, '')}"`,
     `sets locale "${String(locale || 'de-DE').replace(/"/g, '')}"`,
-    `## [Orbit]: onesync ${onesync}`,
-    os,
+    `## [Orbit]: onesync ${onesync} (via FX-Launch)`,
     '',
-    '# Lizenz + MySQL werden vom Orbit-Setup gesetzt:',
-    'sv_licenseKey ""',
-    'set mysql_connection_string ""',
+    '# Lizenz + MySQL setzt Orbit-Setup (nicht leer lassen):',
+    '# set sv_licenseKey "…"',
+    '# set mysql_connection_string "…"',
     '',
     ensures,
     '',
