@@ -178,6 +178,16 @@ input, select, textarea {
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
+input[type='checkbox'],
+input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
 textarea { min-height: 84px; resize: vertical; }
 input:focus, select:focus, textarea:focus {
   border-color: rgba(var(--accent-rgb), 0.7);
