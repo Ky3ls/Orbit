@@ -95,13 +95,13 @@ export default function Install({ phase = 'pin', pendingCfx = null, onMasterDone
           {err && <div className="err">{err}</div>}
           <label className="field">
             <span>Passwort</span>
-            <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mind. 12 Zeichen, Buchstabe + Zahl" />
+            <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mind. 6 Zeichen" />
           </label>
           <label className="field">
             <span>Passwort wiederholen</span>
             <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </label>
-          <p className="muted" style={{ fontSize: 12, marginTop: -4 }}>Mind. 12 Zeichen, Buchstabe und Zahl.</p>
+          <p className="orb-hint">Mind. 6 Zeichen.</p>
           <label className="orb-tos">
             <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
             <span>

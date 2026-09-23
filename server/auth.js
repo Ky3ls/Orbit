@@ -40,8 +40,8 @@ export async function verifyPassword(password, stored) {
 
 export function passwordOk(password) {
   if (typeof password !== 'string') return false;
-  if (password.length < 12 || password.length > 128) return false;
-  return /[A-Za-z]/.test(password) && /\d/.test(password);
+  if (password.length < 6 || password.length > 128) return false;
+  return true;
 }
 
 export function userOk(username) {

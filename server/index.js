@@ -590,7 +590,7 @@ async function handleApi(req, res, url) {
     const accept = body.accept === true || body.accept === '1';
     if (!accept) return json(res, 400, { error: 'Bitte die Bedingungen akzeptieren.' });
     if (!passwordOk(password)) {
-      return json(res, 400, { error: 'Backup-Passwort mind. 12 Zeichen, Buchstabe und Zahl.' });
+      return json(res, 400, { error: 'Backup-Passwort mind. 6 Zeichen.' });
     }
     const usernameBase = String(pending.cfxName || 'owner').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 24) || 'owner';
     let username = usernameBase;
@@ -2073,7 +2073,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const current = typeof body.current === 'string' ? body.current : '';
     const next = typeof body.next === 'string' ? body.next : '';
-    if (!passwordOk(next)) return json(res, 400, { error: 'Neues Passwort: mindestens 12 Zeichen, Buchstabe und Zahl.' });
+    if (!passwordOk(next)) return json(res, 400, { error: 'Neues Passwort: mindestens 6 Zeichen.' });
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(me.id);
     if (!(await verifyPassword(current, row.password_hash))) return json(res, 401, { error: 'Aktuelles Passwort stimmt nicht.' });
     db.prepare('UPDATE users SET password_hash = ?, must_change = 0 WHERE id = ?').run(await hashPassword(next), me.id);
