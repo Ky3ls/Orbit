@@ -155,9 +155,21 @@ sleep 1
 systemctl is-active "$SERVICE_NAME" >/dev/null && echo "==> Dienst $SERVICE_NAME aktiv" || echo "==> WARNUNG: systemctl status $SERVICE_NAME"
 
 HOST_HINT="${PUBLIC_URL:-http://$(hostname -I 2>/dev/null | awk '{print $1}'):$PANEL_PORT}"
-sleep 1
-PIN_LINE="$(journalctl -u "$SERVICE_NAME" -n 40 --no-pager 2>/dev/null | grep -E '^\s*PIN:' | tail -1 || true)"
-PIN_VAL="$(echo "$PIN_LINE" | grep -oE '[0-9]{4}' | tail -1 || true)"
+# PIN-Datei vom Dienst abwarten (kein journalctl nötig)
+PIN_VAL=""
+BANNER_FILE="$DATA_DIR/BOOTSTRAP.txt"
+PIN_FILE="$DATA_DIR/BOOTSTRAP_PIN"
+for _ in $(seq 1 20); do
+  if [[ -f "$PIN_FILE" ]]; then
+    PIN_VAL="$(tr -d '[:space:]' < "$PIN_FILE" | head -c 4)"
+    break
+  fi
+  sleep 0.5
+done
+if [[ -z "$PIN_VAL" ]]; then
+  PIN_VAL="$(journalctl -u "$SERVICE_NAME" -n 80 --no-pager 2>/dev/null | grep -oE 'PIN:[[:space:]]*[0-9]{4}' | tail -1 | grep -oE '[0-9]{4}' || true)"
+fi
+
 cat <<EOF
 
 ========================================
@@ -171,17 +183,27 @@ cat <<EOF
  Server:   $SERVERS
 EOF
 if [[ -n "$PIN_VAL" ]]; then
-  cat <<EOF
- PIN:      $PIN_VAL
- Link:     $HOST_HINT/install?pin=$PIN_VAL
+  if [[ -f "$BANNER_FILE" ]]; then
+    echo ""
+    cat "$BANNER_FILE"
+  else
+    cat <<EOF
 
- → Browser öffnen, PIN eingeben, Cfx.re verknüpfen
+====================================================
+  Orbit · Ersteinrichtung
+====================================================
+  PIN:     $PIN_VAL
+  Panel:   $HOST_HINT
+  Link:    $HOST_HINT/install?pin=$PIN_VAL
+  → Browser öffnen → Cfx.re verknüpfen
+====================================================
 EOF
+  fi
 else
   cat <<EOF
 
- Nächster Schritt: journalctl -u $SERVICE_NAME -n 30
- (PIN steht in der Dienst-Ausgabe)
+ PIN noch nicht bereit — in 2s:
+   cat $DATA_DIR/BOOTSTRAP.txt
 EOF
 fi
 cat <<EOF

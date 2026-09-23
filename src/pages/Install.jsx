@@ -11,32 +11,54 @@ const CFX_HINTS = {
   rate: 'Zu viele Versuche. Kurz warten.',
 };
 
-export default function Install({ phase = 'pin', pendingCfx = null, onMasterDone, onPhaseRefresh }) {
+export default function Install({
+  phase = 'pin',
+  pendingCfx = null,
+  setupPin = null,
+  onMasterDone,
+  onPhaseRefresh,
+}) {
   const [params] = useSearchParams();
   const urlPin = (params.get('pin') || '').replace(/\D/g, '').slice(0, 4);
-  const [pin, setPin] = useState(urlPin);
+  const serverPin = String(setupPin?.pin || '').replace(/\D/g, '').slice(0, 4);
+  const [pin, setPin] = useState(urlPin || serverPin);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [accept, setAccept] = useState(false);
   const [err, setErr] = useState(CFX_HINTS[params.get('cfx')] || '');
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const createMode = phase === 'create' || params.get('step') === 'create';
   const pinOk = useMemo(() => /^\d{4}$/.test(pin), [pin]);
+  const panelUrl = setupPin?.panelUrl || '';
+  const setupLink = setupPin?.link || (serverPin ? `${window.location.origin}/install?pin=${serverPin}` : '');
 
   useEffect(() => {
-    if (urlPin && urlPin !== pin) setPin(urlPin);
-  }, [urlPin]);
+    if (urlPin) setPin(urlPin);
+    else if (serverPin) setPin(serverPin);
+  }, [urlPin, serverPin]);
 
   useEffect(() => {
     if (params.get('step') === 'create') onPhaseRefresh?.();
   }, [params]);
 
+  async function copyLink() {
+    if (!setupLink) return;
+    try {
+      await navigator.clipboard.writeText(setupLink);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setErr('Kopieren fehlgeschlagen.');
+    }
+  }
+
   async function linkAccount(e) {
     e.preventDefault();
     setErr('');
     if (!pinOk) {
-      setErr('PIN muss 4 Ziffern haben (siehe Terminal).');
+      setErr('PIN muss 4 Ziffern haben.');
       return;
     }
     setBusy(true);
@@ -123,13 +145,45 @@ export default function Install({ phase = 'pin', pendingCfx = null, onMasterDone
       <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
       <form className="orb-boot-card" onSubmit={linkAccount}>
         <div className="brand-link"><Mark /> Orbit</div>
-        <p className="orb-boot-status">Kein <em>Cfx.re</em>-Konto verknüpft</p>
+        <p className="orb-boot-status">Ersteinrichtung</p>
+        <h1>PIN &amp; Cfx.re</h1>
+
+        {(serverPin || setupLink) && (
+          <div className="orb-pin-banner" role="status">
+            <div className="orb-pin-banner-line">Orbit · Ersteinrichtung</div>
+            <div className="orb-pin-banner-row">
+              <span>PIN</span>
+              <b className="mono orb-pin-big">{serverPin || pin || '····'}</b>
+            </div>
+            {panelUrl && (
+              <div className="orb-pin-banner-row">
+                <span>Panel</span>
+                <b className="mono" style={{ fontSize: 13, wordBreak: 'break-all' }}>{panelUrl}</b>
+              </div>
+            )}
+            {setupLink && (
+              <div className="orb-pin-banner-row">
+                <span>Link</span>
+                <a className="mono" style={{ fontSize: 12, wordBreak: 'break-all' }} href={setupLink}>{setupLink}</a>
+              </div>
+            )}
+            <p className="orb-pin-banner-hint">→ PIN bestätigen, dann Cfx.re verknüpfen</p>
+            {setupLink && (
+              <button type="button" className="btn btn-sm" style={{ width: 'auto', marginTop: 8 }} onClick={copyLink}>
+                {copied ? 'Link kopiert' : 'Link kopieren'}
+              </button>
+            )}
+          </div>
+        )}
+
         <p className="lede">
-          PIN aus dem Terminal / <code className="mono">journalctl -u orbit</code> eingeben, dann verknüpfen.
+          {serverPin
+            ? 'PIN ist vorausgefüllt — mit Cfx.re fortfahren.'
+            : 'PIN eingeben (steht auch in der SSH-Ausgabe nach der Installation).'}
         </p>
         {err && <div className="err">{err}</div>}
         <label className="field">
-          <span className="orb-autofill">{urlPin && pin === urlPin ? 'Autofilled' : 'PIN'}</span>
+          <span className="orb-autofill">{(urlPin || serverPin) && pin === (urlPin || serverPin) ? 'Autofilled' : 'PIN'}</span>
           <div className="orb-pin-row">
             <input
               className="orb-pin mono"
@@ -147,10 +201,6 @@ export default function Install({ phase = 'pin', pendingCfx = null, onMasterDone
         <button className="btn btn-primary" disabled={busy || !pinOk} type="submit">
           {busy ? 'Weiter zu Cfx.re…' : 'Konto verknüpfen'}
         </button>
-        <div className="orb-boot-meta">
-          <div><span>Profil</span><b>default</b></div>
-          <div><span>Panel</span><b>Orbit</b></div>
-        </div>
       </form>
     </div>
   );

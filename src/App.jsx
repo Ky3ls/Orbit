@@ -94,6 +94,7 @@ export default function App() {
             <Install
               phase={boot.masterPhase || 'pin'}
               pendingCfx={boot.pendingCfx}
+              setupPin={boot.setupPin || null}
               onPhaseRefresh={() => {
                 api('/api/bootstrap').then((data) => {
                   setBoot(data);
@@ -101,7 +102,7 @@ export default function App() {
                 }).catch(() => {});
               }}
               onMasterDone={(data) => {
-                setBoot({ ...boot, needsMaster: false, hasUsers: true, masterPhase: 'done' });
+                setBoot({ ...boot, needsMaster: false, hasUsers: true, masterPhase: 'done', setupPin: null });
                 setSession({ user: data.user, setup: false });
               }}
             />
