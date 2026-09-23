@@ -130,6 +130,9 @@ sleep 1
 systemctl is-active "$SERVICE_NAME" >/dev/null && echo "==> Dienst $SERVICE_NAME aktiv" || echo "==> WARNUNG: systemctl status $SERVICE_NAME"
 
 HOST_HINT="${PUBLIC_URL:-http://$(hostname -I 2>/dev/null | awk '{print $1}'):$PANEL_PORT}"
+sleep 1
+PIN_LINE="$(journalctl -u "$SERVICE_NAME" -n 40 --no-pager 2>/dev/null | grep -E '^\s*PIN:' | tail -1 || true)"
+PIN_VAL="$(echo "$PIN_LINE" | grep -oE '[0-9]{4}' | tail -1 || true)"
 cat <<EOF
 
 ========================================
@@ -141,8 +144,22 @@ cat <<EOF
  Daten:    $DATA_DIR
  FX:       $ARTIFACTS
  Server:   $SERVERS
+EOF
+if [[ -n "$PIN_VAL" ]]; then
+  cat <<EOF
+ PIN:      $PIN_VAL
+ Link:     $HOST_HINT/install?pin=$PIN_VAL
 
- Nächster Schritt: Browser → Setup-Wizard
- Logs: journalctl -u $SERVICE_NAME -f
+ → Browser öffnen, PIN eingeben, Cfx.re verknüpfen
+EOF
+else
+  cat <<EOF
+
+ Nächster Schritt: journalctl -u $SERVICE_NAME -n 30
+ (PIN steht in der Dienst-Ausgabe)
+EOF
+fi
+cat <<EOF
+ Logs:     journalctl -u $SERVICE_NAME -f
 ========================================
 EOF

@@ -24,6 +24,16 @@ import {
   SESSION_MS,
 } from './auth.js';
 import { cfxAuthorizeUrl, decryptPayload, ensureCfxKeys, fetchCfxUser } from './cfx.js';
+import {
+  clearBootstrapPin,
+  clearPendingCfxClaim,
+  ensureBootstrapPin,
+  hasUsers as dbHasUsers,
+  printBootstrapBanner,
+  readPendingCfxClaim,
+  storePendingCfxClaim,
+  verifyBootstrapPin,
+} from './bootstrapPin.js';
 import { ORIGIN, PORT, HOST, DATA_DIR, ORBIT_SERVERS_ROOT, CFG_PATH, FX_SERVER_ROOT } from './config.js';
 import { audit, getDb, setSetting, settingMap } from './db.js';
 import { getUserPrefs, setUserPrefs } from './userPrefs.js';
@@ -155,6 +165,39 @@ function setupDone() {
   return settingMap(db).setupDone === '1';
 }
 
+/** Master fehlt — PIN-Link oder Passwort-Schritt. */
+function masterBootstrapState(req) {
+  if (dbHasUsers(db)) {
+    return { needsMaster: false, phase: 'done', hasUsers: true, pendingCfx: null };
+  }
+  ensureBootstrapPin(db);
+  const claimTok = readCookie(req, 'orbit_claim');
+  const pending = readPendingCfxClaim(db, claimTok);
+  if (pending) {
+    return {
+      needsMaster: true,
+      phase: 'create',
+      hasUsers: false,
+      pendingCfx: { name: pending.cfxName, id: pending.cfxId },
+    };
+  }
+  return { needsMaster: true, phase: 'pin', hasUsers: false, pendingCfx: null };
+}
+
+/** Öffentliche Panel-URL für OAuth-Redirects (IP:Port ohne ORBIT_PUBLIC_URL). */
+function requestPublicOrigin(req) {
+  if (process.env.ORBIT_PUBLIC_URL) return ORIGIN;
+  const xfHost = req.headers['x-forwarded-host'];
+  const host = (typeof xfHost === 'string' && xfHost.split(',')[0].trim()) || req.headers.host || '';
+  if (!host || host.length > 253) return ORIGIN;
+  const xfProto = req.headers['x-forwarded-proto'];
+  let proto = typeof xfProto === 'string' ? xfProto.split(',')[0].trim().toLowerCase() : '';
+  if (proto !== 'http' && proto !== 'https') {
+    proto = String(ORIGIN).startsWith('https://') ? 'https' : 'http';
+  }
+  return `${proto}://${host}`.replace(/\/$/, '');
+}
+
 function persistFivemCfgFromSettings(settings) {
   const { raw } = readCfg();
   const next = patchCfgServerOpts(raw, {
@@ -219,11 +262,39 @@ function readBody(req, max = 65_536) {
   });
 }
 
+function requestHostOrigin(req) {
+  const xfHost = req.headers['x-forwarded-host'];
+  const host = (typeof xfHost === 'string' && xfHost.split(',')[0].trim()) || req.headers.host || '';
+  if (!host || host.length > 253) return '';
+  const xfProto = req.headers['x-forwarded-proto'];
+  let proto = typeof xfProto === 'string' ? xfProto.split(',')[0].trim().toLowerCase() : '';
+  if (proto !== 'http' && proto !== 'https') {
+    proto = String(ORIGIN).startsWith('https://') ? 'https' : 'http';
+  }
+  return `${proto}://${host}`.replace(/\/$/, '');
+}
+
 function originOk(req) {
+  const allowed = new Set([ORIGIN.replace(/\/$/, '')]);
+  const fromHost = requestHostOrigin(req);
+  if (fromHost) allowed.add(fromHost);
+  // Localhost-Varianten desselben Ports
+  try {
+    const u = new URL(ORIGIN);
+    allowed.add(`http://127.0.0.1:${u.port || PORT}`);
+    allowed.add(`http://localhost:${u.port || PORT}`);
+  } catch { /* */ }
+
   const origin = req.headers.origin;
-  if (typeof origin === 'string') return origin === ORIGIN;
+  if (typeof origin === 'string' && origin.length > 0 && origin.length < 256) {
+    return allowed.has(origin.replace(/\/$/, ''));
+  }
   const referer = req.headers.referer || '';
-  return referer.startsWith(`${ORIGIN}/`);
+  if (!referer) return false;
+  for (const base of allowed) {
+    if (referer === base || referer.startsWith(`${base}/`)) return true;
+  }
+  return false;
 }
 
 function mutationOk(req) {
@@ -475,38 +546,77 @@ async function handleApi(req, res, url) {
   if (mutating && !mutationOk(req)) return json(res, 403, { error: 'Anfrage abgelehnt.' });
 
   if (method === 'GET' && pathname === '/api/bootstrap') {
-    const users = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
-    const me = users > 0 ? loadSession(db, req) : null;
+    const boot = masterBootstrapState(req);
+    const me = !boot.needsMaster ? loadSession(db, req) : null;
     return json(res, 200, {
       brand: 'Orbit',
-      needsMaster: users === 0,
+      needsMaster: boot.needsMaster,
+      masterPhase: boot.phase,
+      pendingCfx: boot.pendingCfx,
       setup: setupDone(),
-      hasUsers: users > 0,
+      hasUsers: boot.hasUsers,
       user: me ? publicUser(me) : null,
       tls: { required: REQUIRE_TLS, secure: res._orbitSecure === true, origin: ORIGIN },
     });
   }
 
+  if (method === 'POST' && pathname === '/api/bootstrap/pin') {
+    if (!hit(`boot:${ip}`, 12, 15 * 60_000)) return json(res, 429, { error: 'Zu viele Versuche.' });
+    if (dbHasUsers(db)) return json(res, 409, { error: 'Master existiert bereits. Bitte anmelden.' });
+    ensureBootstrapPin(db);
+    const body = await readBody(req);
+    const pin = typeof body.pin === 'string' ? body.pin : String(body.pin || '');
+    if (!verifyBootstrapPin(pin)) {
+      return json(res, 401, { error: 'PIN ungültig. Schau in die Terminal-/Dienst-Ausgabe.' });
+    }
+    const ticket = randomToken();
+    db.prepare('INSERT INTO tickets (token_hash, user_id, expires) VALUES (?, ?, ?)')
+      .run(sha256(ticket), 0, Date.now() + 10 * 60_000);
+    return json(res, 200, { ok: true }, [[
+      'Set-Cookie', cookieHeader('orbit_pin', ticket, 600, 'Lax'),
+    ]]);
+  }
+
   if (method === 'POST' && pathname === '/api/bootstrap/master') {
     if (!hit(`boot:${ip}`, 4, 15 * 60_000)) return json(res, 429, { error: 'Zu viele Versuche.' });
-    const users = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
-    if (users > 0) return json(res, 409, { error: 'Master existiert bereits. Bitte anmelden.' });
-    const body = await readBody(req);
-    const username = str(body.username, 24);
-    const password = typeof body.password === 'string' ? body.password : '';
-    if (!userOk(username) || !passwordOk(password)) {
-      return json(res, 400, { error: 'Benutzer 3–24 Zeichen. Passwort mind. 12, Buchstabe und Zahl.' });
+    if (dbHasUsers(db)) return json(res, 409, { error: 'Master existiert bereits. Bitte anmelden.' });
+    const claimTok = readCookie(req, 'orbit_claim');
+    const pending = readPendingCfxClaim(db, claimTok);
+    if (!pending) {
+      return json(res, 400, { error: 'Zuerst PIN bestätigen und Cfx.re verknüpfen.' });
     }
+    const body = await readBody(req);
+    const password = typeof body.password === 'string' ? body.password : '';
+    const accept = body.accept === true || body.accept === '1';
+    if (!accept) return json(res, 400, { error: 'Bitte die Bedingungen akzeptieren.' });
+    if (!passwordOk(password)) {
+      return json(res, 400, { error: 'Backup-Passwort mind. 12 Zeichen, Buchstabe und Zahl.' });
+    }
+    const usernameBase = String(pending.cfxName || 'owner').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 24) || 'owner';
+    let username = usernameBase;
+    let n = 0;
+    while (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) {
+      n += 1;
+      username = `${usernameBase.slice(0, 20)}${n}`;
+    }
+    const takenCfx = db.prepare('SELECT id FROM users WHERE cfx_id = ?').get(pending.cfxId);
+    if (takenCfx) return json(res, 409, { error: 'Dieses Cfx.re-Konto ist bereits verknüpft.' });
     const now = Date.now();
     const info = db.prepare(`
-      INSERT INTO users (username, password_hash, role, must_change, created)
-      VALUES (?, ?, 'owner', 0, ?)
-    `).run(username, await hashPassword(password), now);
+      INSERT INTO users (username, password_hash, role, must_change, created, cfx_id, cfx_name)
+      VALUES (?, ?, 'owner', 0, ?, ?, ?)
+    `).run(username, await hashPassword(password), now, pending.cfxId, pending.cfxName);
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+    clearPendingCfxClaim(db);
+    clearBootstrapPin();
     const token = createSession(db, user, req);
-    audit(db, username, 'master.create', '', ip);
-    logLine('ok', `Master-Account ${username} angelegt`);
-    return json(res, 200, { user: publicUser(user), setup: false }, [[ 'Set-Cookie', cookieHeader(COOKIE, token, SESSION_MS / 1000) ]]);
+    audit(db, username, 'master.create', pending.cfxId, ip);
+    logLine('ok', `Master-Account ${username} (Cfx: ${pending.cfxName}) angelegt`);
+    return json(res, 200, { user: publicUser(user), setup: false }, [
+      ['Set-Cookie', cookieHeader(COOKIE, token, SESSION_MS / 1000)],
+      ['Set-Cookie', cookieHeader('orbit_claim', '', 0, 'Lax')],
+      ['Set-Cookie', cookieHeader('orbit_pin', '', 0, 'Lax')],
+    ]);
   }
 
   if (method === 'POST' && pathname === '/api/auth/login') {
@@ -561,23 +671,33 @@ async function handleApi(req, res, url) {
 
   if (method === 'GET' && pathname === '/api/auth/cfx/start') {
     if (!hit(`cfx:${ip}`, 8, 10 * 60_000)) return redirect(res, '/login?cfx=rate');
-    const mode = url.searchParams.get('mode') === 'link' ? 'link' : 'login';
+    const rawMode = url.searchParams.get('mode') || 'login';
+    const mode = rawMode === 'link' || rawMode === 'claim' ? rawMode : 'login';
     let userId = null;
     if (mode === 'link') {
       const linked = loadSession(db, req);
       if (!linked) return redirect(res, '/login');
       userId = linked.id;
+    } else if (mode === 'claim') {
+      if (dbHasUsers(db)) return redirect(res, '/login');
+      const pinTicket = readCookie(req, 'orbit_pin');
+      const pinOk = pinTicket
+        ? db.prepare('SELECT user_id FROM tickets WHERE token_hash = ? AND expires > ?').get(sha256(pinTicket), Date.now())
+        : null;
+      if (!pinOk) return redirect(res, '/install?cfx=pin');
+      userId = null;
     }
     let clientId = settingMap(db).cfxClientId;
     if (!clientId) {
-      clientId = `tx2-${randomToken().slice(0, 24)}`;
+      clientId = `orbit-${randomToken().slice(0, 24)}`;
       setSetting(db, 'cfxClientId', clientId);
     }
     const { publicKey } = ensureCfxKeys();
     const nonce = randomToken();
+    const redirectUri = `${requestPublicOrigin(req)}/api/auth/cfx/callback`;
     db.prepare('INSERT INTO oauth_states (nonce, mode, user_id, expires) VALUES (?, ?, ?, ?)')
       .run(nonce, mode, userId, Date.now() + 10 * 60_000);
-    return redirect(res, cfxAuthorizeUrl({ clientId, nonce, publicKey }));
+    return redirect(res, cfxAuthorizeUrl({ clientId, nonce, publicKey, redirectUri }));
   }
 
   if (method === 'GET' && pathname === '/api/auth/cfx/callback') {
@@ -588,6 +708,22 @@ async function handleApi(req, res, url) {
       db.prepare('DELETE FROM oauth_states WHERE nonce = ?').run(data.nonce);
       if (!state || state.expires < Date.now()) return redirect(res, '/login?cfx=error');
       const profile = await fetchCfxUser(data.key);
+
+      if (state.mode === 'claim') {
+        if (dbHasUsers(db)) return redirect(res, '/login');
+        const taken = db.prepare('SELECT id FROM users WHERE cfx_id = ?').get(profile.id);
+        if (taken) return redirect(res, '/install?cfx=taken');
+        const claimTok = storePendingCfxClaim(db, profile);
+        const pinTicket = readCookie(req, 'orbit_pin');
+        if (pinTicket) db.prepare('DELETE FROM tickets WHERE token_hash = ?').run(sha256(pinTicket));
+        audit(db, profile.username, 'cfx.claim', profile.id, ip);
+        logLine('ok', `Cfx.re verknüpft (${profile.username}) — Master-Passwort setzen`);
+        return redirect(res, '/install?step=create', [
+          ['Set-Cookie', cookieHeader('orbit_claim', claimTok, 1800, 'Lax')],
+          ['Set-Cookie', cookieHeader('orbit_pin', '', 0, 'Lax')],
+        ]);
+      }
+
       if (state.mode === 'link') {
         const taken = db.prepare('SELECT id FROM users WHERE cfx_id = ? AND id != ?').get(profile.id, state.user_id);
         if (taken) return redirect(res, '/settings?cfx=taken');
@@ -595,6 +731,7 @@ async function handleApi(req, res, url) {
         audit(db, profile.username, 'cfx.link', profile.id, ip);
         return redirect(res, '/settings?cfx=ok');
       }
+
       const user = db.prepare('SELECT * FROM users WHERE cfx_id = ?').get(profile.id);
       if (!user || user.disabled) return redirect(res, '/login?cfx=unknown');
       if (user.locked_until > Date.now()) return redirect(res, '/login?cfx=locked');
@@ -2087,7 +2224,8 @@ const boot = (async () => {
   await loop();
   setInterval(loop, 2000);
   server.listen(PORT, HOST, () => {
-    console.log(`TX2 hört auf http://${HOST}:${PORT}`);
+    console.log(`Orbit hört auf http://${HOST}:${PORT}`);
+    printBootstrapBanner(db).catch(() => {});
   });
 })();
 

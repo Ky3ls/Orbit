@@ -12,7 +12,6 @@ import Dashboard from './pages/Dashboard.jsx';
 import History from './pages/History.jsx';
 import Ingame from './pages/Ingame.jsx';
 import Install from './pages/Install.jsx';
-import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
 import Database from './pages/Database.jsx';
 import Monitoring from './pages/Monitoring.jsx';
@@ -54,7 +53,6 @@ export default function App() {
           setSession(data.user ? { user: data.user, setup: !!data.setup } : null);
           return;
         }
-        // Fallback falls Bootstrap ohne User-Feld (ältere Builds)
         return api('/api/auth/me')
           .then((d) => {
             if (!cancelled) setSession({ user: d.user, setup: !!d.setup });
@@ -65,7 +63,7 @@ export default function App() {
       })
       .catch(() => {
         if (cancelled) return;
-        setBoot({ needsMaster: false, setup: false, hasUsers: true, brand: 'Orbit' });
+        setBoot({ needsMaster: true, masterPhase: 'pin', setup: false, hasUsers: false, brand: 'Orbit' });
         setSession(null);
       });
     return () => { cancelled = true; };
@@ -90,7 +88,25 @@ export default function App() {
   if (boot.needsMaster) {
     return (
       <Routes>
-        <Route path="/install" element={<Install onDone={(data) => { setBoot({ ...boot, needsMaster: false, hasUsers: true }); setSession({ user: data.user, setup: false }); }} />} />
+        <Route
+          path="/install"
+          element={(
+            <Install
+              phase={boot.masterPhase || 'pin'}
+              pendingCfx={boot.pendingCfx}
+              onPhaseRefresh={() => {
+                api('/api/bootstrap').then((data) => {
+                  setBoot(data);
+                  setSession(null);
+                }).catch(() => {});
+              }}
+              onMasterDone={(data) => {
+                setBoot({ ...boot, needsMaster: false, hasUsers: true, masterPhase: 'done' });
+                setSession({ user: data.user, setup: false });
+              }}
+            />
+          )}
+        />
         <Route path="*" element={<Navigate to="/install" replace />} />
       </Routes>
     );
@@ -103,7 +119,7 @@ export default function App() {
     <Routes>
       <Route
         path="/"
-        element={<Landing user={authed ? { ...session.user, setup: session.setup } : null} />}
+        element={<Navigate to={authed ? (setupOk ? '/panel' : '/setup') : '/login'} replace />}
       />
       <Route path="/install" element={<Navigate to={authed ? (setupOk ? '/panel' : '/setup') : '/login'} replace />} />
       <Route
@@ -135,7 +151,7 @@ export default function App() {
           <Route path="platform" element={<Navigate to="/settings?tab=servers" replace />} />
           <Route path="database" element={setupOk ? <Database user={session.user} /> : <Navigate to="/setup" replace />} />
           <Route path="more" element={setupOk ? <More /> : <Navigate to="/setup" replace />} />
-          <Route path="setup" element={<Setup onDone={() => setSession({ ...session, setup: true })} />} />
+          <Route path="setup" element={<Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={() => setSession({ ...session, setup: true })} />} />
           <Route
             path="settings"
             element={
@@ -155,13 +171,13 @@ export default function App() {
   );
 }
 
-/** Unauthentifiziert: Panel-Deep-Links → Login (mit Return-Pfad), sonst Landing. */
+/** Unauthentifiziert → Login. */
 function GuestFallback() {
   const location = useLocation();
   if (isPanelPath(location.pathname)) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  return <Navigate to="/" replace />;
+  return <Navigate to="/login" replace />;
 }
 
 function LoginRedirect({ setupOk }) {
@@ -177,10 +193,10 @@ function Authed({ session, setSession }) {
   async function onLogout() {
     await api('/api/auth/logout', { method: 'POST', body: {} }).catch(() => {});
     setSession(null);
-    navigate('/');
+    navigate('/login');
   }
   if (!session.setup) {
-    return <Setup onDone={() => setSession({ ...session, setup: true })} />;
+    return <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={() => setSession({ ...session, setup: true })} />;
   }
   return <Shell user={session.user} onLogout={onLogout} />;
 }

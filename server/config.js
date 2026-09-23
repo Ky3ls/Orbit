@@ -11,5 +11,8 @@ export const DATA_DIR = process.env.ORBIT_DATA_DIR || '/opt/orbit/data';
 export const DB_PATH = process.env.ORBIT_DB_PATH || `${DATA_DIR}/orbit.sqlite`;
 export const SESSION_MS = 12 * 60 * 60 * 1000;
 export const IDLE_MS = 2 * 60 * 60 * 1000;
-export const COOKIE = '__Host-orbit';
-export const TICKET_COOKIE = '__Host-orbitt';
+/** __Host- nur unter HTTPS; bei IP:Port (HTTP) sonst greifen Cookies nicht. */
+const originIsHttps = String(ORIGIN).startsWith('https://');
+export const COOKIE = originIsHttps ? '__Host-orbit' : 'orbit';
+export const TICKET_COOKIE = originIsHttps ? '__Host-orbitt' : 'orbitt';
+export const COOKIE_SECURE = originIsHttps;
