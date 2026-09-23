@@ -36,11 +36,6 @@ export const RECIPE_PACKS = {
 # --- Orbit Profil: ESX Legacy ---
 setr esx:locale "de"
 setr inventory:framework "esx"
-{{MYSQL_LINE}}
-ensure oxmysql
-ensure ox_lib
-ensure [core]
-ensure [esx_addons]
 `,
   },
   qb: {
@@ -56,18 +51,10 @@ ensure [esx_addons]
     cfgBlock: `
 # --- Orbit Profil: QBCore ---
 setr qb_locale "de"
-{{MYSQL_LINE}}
-ensure oxmysql
-ensure qb-core
 `,
   },
 };
 
-export function renderProfileCfgBlock(pack, { mysqlConnection = '' } = {}) {
-  const mysql = String(mysqlConnection || '').trim();
-  const mysqlLine = mysql
-    ? `set mysql_connection_string "${mysql.replace(/"/g, '')}"`
-    : '# set mysql_connection_string "…"';
-  const block = String(pack.cfgBlock || '').replace('{{MYSQL_LINE}}', mysqlLine);
-  return block.trim();
+export function renderProfileCfgBlock(pack) {
+  return String(pack.cfgBlock || '').trim();
 }
