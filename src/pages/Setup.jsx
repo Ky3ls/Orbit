@@ -65,6 +65,7 @@ function CheckRow({ ok, warn, title, detail }) {
 
 export default function Setup({ onDone, userName = '' }) {
   const [step, setStep] = useState(0);
+  const [maxReached, setMaxReached] = useState(0);
   const [preflight, setPreflight] = useState(null);
   const [name, setName] = useState('Mein Roleplay');
   const [deploy, setDeploy] = useState('popular');
@@ -181,11 +182,12 @@ export default function Setup({ onDone, userName = '' }) {
   }
 
   function generateDbPassword() {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%+-';
+    // Nur URL-sichere Zeichen — oxmysql parsed sonst +/% falsch
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
     const bytes = new Uint8Array(20);
     crypto.getRandomValues(bytes);
     let out = '';
-    for (const b of bytes) out += alphabet[b % alphabet.length];
+    for (let i = 0; i < bytes.length; i += 1) out += chars[bytes[i] % chars.length];
     setDbPassword(out);
     setShowDbPassword(true);
     setDbPassCopied(false);
@@ -248,15 +250,17 @@ export default function Setup({ onDone, userName = '' }) {
       });
       setResult(data);
       setStep(8);
-      onDone();
+      setMaxReached((m) => Math.max(m, 8));
 
       const url = String(data.panelUrl || '').replace(/\/$/, '');
       if (panelMode === 'domain' && url && /^https?:\/\//i.test(url)) {
         const dest = `${url}/panel`;
         setRedirectTo(dest);
         window.setTimeout(() => {
-          window.location.assign(dest);
-        }, 2800);
+          window.location.replace(dest);
+        }, 400);
+      } else {
+        onDone();
       }
     } catch (e) {
       setErr(e.message);
@@ -268,9 +272,14 @@ export default function Setup({ onDone, userName = '' }) {
   function goNext() {
     if (step === 3 && deploy !== 'popular') {
       setStep(5);
+      setMaxReached((m) => Math.max(m, 5));
       return;
     }
-    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+    setStep((s) => {
+      const n = Math.min(STEPS.length - 1, s + 1);
+      setMaxReached((m) => Math.max(m, n));
+      return n;
+    });
   }
 
   function goBack() {
@@ -279,6 +288,13 @@ export default function Setup({ onDone, userName = '' }) {
       return;
     }
     setStep((s) => Math.max(0, s - 1));
+  }
+
+  function jumpToStep(to) {
+    if (to < 0 || to > maxReached) return;
+    // Skip template-Schritt wenn nicht popular
+    if (to === 4 && deploy !== 'popular') return;
+    setStep(to);
   }
 
   const canNext = useMemo(() => {
@@ -339,7 +355,8 @@ export default function Setup({ onDone, userName = '' }) {
           <Stepper
             steps={STEPS}
             step={step}
-            onStepChange={setStep}
+            maxReached={maxReached}
+            onStepChange={jumpToStep}
             canNext={canNext}
             busy={busy}
             showNav={step < 8}

@@ -7,7 +7,9 @@ import { ORIGIN, PORT } from './config.js';
 
 const exec = promisify(execFile);
 const ORBIT_UNIT = 'orbit';
-const DROP_IN = `/etc/systemd/system/${ORBIT_UNIT}.service.d/orbit-panel.conf`;
+/** zz- sortiert hinter public-url.conf und gewinnt bei gleichem Key. */
+const DROP_IN = `/etc/systemd/system/${ORBIT_UNIT}.service.d/zz-orbit-panel.conf`;
+const LEGACY_PUBLIC_URL = `/etc/systemd/system/${ORBIT_UNIT}.service.d/public-url.conf`;
 
 export const DEFAULT_PANEL_PORT = 40220;
 
@@ -242,16 +244,31 @@ async function writeSystemdDropIn(env, logLine) {
   fs.writeFileSync(tmp, lines.join('\n'), 'utf8');
   await exec('sudo', ['-n', 'mkdir', '-p', '/etc/systemd/system/orbit.service.d'], { timeout: 10_000 });
   await exec('sudo', ['-n', 'cp', tmp, DROP_IN], { timeout: 10_000 });
+  // Altes Drop-In überschreibt sonst ORBIT_PUBLIC_URL (alphabetisch hinter orbit-panel.conf)
+  if (fs.existsSync(LEGACY_PUBLIC_URL)) {
+    try {
+      await exec('sudo', ['-n', 'rm', '-f', LEGACY_PUBLIC_URL], { timeout: 5_000 });
+      logLine('info', 'Altes public-url.conf entfernt (Konflikt mit Panel-URL).');
+    } catch {
+      try {
+        const stub = '[Service]\n# managed by Orbit — siehe zz-orbit-panel.conf\n';
+        const stubTmp = `/tmp/orbit-public-url-stub-${Date.now()}.conf`;
+        fs.writeFileSync(stubTmp, stub, 'utf8');
+        await exec('sudo', ['-n', 'cp', stubTmp, LEGACY_PUBLIC_URL], { timeout: 5_000 });
+      } catch { /* ignore */ }
+    }
+  }
   await exec('sudo', ['-n', 'systemctl', 'daemon-reload'], { timeout: 20_000 });
   logLine('info', 'systemd orbit.service.d aktualisiert.');
 }
 
-export function schedulePanelServiceRestart() {
+export function schedulePanelServiceRestart(delayMs = 600) {
+  const wait = Math.max(600, Number(delayMs) || 600);
   setTimeout(() => {
     execFile('sudo', ['-n', 'systemctl', 'restart', ORBIT_UNIT], () => {
       setTimeout(() => process.exit(0), 200);
     });
-  }, 600);
+  }, wait);
 }
 
 /**
@@ -317,6 +334,8 @@ export async function applyPanelAccess(opts, logLine = () => {}) {
     panelPort,
     bindHost,
     nextSteps,
+    /** Domain: länger warten, damit Client noch redirecten kann */
+    restartDelayMs: mode === 'domain' ? 8_000 : 1_200,
     restartScheduled: true,
   };
 }

@@ -22,12 +22,17 @@ export function activeResourcesRoot() {
 import { parseGameBuildFromCfg, parseOnesyncFromCfg } from './cfgPatch.js';
 
 export function parseCfgIntegrations(text) {
-  const rcon = String(text || '').match(/^\s*rcon_password\s+["']([^"']+)["']/im);
-  const mysql = String(text || '').match(/set\s+mysql_connection_string\s+"([^"]+)"/i);
-  return {
-    rconPassword: rcon?.[1] || '',
-    mysqlDsn: mysql?.[1] || '',
-  };
+  let rconPassword = '';
+  let mysqlDsn = '';
+  for (const line of String(text || '').split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#') || t.startsWith('//')) continue;
+    const rcon = t.match(/^rcon_password\s+["']([^"']+)["']/i);
+    if (rcon) rconPassword = rcon[1];
+    const mysql = t.match(/^set\s+mysql_connection_string\s+"([^"]+)"/i);
+    if (mysql) mysqlDsn = mysql[1];
+  }
+  return { rconPassword, mysqlDsn };
 }
 
 export function parseServerCfg(text) {

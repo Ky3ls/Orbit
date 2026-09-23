@@ -300,30 +300,75 @@ export default function Settings({ user, onUser, onSetupReset }) {
         )}
         {user.role === 'owner' && (
           <SettingsGroup
-            title="Einrichtung zurücksetzen"
-            lead="Stoppt laufende FX-Instanzen (Orbit-Modus) und öffnet den Setup-Wizard erneut. Datenordner auf dem Host bleiben erhalten."
+            title="Einrichtung & Reset"
+            lead="Setup neu starten (Server bleiben) oder Orbit komplett zurücksetzen. Beim erneuten Setup kannst du einen bestehenden Ordner wählen und den Server wieder aktivieren."
           >
-            <button
-              type="button"
-              className="btn"
-              style={{ width: 'auto' }}
-              disabled={resetBusy}
-              onClick={async () => {
-                if (!window.confirm('Einrichtung wirklich zurücksetzen? Der Setup-Wizard startet neu — bestehende Server-Ordner werden nicht gelöscht.')) return;
-                setResetBusy(true);
-                setErr('');
-                try {
-                  await api('/api/settings/reset-setup', { method: 'POST', body: { confirm: true } });
-                  onSetupReset?.();
-                } catch (e) {
-                  setErr(e.message);
-                } finally {
-                  setResetBusy(false);
-                }
-              }}
-            >
-              {resetBusy ? 'Stoppe…' : 'Setup-Wizard neu starten'}
-            </button>
+            <div className="actions" style={{ flexWrap: 'wrap', gap: 10 }}>
+              <button
+                type="button"
+                className="btn"
+                style={{ width: 'auto' }}
+                disabled={resetBusy}
+                onClick={async () => {
+                  if (!window.confirm('Nur Einrichtung neu starten? Alle Server werden deaktiviert, Ordner bleiben erhalten und können später wiedergewählt werden.')) return;
+                  setResetBusy(true);
+                  setErr('');
+                  try {
+                    await api('/api/settings/reset-setup', { method: 'POST', body: { confirm: true, mode: 'setup' } });
+                    onSetupReset?.();
+                  } catch (e) {
+                    setErr(e.message);
+                  } finally {
+                    setResetBusy(false);
+                  }
+                }}
+              >
+                {resetBusy ? '…' : 'Nur Einrichtung neu'}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{ width: 'auto' }}
+                disabled={resetBusy}
+                onClick={async () => {
+                  if (!window.confirm('Orbit zurücksetzen (ohne Server-Ordner zu löschen)? Setup startet neu, Server bleiben auf der Disk.')) return;
+                  setResetBusy(true);
+                  setErr('');
+                  try {
+                    await api('/api/settings/reset-setup', { method: 'POST', body: { confirm: true, mode: 'full', deleteServers: false } });
+                    onSetupReset?.();
+                  } catch (e) {
+                    setErr(e.message);
+                  } finally {
+                    setResetBusy(false);
+                  }
+                }}
+              >
+                Orbit zurücksetzen
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ width: 'auto' }}
+                disabled={resetBusy}
+                onClick={async () => {
+                  if (!window.confirm('WARNUNG: Orbit zurücksetzen UND alle Server-Ordner löschen? Das kann nicht rückgängig gemacht werden.')) return;
+                  if (!window.confirm('Wirklich alle Server-Daten löschen?')) return;
+                  setResetBusy(true);
+                  setErr('');
+                  try {
+                    await api('/api/settings/reset-setup', { method: 'POST', body: { confirm: true, mode: 'full', deleteServers: true } });
+                    onSetupReset?.();
+                  } catch (e) {
+                    setErr(e.message);
+                  } finally {
+                    setResetBusy(false);
+                  }
+                }}
+              >
+                Orbit + Server löschen
+              </button>
+            </div>
           </SettingsGroup>
         )}
       </form>

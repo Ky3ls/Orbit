@@ -20,6 +20,7 @@ export default function Stepper({
   hideBack = false,
   hideNext = false,
   isLastAction = false,
+  maxReached = 0,
   children,
 }) {
   const total = steps.length;
@@ -55,6 +56,7 @@ export default function Stepper({
   }
 
   const showNext = !hideNext && (!isLast || isLastAction);
+  const maxReach = Math.max(Number(maxReached) || 0, step);
 
   return (
     <div className="orbit-stepper">
@@ -62,15 +64,16 @@ export default function Stepper({
         {steps.map((item, index) => {
           const done = index < step;
           const active = index === step;
-          const clickable = done && !busy;
+          const reached = index <= maxReach;
+          const clickable = reached && !busy && index !== step;
           return (
             <li
               key={item.id || item.label}
-              className={`orbit-step${done ? ' is-done' : ''}${active ? ' is-active' : ''}`}
+              className={`orbit-step${done || (reached && index < maxReach) ? ' is-done' : ''}${active ? ' is-active' : ''}${reached && !active && !done ? ' is-reached' : ''}`}
             >
               {index > 0 && (
                 <span
-                  className={`orbit-step-line${index <= step ? ' is-filled' : ''}`}
+                  className={`orbit-step-line${index <= step || index <= maxReach ? ' is-filled' : ''}`}
                   aria-hidden="true"
                 />
               )}
