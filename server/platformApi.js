@@ -106,15 +106,25 @@ export async function handlePlatformApi(ctx) {
     const body = await readBody(req);
     const name = str(body.name, 80);
     try {
+      let fxRoot = str(body.fxServerRoot, 256) || settingMap(db).fxServerRoot;
+      const hasFx = fxRoot && fs.existsSync(path.join(fxRoot, 'alpine/opt/cfx-server/FXServer'));
+      if (!hasFx) {
+        const { fetchRecommendedBuild, installArtifact } = await import('./artifacts.js');
+        const build = await fetchRecommendedBuild();
+        const installed = await installArtifact(build, (t) => logLine('info', t));
+        fxRoot = installed.path;
+        setSetting(db, 'fxServerRoot', fxRoot);
+        setSetting(db, 'fxArtifactBuild', installed.build);
+      }
       const { row, result } = createAndActivateOrbitServer(db, {
         name,
         port: Number(body.port) || 30120,
         maxClients: Number(body.maxClients) || 48,
-        fxServerRoot: str(body.fxServerRoot, 256) || settingMap(db).fxServerRoot,
+        fxServerRoot: fxRoot,
       });
       syncResourcesFromDisk(db);
       audit(db, me.username, 'server.create', row.slug, ip);
-      return json(res, 200, { ok: true, server: row, dataPath: result.fxDataPath });
+      return json(res, 200, { ok: true, server: row, dataPath: result.fxDataPath, fxServerRoot: fxRoot });
     } catch (err) {
       return json(res, 400, { error: err.message });
     }
@@ -134,14 +144,24 @@ export async function handlePlatformApi(ctx) {
     const steps = [];
     try {
       const settings = settingMap(db);
-      if (!settings.fxServerRoot) {
-        return json(res, 400, { error: 'Kein FX-Artifact — zuerst unter FX Builds installieren.' });
+      let fxRoot = settings.fxServerRoot || '';
+      if (!fxRoot || !fs.existsSync(path.join(fxRoot, 'alpine/opt/cfx-server/FXServer'))) {
+        const { fetchRecommendedBuild, installArtifact } = await import('./artifacts.js');
+        const build = await fetchRecommendedBuild();
+        const installed = await installArtifact(build, (t) => {
+          logLine('info', t);
+          steps.push(t);
+        });
+        fxRoot = installed.path;
+        setSetting(db, 'fxServerRoot', fxRoot);
+        setSetting(db, 'fxArtifactBuild', installed.build);
+        steps.push(`FX Artifact ${installed.build}`);
       }
       const { row, result } = createAndActivateOrbitServer(db, {
         name,
         port,
         maxClients,
-        fxServerRoot: settings.fxServerRoot,
+        fxServerRoot: fxRoot,
         onesync: body.onesync === 'off' || body.onesync === 'legacy' ? body.onesync : 'on',
       });
       steps.push(`Server angelegt: ${result.fxDataPath}`);
