@@ -305,7 +305,7 @@ export default function Setup({ onDone }) {
                   </button>
                   <button type="button" className={`template-card${panelMode === 'domain' ? ' on' : ''}`} onClick={() => setPanelMode('domain')}>
                     <b>Domain / HTTPS</b>
-                    <span>Eigene URL wie tx2.ky3ls.space — Proxy wird eingerichtet</span>
+                    <span>Eigene Domain — Reverse-Proxy wird eingerichtet</span>
                   </button>
                 </div>
                 <label className="field">
