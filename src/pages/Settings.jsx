@@ -8,7 +8,7 @@ import { useAppearance } from '../hooks/useAppearance.js';
 import { ACCENT_PRESETS } from '../appearance.js';
 import { GAME_BUILD_OPTIONS, ONESYNC_OPTIONS } from './settingsOptions.js';
 
-const HOST_TABS = new Set(['servers', 'txadmin', 'artifacts', 'prod']);
+const HOST_TABS = new Set(['servers', 'artifacts', 'prod']);
 
 function SettingsGroup({ id, title, lead, children }) {
   return (
@@ -229,7 +229,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
           <SettingsGroup
             id="settings-host"
             title="Host & Instanzen"
-            lead="FX-Builds, weitere Server und Prod — FX läuft über Orbit (ohne txAdmin)."
+            lead="FX-Builds, weitere Server und Prod — FX läuft über Orbit."
           >
             {form.orbitServerName ? (
               <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>

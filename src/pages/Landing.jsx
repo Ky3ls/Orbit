@@ -53,7 +53,7 @@ function Reveal({ children, className = '', delay = 0 }) {
 
 const STACK = [
   ['01', 'Unified control', 'Spieler, Konsole, Bans, Whitelist und Ressourcen in einer Oberfläche.'],
-  ['02', 'Setup-Wizard', 'Master zuerst, danach Deployment wie bei txAdmin: Recipes oder vorhandene Daten.'],
+  ['02', 'Setup-Wizard', 'Master-Account, Serverprofil, Datenbank und License — alles im Browser.'],
   ['03', 'Live monitoring', 'CPU, RAM und Slots als Kurve — ohne Extra-Last auf dem FXServer.'],
   ['04', 'Cfx.re login', 'Optional verknüpfen. Neue Admins entstehen dadurch nicht von allein.'],
   ['05', 'Access control', 'Rollen, Audit, Rate-Limits und Sitzungen, die nur lokal bleiben.'],

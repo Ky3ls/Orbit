@@ -12,26 +12,10 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
   const [readiness, setReadiness] = useState(null);
   const [licenseKey, setLicenseKey] = useState('');
   const [prodMysql, setProdMysql] = useState('');
-  const [txDetect, setTxDetect] = useState(null);
-  const [txImportSettings, setTxImportSettings] = useState(true);
-  const [txDeactivate, setTxDeactivate] = useState(true);
-  const [txStart, setTxStart] = useState(true);
-  const [txImportBans, setTxImportBans] = useState(true);
-  const [txImportWarns, setTxImportWarns] = useState(true);
-  const [txImportWl, setTxImportWl] = useState(true);
-  const [txActiveProfile, setTxActiveProfile] = useState('');
 
   useEffect(() => {
-    setTab(initialTab);
+    setTab(['artifacts', 'prod', 'servers'].includes(initialTab) ? initialTab : 'servers');
   }, [initialTab]);
-
-  useEffect(() => {
-    if (tab !== 'txadmin') return;
-    api('/api/txadmin/detect').then((d) => {
-      setTxDetect(d);
-      if (d.profiles?.length && !txActiveProfile) setTxActiveProfile(d.profiles[0].profile);
-    }).catch((e) => onError?.(e.message));
-  }, [tab]);
 
   function load() {
     api('/api/artifacts').then(setArtifacts).catch((e) => onError?.(e.message));
@@ -106,36 +90,9 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
 
   const tabs = [
     { id: 'servers', label: 'Instanzen' },
-    { id: 'txadmin', label: 'txAdmin' },
     { id: 'artifacts', label: 'FX Builds' },
     { id: 'prod', label: 'Prod' },
   ];
-
-  async function runTxMigrate() {
-    setBusy(true);
-    onError?.('');
-    try {
-      const data = await api('/api/txadmin/migrate', {
-        method: 'POST',
-        body: {
-          importSettings: txImportSettings,
-          deactivateTxAdmin: txDeactivate,
-          importBans: txImportBans,
-          importWarns: txImportWarns,
-          importWhitelist: txImportWl,
-          startServers: txStart,
-          activeProfile: txActiveProfile,
-        },
-      });
-      onMessage?.(`Migration OK: ${data.imported?.length || 0} Server · aktiv: ${data.active?.name || '—'}`);
-      load();
-      api('/api/txadmin/detect').then(setTxDetect).catch(() => {});
-    } catch (e) {
-      onError?.(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="st-host-panel">
@@ -152,7 +109,7 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
           <h3>Multi-Server</h3>
           <p className="muted" style={{ fontSize: 13 }}>
             FX ist in Orbit integriert (Start/Stop/Crash-Restart). „Aktiv“ = Cockpit & Konsole.
-            Neuer RP-Server: Name eingeben → Anlegen → Start (ohne txAdmin-Recipe-Deploy).
+            Neuer Server: Name eingeben → Anlegen → Start.
           </p>
           <div className="row" style={{ gap: 8, marginBottom: 12 }}>
             <input className="search grow" placeholder="Neuer Servername…" value={newName} onChange={(e) => setNewName(e.target.value)} />
@@ -177,56 +134,6 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {tab === 'txadmin' && (
-        <div className="st-sub">
-          <h3>Wechsel von txAdmin</h3>
-          <p className="muted" style={{ fontSize: 13 }}>
-            Erkennt txData & Dienste, übernimmt alle Server-Profile, optional CFG-Einstellungen,
-            stoppt txAdmin und startet FX über Orbit.
-          </p>
-          {!txDetect && <p className="muted">Suche…</p>}
-          {txDetect && !txDetect.found && (
-            <p className="muted">Kein txAdmin / txData auf diesem Host gefunden.</p>
-          )}
-          {txDetect?.found && (
-            <>
-              <p className="muted" style={{ fontSize: 13 }}>
-                FX-Root: <span className="mono">{txDetect.fxRoot || '—'}</span>
-                {txDetect.processRunning ? ' · txAdmin-Prozess läuft' : ''}
-              </p>
-              <ul style={{ fontSize: 13, marginBottom: 12 }}>
-                {(txDetect.profiles || []).map((p) => (
-                  <li key={p.dataPath}>
-                    <b>{p.profile}</b> — {p.hostname} · :{p.port} · {p.resourceCount} Res.
-                    <div className="mono muted">{p.dataPath}</div>
-                  </li>
-                ))}
-              </ul>
-              <label className="field">
-                <span>Aktives Profil nach Migration</span>
-                <select value={txActiveProfile} onChange={(e) => setTxActiveProfile(e.target.value)}>
-                  {(txDetect.profiles || []).map((p) => (
-                    <option key={p.profile} value={p.profile}>{p.profile} ({p.hostname})</option>
-                  ))}
-                </select>
-              </label>
-              <label className="row"><input type="checkbox" checked={txImportSettings} onChange={(e) => setTxImportSettings(e.target.checked)} /> server.cfg → Panel-Einstellungen</label>
-              <label className="row"><input type="checkbox" checked={txImportBans} onChange={(e) => setTxImportBans(e.target.checked)} /> Bans (playersDB)</label>
-              <label className="row"><input type="checkbox" checked={txImportWarns} onChange={(e) => setTxImportWarns(e.target.checked)} /> Warns</label>
-              <label className="row"><input type="checkbox" checked={txImportWl} onChange={(e) => setTxImportWl(e.target.checked)} /> Allowlist</label>
-              <label className="row"><input type="checkbox" checked={txDeactivate} onChange={(e) => setTxDeactivate(e.target.checked)} /> txAdmin-Dienst deaktivieren</label>
-              <label className="row"><input type="checkbox" checked={txStart} onChange={(e) => setTxStart(e.target.checked)} /> FXServer nach Migration starten</label>
-              {txDetect.hints?.processTxRoots?.length > 0 && (
-                <p className="muted" style={{ fontSize: 12 }}>txData via Prozess: {txDetect.hints.processTxRoots.join(', ')}</p>
-              )}
-              <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 12 }} disabled={busy || !txDetect.profiles?.length} onClick={runTxMigrate}>
-                Jetzt auf Orbit umstellen
-              </button>
-            </>
-          )}
         </div>
       )}
 

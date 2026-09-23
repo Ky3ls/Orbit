@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Orbit-Cutover: FXServer von systemd/txAdmin → Orbit-Supervisor
+# Orbit-Cutover: FXServer von systemd/Monitor → Orbit-Supervisor
 # Nur als root auf dem Host ausführen.
 set -euo pipefail
 
@@ -70,4 +70,4 @@ else
   echo "WARN: info.json noch nicht erreichbar — Logs im Panel prüfen."
 fi
 
-echo "==> Cutover abgeschlossen. txAdmin-Dienst ist disabled."
+echo "==> Cutover abgeschlossen. Monitor-Dienst ist disabled."

@@ -102,7 +102,7 @@ export async function buildPanelAccessPreview(opts = {}) {
     stacks,
     suggestedStack,
     previewUrl: publicUrl,
-    txAdminStylePort: `http://${publicIp}:${panelPort}`,
+    directPortUrl: `http://${publicIp}:${panelPort}`,
   };
 }
 
@@ -276,7 +276,7 @@ export async function applyPanelAccess(opts, logLine = () => {}) {
     bindHost = '0.0.0.0';
     requireTls = '0';
     tlsRelax = '1';
-    nextSteps.push(`Panel direkt: ${publicUrl} (wie txAdmin mit IP:Port — Firewall-Port ${panelPort} freigeben).`);
+    nextSteps.push(`Panel direkt: ${publicUrl} (per IP:Port — Port ${panelPort} freigeben).`);
   } else {
     const domain = parseDomainInput(opts.domain);
     const useHttps = opts.https !== false;

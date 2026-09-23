@@ -65,24 +65,12 @@ export default function Setup({ onDone }) {
   const [result, setResult] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [migrateTxAdmin, setMigrateTxAdmin] = useState(false);
-  const [importTxSettings, setImportTxSettings] = useState(true);
-  const [deactivateTxAdmin, setDeactivateTxAdmin] = useState(true);
-  const [importTxBans, setImportTxBans] = useState(true);
-  const [importTxWarns, setImportTxWarns] = useState(true);
-  const [importTxWhitelist, setImportTxWhitelist] = useState(true);
 
   const loadPreflight = useCallback(() => {
     api('/api/setup/preflight').then(setPreflight).catch((e) => setErr(e.message));
   }, []);
 
   useEffect(() => { loadPreflight(); }, [loadPreflight]);
-
-  const txProfiles = preflight?.txadmin?.profiles || [];
-
-  useEffect(() => {
-    if (txProfiles.length) setMigrateTxAdmin(true);
-  }, [txProfiles.length]);
 
   useEffect(() => {
     api('/api/setup/panel-access').then(setPanelAccess).catch(() => {});
@@ -189,12 +177,6 @@ export default function Setup({ onDone }) {
             stack: panelStack,
             https: panelMode === 'domain',
           },
-          migrateFromTxAdmin: migrateTxAdmin && txProfiles.length > 0,
-          importTxAdminSettings: importTxSettings,
-          deactivateTxAdmin,
-          importTxAdminBans: importTxBans,
-          importTxAdminWarns: importTxWarns,
-          importTxAdminWhitelist: importTxWhitelist,
         },
       });
       setResult(data);
@@ -216,7 +198,6 @@ export default function Setup({ onDone }) {
       return true;
     }
     if (step === 2) {
-      if (migrateTxAdmin && txProfiles.length > 0) return true;
       return name.trim().length >= 2 && recipe;
     }
     if (step === 3) {
@@ -239,11 +220,10 @@ export default function Setup({ onDone }) {
       return true;
     }
     if (step === 5) {
-      if (migrateTxAdmin && txProfiles.length > 0) return true;
       return licenseKey.trim().length > 8;
     }
     return false;
-  }, [step, name, recipe, port, maxClients, portStatus, pathStatus, useCustomPath, serversRoot, dataPath, preflight, createDatabase, licenseKey, panelMode, panelPort, panelDomain, migrateTxAdmin]);
+  }, [step, name, recipe, port, maxClients, portStatus, pathStatus, useCustomPath, serversRoot, dataPath, preflight, createDatabase, licenseKey, panelMode, panelPort, panelDomain]);
 
   const isLastAction = step === 5;
 
@@ -304,51 +284,7 @@ export default function Setup({ onDone }) {
                     title="FX-Artifact"
                     detail={preflight?.artifact ? 'Binary vorhanden oder wird beim Abschluss geladen' : 'Wird beim Abschluss automatisch installiert'}
                   />
-                  {txProfiles.length > 0 && (
-                    <CheckRow
-                      ok
-                      title="txAdmin erkannt"
-                      detail={`${preflight.txadmin.profiles?.length || 0} Server in txData · Dienste: ${(preflight.txadmin.unitsActive || []).join(', ') || 'Prozess/txData'}`}
-                    />
-                  )}
                 </div>
-                {txProfiles.length > 0 && (
-                  <div className="panel" style={{ padding: 12, marginTop: 12 }}>
-                    <label className="row">
-                      <input type="checkbox" checked={migrateTxAdmin} onChange={(e) => setMigrateTxAdmin(e.target.checked)} />
-                      Von txAdmin auf Orbit umstellen (Server & Daten übernehmen)
-                    </label>
-                    {migrateTxAdmin && (
-                      <>
-                        <label className="row">
-                          <input type="checkbox" checked={importTxSettings} onChange={(e) => setImportTxSettings(e.target.checked)} />
-                          Einstellungen aus server.cfg ins Panel übernehmen
-                        </label>
-                        <label className="row">
-                          <input type="checkbox" checked={deactivateTxAdmin} onChange={(e) => setDeactivateTxAdmin(e.target.checked)} />
-                          txAdmin-Dienst danach stoppen & deaktivieren
-                        </label>
-                        <label className="row">
-                          <input type="checkbox" checked={importTxBans} onChange={(e) => setImportTxBans(e.target.checked)} />
-                          Bans aus playersDB.json übernehmen
-                        </label>
-                        <label className="row">
-                          <input type="checkbox" checked={importTxWarns} onChange={(e) => setImportTxWarns(e.target.checked)} />
-                          Warns übernehmen
-                        </label>
-                        <label className="row">
-                          <input type="checkbox" checked={importTxWhitelist} onChange={(e) => setImportTxWhitelist(e.target.checked)} />
-                          Allowlist (whitelistApprovals) übernehmen
-                        </label>
-                        <ul className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                          {(preflight.txadmin.profiles || []).map((p) => (
-                            <li key={p.dataPath}><b>{p.profile}</b> · {p.hostname} · :{p.port} · <span className="mono">{p.dataPath}</span></li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </div>
-                )}
                 <div className="setup-actions-inline">
                   <button type="button" className="btn btn-sm" onClick={loadPreflight}>Erneut prüfen</button>
                 </div>
@@ -359,13 +295,13 @@ export default function Setup({ onDone }) {
               <>
                 <h1>Panel-Zugang</h1>
                 <p className="lede">
-                  Wie txAdmin per <code className="mono">IP:Port</code> — Orbit standardmäßig Port {DEFAULT_PANEL_PORT}.
-                  Oder eigene Domain mit automatischem Reverse-Proxy (nginx/Apache/Caddy).
+                  Direkt per <code className="mono">IP:Port</code> (Standard {DEFAULT_PANEL_PORT})
+                  oder eigene Domain mit Reverse-Proxy (nginx/Apache/Caddy).
                 </p>
                 <div className="template-list" style={{ marginBottom: 16 }}>
                   <button type="button" className={`template-card${panelMode === 'port' ? ' on' : ''}`} onClick={() => setPanelMode('port')}>
                     <b>IP & Port</b>
-                    <span>Direkt erreichbar — z. B. {panelAccess?.txAdminStylePort || `http://…:${DEFAULT_PANEL_PORT}`}</span>
+                    <span>Direkt erreichbar — z. B. {panelAccess?.directPortUrl || `http://…:${DEFAULT_PANEL_PORT}`}</span>
                   </button>
                   <button type="button" className={`template-card${panelMode === 'domain' ? ' on' : ''}`} onClick={() => setPanelMode('domain')}>
                     <b>Domain / HTTPS</b>
