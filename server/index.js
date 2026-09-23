@@ -550,6 +550,13 @@ async function handleApi(req, res, url) {
   if (method === 'GET' && pathname === '/api/bootstrap') {
     const boot = masterBootstrapState(req);
     const me = !boot.needsMaster ? loadSession(db, req) : null;
+    let setupPin = null;
+    if (boot.needsMaster && boot.phase === 'pin') {
+      try {
+        const { bootstrapPinPublicInfo } = await import('./bootstrapPin.js');
+        setupPin = await bootstrapPinPublicInfo(db);
+      } catch { /* */ }
+    }
     return json(res, 200, {
       brand: 'Orbit',
       needsMaster: boot.needsMaster,
@@ -558,6 +565,7 @@ async function handleApi(req, res, url) {
       setup: setupDone(),
       hasUsers: boot.hasUsers,
       user: me ? publicUser(me) : null,
+      setupPin,
       tls: { required: REQUIRE_TLS, secure: res._orbitSecure === true, origin: ORIGIN },
     });
   }

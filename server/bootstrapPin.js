@@ -1,10 +1,14 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { DATA_DIR, ORIGIN, PORT } from './config.js';
 import { detectPublicIpv4 } from './panelAccess.js';
 import { sha256 } from './auth.js';
 
 const PIN_TTL_MS = 24 * 60 * 60 * 1000;
 const CLAIM_TTL_MS = 30 * 60 * 1000;
+const PIN_FILE = () => path.join(DATA_DIR, 'BOOTSTRAP_PIN');
+const BANNER_FILE = () => path.join(DATA_DIR, 'BOOTSTRAP.txt');
 
 /** @type {{ pin: string, hash: string, expires: number } | null} */
 let livePin = null;
@@ -16,6 +20,7 @@ export function hasUsers(db) {
 export function ensureBootstrapPin(db) {
   if (hasUsers(db)) {
     livePin = null;
+    clearBootstrapFiles();
     return null;
   }
   const now = Date.now();
@@ -45,6 +50,13 @@ export function verifyBootstrapPin(pin) {
 
 export function clearBootstrapPin() {
   livePin = null;
+  clearBootstrapFiles();
+}
+
+function clearBootstrapFiles() {
+  for (const f of [PIN_FILE(), BANNER_FILE()]) {
+    try { fs.unlinkSync(f); } catch { /* */ }
+  }
 }
 
 export function storePendingCfxClaim(db, profile) {
@@ -76,26 +88,57 @@ export function clearPendingCfxClaim(db) {
   db.prepare('DELETE FROM settings WHERE k = ?').run('pendingCfxClaim');
 }
 
-export async function printBootstrapBanner(db) {
-  if (hasUsers(db)) return;
-  const pinState = ensureBootstrapPin(db);
-  if (!pinState) return;
+export async function resolveSetupPanelUrl() {
   let host = '127.0.0.1';
   try {
     host = await detectPublicIpv4();
   } catch { /* */ }
   const envUrl = String(process.env.ORBIT_PUBLIC_URL || '').replace(/\/$/, '');
-  const panelUrl = envUrl || (ORIGIN.includes('127.0.0.1')
+  return envUrl || (ORIGIN.includes('127.0.0.1')
     ? `http://${host}:${PORT}`
     : ORIGIN);
+}
+
+/** Für /api/bootstrap — PIN + Link, solange kein User existiert. */
+export async function bootstrapPinPublicInfo(db) {
+  if (hasUsers(db)) return null;
+  const pinState = ensureBootstrapPin(db);
+  if (!pinState) return null;
+  const panelUrl = await resolveSetupPanelUrl();
+  return {
+    pin: pinState.pin,
+    panelUrl,
+    link: `${panelUrl}/install?pin=${pinState.pin}`,
+  };
+}
+
+export async function printBootstrapBanner(db) {
+  if (hasUsers(db)) {
+    clearBootstrapFiles();
+    return;
+  }
+  const pinState = ensureBootstrapPin(db);
+  if (!pinState) return;
+  const panelUrl = await resolveSetupPanelUrl();
   const link = `${panelUrl}/install?pin=${pinState.pin}`;
   const line = '='.repeat(52);
-  console.log(`\n${line}`);
-  console.log('  Orbit · Ersteinrichtung');
-  console.log(line);
-  console.log(`  PIN:     ${pinState.pin}`);
-  console.log(`  Panel:   ${panelUrl}`);
-  console.log(`  Link:    ${link}`);
-  console.log('  → PIN im Browser eingeben → Cfx.re verknüpfen');
-  console.log(`${line}\n`);
+  const banner = [
+    line,
+    '  Orbit · Ersteinrichtung',
+    line,
+    `  PIN:     ${pinState.pin}`,
+    `  Panel:   ${panelUrl}`,
+    `  Link:    ${link}`,
+    '  → PIN im Browser eingeben → Cfx.re verknüpfen',
+    line,
+    '',
+  ].join('\n');
+  console.log(`\n${banner}`);
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(PIN_FILE(), `${pinState.pin}\n`, { mode: 0o600 });
+    fs.writeFileSync(BANNER_FILE(), banner, { mode: 0o644 });
+  } catch (err) {
+    console.warn(`BOOTSTRAP-Datei: ${err.message}`);
+  }
 }
