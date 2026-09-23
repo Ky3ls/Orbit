@@ -39,7 +39,7 @@ export function upsertCfgSet(cfg, key, value, { allowBare = false } = {}) {
   const hintRe = new RegExp(`^\\s*#\\s*${k}\\b.*$`, 'mi');
   if (hintRe.test(cfg)) return cfg.replace(hintRe, setLine);
 
-  return `${String(cfg).trimEnd()}\n${allowBare && key === 'sv_licenseKey' ? bareLine : setLine}\n`;
+  return `${String(cfg).trimEnd()}\n${setLine}\n`;
 }
 
 /** ensure-Zeile nur einmal; Namen mit [brackets] korrekt. */

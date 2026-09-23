@@ -32,14 +32,9 @@ export function parseGameBuildFromCfg(text) {
 
 function onesyncLines(mode) {
   const onesync = mode === 'off' ? 'off' : mode === 'legacy' ? 'legacy' : 'on';
-  const active = onesync === 'off'
-    ? '## set onesync off'
-    : onesync === 'legacy'
-      ? 'set onesync legacy'
-      : 'set onesync on';
+  // Kein `set onesync` in cfg — internes ConVar, nur per FX-Launch +set
   return [
-    `## [txAdmin CFG validator]: onesync ${onesync}`,
-    active,
+    `## [Orbit]: onesync ${onesync} (via FX-Launch +set)`,
   ];
 }
 

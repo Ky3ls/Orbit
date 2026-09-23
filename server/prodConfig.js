@@ -12,7 +12,10 @@ export function applyProdSecretsToCfg(cfgPath, { licenseKey = '', mysqlConnectio
   if (mysqlConnection) {
     cfg = upsertCfgSet(cfg, 'mysql_connection_string', mysqlConnection);
   }
-  fs.writeFileSync(cfgPath, cfg, 'utf8');
+  // Leere Platzhalter entfernen
+  cfg = cfg.replace(/^\s*(?:set\s+)?sv_licenseKey\s+""\s*$/gmi, '');
+  cfg = cfg.replace(/^\s*set\s+mysql_connection_string\s+""\s*$/gmi, '');
+  fs.writeFileSync(cfgPath, cfg.replace(/\n{3,}/g, '\n\n'), 'utf8');
   return cfgPath;
 }
 

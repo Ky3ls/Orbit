@@ -97,10 +97,10 @@ import {
 import { buildResourceGroups, resolveResourceActual, syncResourcesFromDisk } from './resourceScan.js';
 import { drainCommandQueue } from './queueWorker.js';
 import { refreshInstanceMonitors } from './instanceMonitor.js';
-import { pollOrbitLogDrops } from './fxLogTail.js';
 import { resolveConsoleSettings } from './consoleSettings.js';
 import { fxCommandReady } from './rcon.js';
-import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady, hydrateConsoleFromFxLog } from './fxSupervisor.js';
+import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
+import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail.js';
 import { logLine, runtime, pushSeries, setLogHook, snapshot } from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -123,14 +123,14 @@ function hit(key, limit, windowMs) {
 }
 
 const RECIPES = {
-  blank: ['oxmysql', 'sessionmanager', 'hardcap', 'chat'],
-  esx: ['oxmysql', 'es_extended', 'ox_lib', 'ky3ls_loading', 'ky3ls_chat', '[core]', '[esx_addons]', '[scripts]'],
+  blank: ['oxmysql'],
+  esx: ['oxmysql', 'es_extended', 'ox_lib', '[core]', '[esx_addons]'],
   qb: ['oxmysql', 'qb-core', 'qb-multicharacter', '[qb]'],
   qbox: ['oxmysql', 'qbx_core', 'ox_lib', '[qbx]'],
-  vmenu: ['oxmysql', 'vMenu', 'hardcap'],
-  streetkings: ['oxmysql', 'streetkings', 'hardcap'],
-  warfare: ['oxmysql', 'warfaretacticsv', 'hardcap'],
-  redm: ['oxmysql', 'sessionmanager', 'hardcap'],
+  vmenu: ['oxmysql', 'vMenu'],
+  streetkings: ['oxmysql', 'streetkings'],
+  warfare: ['oxmysql', 'warfaretacticsv'],
+  redm: ['oxmysql'],
   vorp: ['oxmysql', 'vorp_core', 'vorp_character'],
 };
 
@@ -145,10 +145,10 @@ function renderCfg({ name, project, port, maxClients, locale, tags, onesync, rec
     `sets sv_projectName "${project.replace(/"/g, '')}"`,
     `sets tags "${tags.replace(/"/g, '')}"`,
     `sets locale "${locale.replace(/"/g, '')}"`,
-    `## [txAdmin CFG validator]: onesync ${onesync}`,
-    onesync === 'off' ? '## set onesync off' : onesync === 'legacy' ? 'set onesync legacy' : 'set onesync on',
+    `## [Orbit]: onesync ${onesync} (via FX-Launch)`,
     '',
-    '# Lizenzschlüssel bleibt in der echten server.cfg und wird hier nicht gespeichert.',
+    '# set sv_licenseKey "…"',
+    '# set mysql_connection_string "…"',
     '',
     ensures,
     '',
@@ -410,6 +410,13 @@ async function loop() {
         pollOrbitLogDrops(db, settings.fxDataPath, settings);
       }
     }
+    // FX-Konsole live aus Log-Datei (auch nach Panel-Restart)
+    const consolePaths = new Set();
+    for (const s of listOrbitServers(db)) {
+      if (s.data_path) consolePaths.add(s.data_path);
+    }
+    if (settings.fxDataPath) consolePaths.add(settings.fxDataPath);
+    for (const p of consolePaths) pollFxConsole(p, logLine);
     if (fivemTick % 3 === 0) pollFxJournal(logLine, settings).catch(() => {});
     if (!queueBusy) {
       queueBusy = true;
@@ -1300,10 +1307,8 @@ async function handleApi(req, res, url) {
     let serverStarted = false;
     try {
       const cfgFile = dataPath ? path.join(dataPath, 'server.cfg') : '';
-      const integr = cfgFile && fs.existsSync(cfgFile)
-        ? parseCfgIntegrations(fs.readFileSync(cfgFile, 'utf8'))
-        : parseCfgIntegrations('');
-      if (!/sv_licenseKey\s+"[^"]+"/i.test(fs.existsSync(cfgFile) ? fs.readFileSync(cfgFile, 'utf8') : '')) {
+      if (!cfgFile || !fs.existsSync(cfgFile)
+        || !/^\s*(?:set\s+)?sv_licenseKey\s+"[^"]+"/mi.test(fs.readFileSync(cfgFile, 'utf8'))) {
         nextSteps.push('sv_licenseKey in server.cfg setzen');
       }
     } catch {
@@ -1312,19 +1317,10 @@ async function handleApi(req, res, url) {
     if (!mysqlReady(settingsAfter)) {
       nextSteps.push('mysql_connection_string in server.cfg setzen');
     }
-    if (body.startServer !== false && (migratingTxAdmin || (licenseKey && mysqlReady(settingsAfter)))) {
-      try {
-        const active = getActiveOrbitServer(db);
-        if (active) {
-          await controlFx('start', buildSettingsForServer(db, active), logLine);
-          serverStarted = true;
-        }
-      } catch (err) {
-        nextSteps.push(`Autostart: ${err.message}`);
-      }
-    } else if (!serverStarted) {
-      nextSteps.push('Server unter Einstellungen → Instanzen starten oder Command-Panel');
-    }
+    if (licenseKey) setSetting(db, 'svLicenseKey', licenseKey);
+
+    const wantAutostart = body.startServer !== false
+      && (migratingTxAdmin || (licenseKey && mysqlReady(settingsAfter)));
 
     let panelUrl = ORIGIN;
     let panelRestart = false;
@@ -1344,12 +1340,31 @@ async function handleApi(req, res, url) {
         setSetting(db, 'panelAccessMode', panelResult.mode);
         setSetting(db, 'panelPort', String(panelResult.panelPort));
         for (const line of panelResult.nextSteps || []) nextSteps.push(line);
+        // FX erst NACH Panel-Restart starten — sonst stirbt die Live-Konsole
+        if (wantAutostart) {
+          setSetting(db, 'pendingFxAutostart', '1');
+          nextSteps.push('Server startet automatisch nach Panel-Neustart.');
+        }
         schedulePanelServiceRestart(panelResult.restartDelayMs || 1200);
         panelRestart = true;
         audit(db, me.username, 'setup.panel', panelResult.mode, ip);
       } catch (err) {
         nextSteps.push(`Panel-Zugang: ${err.message}`);
       }
+    }
+
+    if (!panelRestart && wantAutostart) {
+      try {
+        const active = getActiveOrbitServer(db);
+        if (active) {
+          await controlFx('start', buildSettingsForServer(db, active), logLine);
+          serverStarted = true;
+        }
+      } catch (err) {
+        nextSteps.push(`Autostart: ${err.message}`);
+      }
+    } else if (!wantAutostart) {
+      nextSteps.push('Server unter Einstellungen → Instanzen starten oder Command-Panel');
     }
 
     audit(db, me.username, 'setup', deploy, ip);
@@ -1399,7 +1414,7 @@ async function handleApi(req, res, url) {
         send('console', fresh);
       }
       send('state', snapshot());
-    }, 2000);
+    }, 500);
     req.on('close', () => clearInterval(timer));
     return;
   }
@@ -2423,10 +2438,20 @@ const boot = (async () => {
   try {
     ensureIngameToken(db);
     const s = settingMap(db);
-    if (s.fxDataPath) hydrateConsoleFromFxLog(s.fxDataPath, logLine, '1', 400);
+    if (s.fxDataPath) backfillFxConsole(s.fxDataPath, logLine, 100);
     syncOrbitSystemResource(s.fxServerRoot || FX_SERVER_ROOT, s.fxDataPath || '', (t) => logLine('info', t));
     if (supervisorConsoleReady(s)) {
       hotDeployOrbit(db, (cmd) => sendSupervisorCommand(s, cmd), s.fxServerRoot, s.fxDataPath, (t) => logLine('info', t));
+    }
+    // Nach Domain-Setup: FX erst jetzt starten (Live-Konsole bleibt verbunden)
+    if (s.pendingFxAutostart === '1') {
+      setSetting(db, 'pendingFxAutostart', '0');
+      const active = getActiveOrbitServer(db);
+      if (active) {
+        controlFx('start', buildSettingsForServer(db, active), logLine)
+          .then(() => logLine('ok', 'Autostart nach Panel-Neustart.'))
+          .catch((err) => logLine('warn', `Autostart: ${err.message}`));
+      }
     }
   } catch (err) {
     logLine('warn', `orbit boot: ${err.message}`);
@@ -2437,7 +2462,7 @@ const boot = (async () => {
   logLine('info', `Orbit bereit — API-TLS: ${REQUIRE_TLS ? 'erforderlich (HTTPS)' : 'relax'}.`);
   refreshDiscordBot(settingMap(db)).catch((e) => logLine('warn', `Discord-Bot: ${e.message}`));
   await loop();
-  setInterval(loop, 2000);
+  setInterval(loop, 1000);
   server.listen(PORT, HOST, () => {
     console.log(`Orbit hört auf http://${HOST}:${PORT}`);
     printBootstrapBanner(db).catch(() => {});
