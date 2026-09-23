@@ -89,14 +89,12 @@ export function clearPendingCfxClaim(db) {
 }
 
 export async function resolveSetupPanelUrl() {
+  // Ersteinrichtung immer IP:Port — Domain kommt erst aus dem Setup-Wizard
   let host = '127.0.0.1';
   try {
     host = await detectPublicIpv4();
   } catch { /* */ }
-  const envUrl = String(process.env.ORBIT_PUBLIC_URL || '').replace(/\/$/, '');
-  return envUrl || (ORIGIN.includes('127.0.0.1')
-    ? `http://${host}:${PORT}`
-    : ORIGIN);
+  return `http://${host}:${PORT}`;
 }
 
 /** Für /api/bootstrap — PIN + Link, solange kein User existiert. */
