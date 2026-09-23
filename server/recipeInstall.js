@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import mysql from 'mysql2/promise';
 import { RECIPE_PACKS, renderProfileCfgBlock } from './recipeProfiles.js';
 import { syncOrbitBridgeToDataPath } from './orbitBridgeSync.js';
+import { ensureOnce } from './cfgUpsert.js';
 
 const exec = promisify(execFile);
 
@@ -302,19 +303,15 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
 
   const cfgPath = path.join(dataPath, 'server.cfg');
   let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
-  // Placeholder-Zeile entfernen, damit kein user:pass aus Kommentaren geleakt wird
-  cfg = cfg.replace(/^\s*#\s*set\s+mysql_connection_string\s+".*"\s*$/gim, '# mysql_connection_string wird von Orbit gesetzt');
-  const profileBlock = renderProfileCfgBlock(pack, opts);
+  const profileBlock = renderProfileCfgBlock(pack);
   if (profileBlock) {
     cfg = mergeCfgProfile(cfg, profileBlock, pack.profile || recipeId);
   }
+  // Ensures nur einmal (auch [core] / [esx_addons])
   for (const res of pack.ensures) {
-    const line = `ensure ${res}`;
-    if (!new RegExp(`^\\s*ensure\\s+${res.replace(/[[\]]/g, '\\$&')}\\b`, 'mi').test(cfg)) {
-      cfg += `\n${line}`;
-    }
+    cfg = ensureOnce(cfg, res);
   }
-  if (!/^\s*ensure\s+orbit\b/mi.test(cfg)) cfg += '\nensure orbit';
+  cfg = ensureOnce(cfg, 'orbit');
   fs.writeFileSync(cfgPath, cfg.trim() + '\n', 'utf8');
   onLog(`Profil „${pack.title}“ + CFG-Vorlage angewendet.`);
   return results;

@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { HOST, PORT, FX_SERVER_ROOT } from './config.js';
 import { setSetting, settingMap } from './db.js';
+import { ensureOnce } from './cfgUpsert.js';
 
 const PANEL_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BRIDGE_SRC = path.join(PANEL_ROOT, 'resources', 'orbit_bridge');
@@ -78,8 +79,13 @@ export function ensureOrbitInServerCfg(dataPath, onLog = () => {}) {
   const cfg = path.join(String(dataPath).replace(/\/$/, ''), 'server.cfg');
   if (!fs.existsSync(cfg)) return false;
   let raw = fs.readFileSync(cfg, 'utf8');
-  if (/^\s*ensure\s+orbit\b/mi.test(raw)) return false;
-  raw = `${raw.trimEnd()}\n\n## Orbit Admin-Menü (system_resources — auto)\nensure orbit\n`;
+  const next = ensureOnce(raw, 'orbit');
+  if (next === raw) return false;
+  // Kommentar-Header nur wenn neu
+  raw = next.replace(
+    /^(\s*ensure\s+orbit\s*)$/m,
+    '\n## Orbit Admin-Menü (system_resources — auto)\nensure orbit',
+  );
   try {
     fs.writeFileSync(cfg, raw);
   } catch (err) {

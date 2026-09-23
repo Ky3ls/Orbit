@@ -1,20 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ORBIT_ARTIFACTS_ROOT, ORBIT_SERVERS_ROOT } from './config.js';
-
-function upsertSetLine(cfg, key, value) {
-  const quoted = `"${String(value).replace(/"/g, '')}"`;
-  const re = new RegExp(`^\\s*set\\s+${key}\\s+.*$`, 'm');
-  const line = `set ${key} ${quoted}`;
-  if (re.test(cfg)) return cfg.replace(re, line);
-  return `${cfg.trim()}\n${line}\n`;
-}
+import { upsertCfgSet } from './cfgUpsert.js';
 
 export function applyProdSecretsToCfg(cfgPath, { licenseKey = '', mysqlConnection = '' }) {
   if (!fs.existsSync(cfgPath)) throw new Error(`server.cfg fehlt: ${cfgPath}`);
   let cfg = fs.readFileSync(cfgPath, 'utf8');
-  if (licenseKey) cfg = upsertSetLine(cfg, 'sv_licenseKey', licenseKey);
-  if (mysqlConnection) cfg = upsertSetLine(cfg, 'mysql_connection_string', mysqlConnection);
+  if (licenseKey) {
+    cfg = upsertCfgSet(cfg, 'sv_licenseKey', licenseKey, { allowBare: true });
+  }
+  if (mysqlConnection) {
+    cfg = upsertCfgSet(cfg, 'mysql_connection_string', mysqlConnection);
+  }
   fs.writeFileSync(cfgPath, cfg, 'utf8');
   return cfgPath;
 }
