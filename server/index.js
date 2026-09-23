@@ -64,6 +64,7 @@ import {
   schedulePanelServiceRestart,
 } from './panelAccess.js';
 import { probeServerPath, resolveCustomDataPath, resolveOrbitServersRoot } from './serverPathPolicy.js';
+import { prepareServerDataPath, sudoAvailable } from './hostAccess.js';
 import { detectTxAdminEnvironment, migrateFromTxAdmin } from './txAdminMigration.js';
 import {
   extraSecurityHeaders,
@@ -886,10 +887,12 @@ async function handleApi(req, res, url) {
   if (method === 'POST' && pathname === '/api/setup/validate-path') {
     if (me.role !== 'owner' && me.role !== 'admin') return json(res, 403, { error: 'Keine Berechtigung.' });
     const body = await readBody(req);
+    const elevate = await sudoAvailable();
     const report = probeServerPath({
       serversRoot: str(body.serversRoot, 256),
       dataPath: str(body.dataPath, 512),
       defaultRoot: ORBIT_SERVERS_ROOT,
+      canElevate: elevate,
     });
     return json(res, 200, report);
   }
@@ -1060,8 +1063,10 @@ async function handleApi(req, res, url) {
         const customData = str(body.dataPath, 512);
         if (customData) {
           dataPathOpt = resolveCustomDataPath(customData);
+          await prepareServerDataPath(dataPathOpt, logLine);
         } else if (customRoot) {
           serversRootOpt = resolveOrbitServersRoot(customRoot, ORBIT_SERVERS_ROOT);
+          await prepareServerDataPath(serversRootOpt, logLine);
         } else if (settingsBefore.orbitServersRoot) {
           serversRootOpt = resolveOrbitServersRoot(settingsBefore.orbitServersRoot, ORBIT_SERVERS_ROOT);
         }

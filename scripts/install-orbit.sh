@@ -105,6 +105,25 @@ systemctl disable tx2.service 2>/dev/null || true
 rm -f /etc/systemd/system/tx2.service
 rm -rf /etc/systemd/system/tx2.service.d
 
+# sudo für Panel-User (Ordner/ACL/Host — kein Vollzugriff)
+cat > /etc/sudoers.d/orbit <<SUDOEOF
+Defaults:orbit !requiretty
+orbit ALL=(root) NOPASSWD: /usr/bin/mkdir, /bin/mkdir
+orbit ALL=(root) NOPASSWD: /usr/bin/chown, /bin/chown
+orbit ALL=(root) NOPASSWD: /usr/bin/chmod, /bin/chmod
+orbit ALL=(root) NOPASSWD: /usr/bin/setfacl
+orbit ALL=(root) NOPASSWD: /usr/bin/install
+orbit ALL=(root) NOPASSWD: /usr/bin/cp, /bin/cp
+orbit ALL=(root) NOPASSWD: /usr/bin/ln, /bin/ln
+orbit ALL=(root) NOPASSWD: /usr/bin/systemctl
+orbit ALL=(root) NOPASSWD: /usr/sbin/nginx, /usr/bin/nginx
+orbit ALL=(root) NOPASSWD: /usr/sbin/a2enmod, /usr/sbin/a2ensite
+orbit ALL=(root) NOPASSWD: /usr/bin/apt-get
+orbit ALL=(root) NOPASSWD: /usr/bin/mysql, /usr/bin/mariadb
+SUDOEOF
+chmod 440 /etc/sudoers.d/orbit
+visudo -cf /etc/sudoers.d/orbit >/dev/null
+
 cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
 Description=Orbit Panel
