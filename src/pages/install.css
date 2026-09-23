@@ -29,13 +29,6 @@
   font-style: normal;
 }
 
-.orb-autofill {
-  color: var(--accent) !important;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
 .orb-pin-row {
   position: relative;
 }
@@ -143,50 +136,6 @@
 
 .orb-tos a {
   color: var(--accent);
-}
-
-.orb-pin-banner {
-  margin: 12px 0 18px;
-  padding: 14px 14px 12px;
-  border-radius: 12px;
-  background: rgba(var(--accent-rgb), 0.12);
-  border: 1px solid rgba(var(--accent-rgb), 0.35);
-}
-
-.orb-pin-banner-line {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 10px;
-}
-
-.orb-pin-banner-row {
-  display: grid;
-  grid-template-columns: 52px 1fr;
-  gap: 8px;
-  align-items: start;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-.orb-pin-banner-row > span {
-  color: var(--muted);
-  padding-top: 2px;
-}
-
-.orb-pin-big {
-  font-size: 28px !important;
-  letter-spacing: 0.2em;
-  color: #fff;
-  user-select: all;
-}
-
-.orb-pin-banner-hint {
-  margin: 10px 0 0;
-  font-size: 12px;
-  color: var(--muted);
 }
 
 .orb-boot-card {

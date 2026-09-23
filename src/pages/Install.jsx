@@ -27,12 +27,9 @@ export default function Install({
   const [accept, setAccept] = useState(false);
   const [err, setErr] = useState(CFX_HINTS[params.get('cfx')] || '');
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const createMode = phase === 'create' || params.get('step') === 'create';
   const pinOk = useMemo(() => /^\d{4}$/.test(pin), [pin]);
-  const panelUrl = setupPin?.panelUrl || '';
-  const setupLink = setupPin?.link || (serverPin ? `${window.location.origin}/install?pin=${serverPin}` : '');
 
   useEffect(() => {
     if (urlPin) setPin(urlPin);
@@ -42,17 +39,6 @@ export default function Install({
   useEffect(() => {
     if (params.get('step') === 'create') onPhaseRefresh?.();
   }, [params]);
-
-  async function copyLink() {
-    if (!setupLink) return;
-    try {
-      await navigator.clipboard.writeText(setupLink);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setErr('Kopieren fehlgeschlagen.');
-    }
-  }
 
   async function linkAccount(e) {
     e.preventDefault();
@@ -147,43 +133,12 @@ export default function Install({
         <div className="brand-link"><Mark /> Orbit</div>
         <p className="orb-boot-status">Ersteinrichtung</p>
         <h1>PIN &amp; Cfx.re</h1>
-
-        {(serverPin || setupLink) && (
-          <div className="orb-pin-banner" role="status">
-            <div className="orb-pin-banner-line">Orbit · Ersteinrichtung</div>
-            <div className="orb-pin-banner-row">
-              <span>PIN</span>
-              <b className="mono orb-pin-big">{serverPin || pin || '····'}</b>
-            </div>
-            {panelUrl && (
-              <div className="orb-pin-banner-row">
-                <span>Panel</span>
-                <b className="mono" style={{ fontSize: 13, wordBreak: 'break-all' }}>{panelUrl}</b>
-              </div>
-            )}
-            {setupLink && (
-              <div className="orb-pin-banner-row">
-                <span>Link</span>
-                <a className="mono" style={{ fontSize: 12, wordBreak: 'break-all' }} href={setupLink}>{setupLink}</a>
-              </div>
-            )}
-            <p className="orb-pin-banner-hint">→ PIN bestätigen, dann Cfx.re verknüpfen</p>
-            {setupLink && (
-              <button type="button" className="btn btn-sm" style={{ width: 'auto', marginTop: 8 }} onClick={copyLink}>
-                {copied ? 'Link kopiert' : 'Link kopieren'}
-              </button>
-            )}
-          </div>
-        )}
-
         <p className="lede">
-          {serverPin
-            ? 'PIN ist vorausgefüllt — mit Cfx.re fortfahren.'
-            : 'PIN eingeben (steht auch in der SSH-Ausgabe nach der Installation).'}
+          PIN eingeben und mit Cfx.re verknüpfen.
         </p>
         {err && <div className="err">{err}</div>}
         <label className="field">
-          <span className="orb-autofill">{(urlPin || serverPin) && pin === (urlPin || serverPin) ? 'Autofilled' : 'PIN'}</span>
+          <span>PIN</span>
           <div className="orb-pin-row">
             <input
               className="orb-pin mono"
