@@ -1,0 +1,42 @@
+* { box-sizing: border-box; font-family: system-ui, sans-serif; }
+html, body { margin: 0; background: transparent; }
+.hidden { display: none !important; }
+#app {
+  position: absolute; top: 8vh; right: 3vw;
+  width: min(420px, 92vw); max-height: 84vh; overflow: auto;
+  background: rgba(10, 10, 12, 0.94);
+  border: 1px solid rgba(255, 122, 26, 0.35);
+  border-radius: 14px; padding: 14px 14px 16px;
+  color: #f2f2f2;
+  box-shadow: 0 18px 48px rgba(0,0,0,.55);
+}
+header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+h1 { margin: 0; font-size: 20px; color: #ff7a1a; }
+.sub { margin: 4px 0 0; font-size: 12px; color: #9a9a9a; }
+.tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.tabs button {
+  flex: 1; padding: 8px; border: 1px solid #2a2a30; border-radius: 8px;
+  background: #16161a; color: #bbb; cursor: pointer; font-weight: 600;
+}
+.tabs button.active { border-color: #ff7a1a; color: #fff; background: rgba(255,122,26,.15); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+button {
+  padding: 10px; border: 0; border-radius: 8px;
+  background: #2a2a30; color: #eee; font-weight: 600; cursor: pointer;
+}
+button.primary { background: #ff7a1a; color: #111; }
+button.ghost { background: transparent; border: 1px solid #333; }
+button.sm { padding: 6px 10px; font-size: 12px; width: auto; }
+button.danger { background: #7f1d1d; }
+.field { display: block; font-size: 12px; color: #9a9a9a; margin: 8px 0; }
+.field input {
+  width: 100%; margin-top: 4px; padding: 9px; border-radius: 8px;
+  border: 1px solid #333; background: #0e0e12; color: #fff;
+}
+#plist { list-style: none; padding: 0; margin: 8px 0 0; }
+#plist li {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid #222; font-size: 13px;
+}
+#plist .name { flex: 1; min-width: 100px; }
+#plist button { padding: 5px 8px; font-size: 11px; }

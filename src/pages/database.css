@@ -1,0 +1,362 @@
+/* phpMyAdmin-Struktur: Tabellen links, Workspace rechts mit Tabs — Orbit-Look */
+
+.ws-module.db-page {
+  max-height: calc(100dvh - 52px);
+  overflow: hidden;
+}
+
+body.orbit-ws:has(.ws-banner) .ws-module.db-page {
+  max-height: calc(100dvh - 52px - 42px);
+}
+
+.ws-module.db-page .ws-module-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.db-shell {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: min(240px, 34vw) minmax(0, 1fr);
+  border-top: 1px solid var(--line);
+}
+
+/* —— Linke Tabellenliste (untereinander, kompakt) —— */
+.db-shell-aside {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  background: #040404;
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.db-aside-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.db-aside-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.db-aside-count {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.db-aside-search {
+  margin: 8px 10px;
+  width: calc(100% - 20px);
+  min-width: 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.db-table-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 4px 8px;
+}
+
+.db-aside-empty {
+  padding: 12px;
+  font-size: 13px;
+}
+
+.db-table-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 10px;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-family: var(--mono);
+  cursor: pointer;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
+.db-table-btn:hover {
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--text);
+}
+
+.db-table-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+/* —— Rechter Workspace —— */
+.db-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: #000;
+}
+
+.db-main-head {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #050505;
+  flex-shrink: 0;
+}
+
+.db-main-head-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.db-nav-toggle {
+  display: none;
+}
+
+.db-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.db-crumb button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-2);
+  cursor: pointer;
+}
+
+.db-crumb strong {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.db-crumb .sep {
+  color: var(--faint);
+}
+
+.db-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  background: #030303;
+}
+
+.db-tab {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.db-tab:hover {
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.db-tab.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent-2);
+}
+
+.db-panel {
+  padding: 12px 14px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.db-panel .err,
+.db-panel .banner {
+  margin-bottom: 10px;
+}
+
+.db-lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.db-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent-2);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.db-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.db-search-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.db-search-form .field {
+  margin-bottom: 0;
+  min-width: 140px;
+}
+
+.db-search-form .grow {
+  flex: 1;
+  min-width: 160px;
+}
+
+.db-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  -webkit-overflow-scrolling: touch;
+}
+
+.db-scroll .ws-table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.db-scroll .ws-table th,
+.db-scroll .ws-table td {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-scroll .ws-table td.null {
+  font-style: italic;
+  color: var(--faint);
+}
+
+.db-overview-table .mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.db-sql-area {
+  width: 100%;
+  min-height: 200px;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+.db-sql-actions {
+  margin-top: 8px;
+}
+
+.db-sql-hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.db-sql-result {
+  margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .ws-module.db-page {
+    max-height: none;
+    overflow: visible;
+  }
+
+  body.orbit-ws:has(.ws-module.db-page) .ws-main {
+    overflow: auto;
+  }
+
+  .ws-module.db-page .ws-module-content {
+    overflow: visible;
+  }
+
+  .db-shell {
+    display: block;
+  }
+
+  .db-shell-aside:not(.is-open) {
+    display: none;
+  }
+
+  .db-shell-aside.is-open {
+    display: flex;
+    max-height: min(45vh, 360px);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .db-nav-toggle {
+    display: inline-flex;
+  }
+
+  .db-panel {
+    overflow: visible;
+    flex: none;
+  }
+
+  .db-page .ws-lead {
+    display: none;
+  }
+}
+
+@media (min-width: 901px) {
+  .db-shell-aside {
+    display: flex;
+  }
+}

@@ -1,0 +1,74 @@
+/* Orbit — Schwarz + Orange (global) */
+:root {
+  --bg: #000000;
+  --bg-2: #0a0a0a;
+  --bg-elevated: #111111;
+  --card: #0d0d0d;
+  --glass: rgba(13, 13, 13, 0.92);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(var(--accent-rgb), 0.45);
+  --text: #f5f5f5;
+  --muted: #9a9a9a;
+  --faint: #5c5c5c;
+  --accent: #ff7a1a;
+  --accent-2: #ff9a4d;
+  --accent-rgb: 255, 122, 26;
+  --accent-dim: rgba(var(--accent-rgb), 0.14);
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --info: #60a5fa;
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --glow: none;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --font: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
+  --display: Syne, var(--font);
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  color-scheme: dark;
+}
+
+::selection {
+  background: rgba(var(--accent-rgb), 0.35);
+}
+
+.aurora i {
+  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.12), transparent 72%) !important;
+}
+.aurora i:nth-child(2) {
+  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.06), transparent 70%) !important;
+}
+
+.mark {
+  background: linear-gradient(160deg, rgba(var(--accent-rgb), 0.22), rgba(255, 255, 255, 0.03));
+  border-color: rgba(var(--accent-rgb), 0.25);
+  box-shadow: none;
+  color: var(--accent);
+}
+
+.mark svg path,
+.mark svg circle {
+  stroke: currentColor !important;
+  fill: currentColor !important;
+}
+
+.btn-primary {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #0a0a0a !important;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+.btn-primary::after {
+  content: none !important;
+  animation: none !important;
+}
+.btn-primary:hover {
+  background: var(--accent-2) !important;
+  border-color: var(--accent-2) !important;
+  box-shadow: none !important;
+}
+
+.o-metric-bar {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2)) !important;
+}

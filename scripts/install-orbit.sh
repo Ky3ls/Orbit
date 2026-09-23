@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Orbit Panel — Ein-Befehl-Installation (Linux, root empfohlen)
+#
+# Einzeiler (nach GitHub-Push):
+#   curl -fsSL https://raw.githubusercontent.com/DEIN_USER/orbit/main/scripts/install-orbit.sh | sudo bash
+#
+# Oder lokal im Repo:
+#   sudo bash scripts/install-orbit.sh
+#
+# Optional:
+#   ORBIT_GIT_URL=https://github.com/DEIN_USER/orbit.git
+#   ORBIT_INSTALL_DIR=/opt/tx2
+#   ORBIT_PUBLIC_URL=https://panel.example.com
+#   ORBIT_PORT=40220
+set -euo pipefail
+
+INSTALL_DIR="${ORBIT_INSTALL_DIR:-/opt/tx2}"
+ARTIFACTS="${ORBIT_ARTIFACTS_ROOT:-/opt/orbit/artifacts}"
+SERVERS="${ORBIT_SERVERS_ROOT:-/opt/orbit/servers}"
+USER_NAME="${ORBIT_USER:-tx2}"
+PANEL_PORT="${ORBIT_PORT:-40220}"
+PUBLIC_URL="${ORBIT_PUBLIC_URL:-}"
+GIT_URL="${ORBIT_GIT_URL:-}"
+
+need_root() {
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    echo "Bitte als root ausführen: sudo bash $0"
+    exit 1
+  fi
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+ensure_pkgs() {
+  if have apt-get; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq git curl ca-certificates unzip xz-utils rsync >/dev/null
+    if ! have node || ! have npm; then
+      apt-get install -y -qq nodejs npm >/dev/null || true
+    fi
+  fi
+  have git || { echo "git fehlt."; exit 1; }
+  have node || { echo "Node.js fehlt (apt install nodejs npm / Node 20+)."; exit 1; }
+  have npm || { echo "npm fehlt."; exit 1; }
+  have unzip || { echo "unzip fehlt."; exit 1; }
+}
+
+resolve_source() {
+  if [[ -f ./package.json && -d ./server && -d ./scripts ]]; then
+    SRC="$(pwd)"
+    echo "==> Quelle: lokales Repo ($SRC)"
+    return
+  fi
+  if [[ -z "$GIT_URL" ]]; then
+    cat <<EOF
+Kein Repo gefunden und ORBIT_GIT_URL fehlt.
+
+Beispiele:
+  cd /pfad/zum/orbit && sudo bash scripts/install-orbit.sh
+  ORBIT_GIT_URL=https://github.com/DEIN_USER/orbit.git sudo -E bash scripts/install-orbit.sh
+EOF
+    exit 1
+  fi
+  TMP="$(mktemp -d)"
+  echo "==> Clone $GIT_URL"
+  git clone --depth 1 "$GIT_URL" "$TMP/repo"
+  SRC="$TMP/repo"
+  [[ -f "$SRC/package.json" ]] || { echo "package.json nicht im Repo-Root."; exit 1; }
+}
+
+need_root
+echo "==> Orbit Installer"
+ensure_pkgs
+
+id "$USER_NAME" &>/dev/null || useradd -r -m -d "/home/$USER_NAME" -s /bin/bash "$USER_NAME"
+mkdir -p "$INSTALL_DIR" "$ARTIFACTS" "$SERVERS" /opt/orbit
+chown -R "$USER_NAME:$USER_NAME" "$ARTIFACTS" "$SERVERS" /opt/orbit
+
+resolve_source
+
+echo "==> Dateien → $INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+if have rsync; then
+  rsync -a --delete --exclude node_modules --exclude dist --exclude data --exclude .git "$SRC/" "$INSTALL_DIR/"
+else
+  tar -cf - --exclude=node_modules --exclude=dist --exclude=data --exclude=.git -C "$SRC" . | tar -xf - -C "$INSTALL_DIR"
+fi
+chown -R "$USER_NAME:$USER_NAME" "$INSTALL_DIR"
+
+cd "$INSTALL_DIR"
+echo "==> npm ci + build"
+runuser -u "$USER_NAME" -- npm ci
+runuser -u "$USER_NAME" -- npm run build
+
+ENV_LINES="Environment=NODE_ENV=production
+Environment=ORBIT_ARTIFACTS_ROOT=$ARTIFACTS
+Environment=ORBIT_SERVERS_ROOT=$SERVERS
+Environment=PORT=$PANEL_PORT"
+if [[ -n "$PUBLIC_URL" ]]; then
+  ENV_LINES="$ENV_LINES
+Environment=ORBIT_PUBLIC_URL=$PUBLIC_URL"
+fi
+
+cat > /etc/systemd/system/tx2.service <<EOF
+[Unit]
+Description=Orbit Panel
+After=network.target
+
+[Service]
+Type=simple
+User=$USER_NAME
+WorkingDirectory=$INSTALL_DIR
+$ENV_LINES
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable tx2
+systemctl restart tx2
+sleep 1
+systemctl is-active tx2 >/dev/null && echo "==> Dienst tx2 aktiv" || echo "==> WARNUNG: systemctl status tx2"
+
+HOST_HINT="${PUBLIC_URL:-http://$(hostname -I 2>/dev/null | awk '{print $1}'):$PANEL_PORT}"
+cat <<EOF
+
+========================================
+ Orbit installiert
+========================================
+ Panel:   $HOST_HINT
+ Port:    $PANEL_PORT (Firewall/Proxy freigeben)
+ Pfad:    $INSTALL_DIR
+ FX/Daten: $ARTIFACTS  ·  $SERVERS
+
+ Nächster Schritt (Browser):
+   1) $HOST_HINT öffnen → Setup-Wizard
+   2) Master-Account anlegen
+   3) FX-Build laden, Servername, Port, MySQL, License
+   4) Fertig — FX startet über Orbit (kein txAdmin)
+
+ Logs: journalctl -u tx2 -f
+========================================
+EOF
