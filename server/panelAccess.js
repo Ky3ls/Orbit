@@ -131,20 +131,29 @@ function proxyBlock(panelPort) {
   ].join('\n');
 }
 
-async function configureNginx(domain, panelPort, logLine) {
+async function configureNginx(domain, panelPort, logLine, opts = {}) {
   const site = nginxSitePath(domain);
-  const body = [
+  const wantHttps = opts.https !== false;
+  let body = [
     `# Orbit Panel — auto-generated`,
     'server {',
     '  listen 80;',
     '  listen [::]:80;',
     `  server_name ${domain};`,
-    proxyBlock(panelPort),
+    '  location ^~ /.well-known/acme-challenge/ {',
+    '    root /var/www/html;',
+    '    default_type "text/plain";',
+    '  }',
+    wantHttps
+      ? '  location / { return 301 https://$host$request_uri; }'
+      : proxyBlock(panelPort),
     '}',
     '',
   ].join('\n');
+
   const tmp = `/tmp/orbit-nginx-${Date.now()}.conf`;
   fs.writeFileSync(tmp, body, 'utf8');
+  await exec('sudo', ['-n', 'mkdir', '-p', '/var/www/html'], { timeout: 10_000 }).catch(() => {});
   await exec('sudo', ['-n', 'cp', tmp, site], { timeout: 15_000 });
   const enabled = `/etc/nginx/sites-enabled/${path.basename(site)}`;
   try {
@@ -153,6 +162,43 @@ async function configureNginx(domain, panelPort, logLine) {
   await exec('sudo', ['-n', 'nginx', '-t'], { timeout: 20_000 });
   await exec('sudo', ['-n', 'systemctl', 'reload', 'nginx'], { timeout: 20_000 });
   logLine('ok', `nginx VHost für ${domain} aktiv.`);
+
+  if (wantHttps) {
+    const gotCert = await tryCertbotWebroot(domain, logLine);
+    if (gotCert) {
+      body = [
+        `# Orbit Panel — auto-generated`,
+        'server {',
+        '  listen 80;',
+        '  listen [::]:80;',
+        `  server_name ${domain};`,
+        '  location ^~ /.well-known/acme-challenge/ {',
+        '    root /var/www/html;',
+        '    default_type "text/plain";',
+        '  }',
+        '  location / { return 301 https://$host$request_uri; }',
+        '}',
+        '',
+        'server {',
+        '  listen 443 ssl http2;',
+        '  listen [::]:443 ssl http2;',
+        `  server_name ${domain};`,
+        `  ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;`,
+        `  ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;`,
+        '  include /etc/letsencrypt/options-ssl-nginx.conf;',
+        '  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;',
+        proxyBlock(panelPort),
+        '}',
+        '',
+      ].join('\n');
+      const tmp2 = `/tmp/orbit-nginx-ssl-${Date.now()}.conf`;
+      fs.writeFileSync(tmp2, body, 'utf8');
+      await exec('sudo', ['-n', 'cp', tmp2, site], { timeout: 15_000 });
+      await exec('sudo', ['-n', 'nginx', '-t'], { timeout: 20_000 });
+      await exec('sudo', ['-n', 'systemctl', 'reload', 'nginx'], { timeout: 20_000 });
+      logLine('ok', `HTTPS für ${domain} aktiv.`);
+    }
+  }
   return { ok: true, stack: 'nginx', configPath: site };
 }
 
@@ -200,19 +246,30 @@ async function configureCaddy(domain, panelPort, logLine) {
   return { ok: true, stack: 'caddy', configPath: snippetPath };
 }
 
-async function tryCertbotNginx(domain, logLine) {
+async function tryCertbotWebroot(domain, logLine) {
+  const live = `/etc/letsencrypt/live/${domain}/fullchain.pem`;
+  if (fs.existsSync(live)) {
+    logLine('info', `Zertifikat für ${domain} bereits vorhanden.`);
+    return true;
+  }
   try {
     await exec('which', ['certbot'], { timeout: 3000 });
+    await exec('sudo', ['-n', 'mkdir', '-p', '/var/www/html'], { timeout: 10_000 }).catch(() => {});
     await exec('sudo', [
-      '-n', 'certbot', '--nginx', '-d', domain,
-      '--non-interactive', '--agree-tos', '--register-unsafely-without-email', '--redirect',
+      '-n', 'certbot', 'certonly', '--webroot', '-w', '/var/www/html',
+      '-d', domain,
+      '--non-interactive', '--agree-tos', '--register-unsafely-without-email',
     ], { timeout: 300_000 });
     logLine('ok', `Let's Encrypt Zertifikat für ${domain}.`);
-    return true;
+    return fs.existsSync(live);
   } catch (err) {
-    logLine('warn', `certbot: ${err.message}`);
+    logLine('warn', `certbot: ${String(err.message || err).slice(0, 160)}`);
     return false;
   }
+}
+
+async function tryCertbotNginx(domain, logLine) {
+  return tryCertbotWebroot(domain, logLine);
 }
 
 async function configureReverseProxy(stackId, domain, panelPort, logLine, opts = {}) {
@@ -227,14 +284,11 @@ async function configureReverseProxy(stackId, domain, panelPort, logLine, opts =
     };
   }
   let result;
-  if (stack === 'nginx') result = await configureNginx(domain, panelPort, logLine);
+  if (stack === 'nginx') result = await configureNginx(domain, panelPort, logLine, opts);
   else if (stack === 'apache') result = await configureApache(domain, panelPort, logLine);
   else if (stack === 'caddy') result = await configureCaddy(domain, panelPort, logLine);
   else return { ok: false, stack, message: 'Unbekannter Webserver.' };
 
-  if (opts.https !== false && stack === 'nginx') {
-    await tryCertbotNginx(domain, logLine);
-  }
   return result;
 }
 
@@ -298,9 +352,10 @@ export async function applyPanelAccess(opts, logLine = () => {}) {
     const domain = parseDomainInput(opts.domain);
     const useHttps = opts.https !== false;
     publicUrl = useHttps ? `https://${domain}` : `http://${domain}`;
-    bindHost = '127.0.0.1';
-    requireTls = useHttps ? '1' : '0';
-    tlsRelax = useHttps ? '0' : '1';
+    // 0.0.0.0: Domain via nginx + Fallback IP:Port
+    bindHost = '0.0.0.0';
+    requireTls = '0';
+    tlsRelax = '1';
 
     const proxy = await configureReverseProxy(
       opts.stack || 'auto',
