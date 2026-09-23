@@ -131,10 +131,23 @@ function proxyBlock(panelPort) {
   ].join('\n');
 }
 
-async function configureNginx(domain, panelPort, logLine, opts = {}) {
-  const site = nginxSitePath(domain);
-  const wantHttps = opts.https !== false;
-  let body = [
+/** live/ ist root-only — orbit darf nicht fs.existsSync nutzen. */
+async function sudoFileExists(filePath) {
+  try {
+    await exec('sudo', ['-n', 'test', '-f', filePath], { timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function hasLetsEncryptCert(domain) {
+  return sudoFileExists(`/etc/letsencrypt/live/${domain}/fullchain.pem`)
+    && sudoFileExists(`/etc/letsencrypt/live/${domain}/privkey.pem`);
+}
+
+function nginxHttpOnlyBody(domain, panelPort) {
+  return [
     `# Orbit Panel — auto-generated`,
     'server {',
     '  listen 80;',
@@ -144,13 +157,45 @@ async function configureNginx(domain, panelPort, logLine, opts = {}) {
     '    root /var/www/html;',
     '    default_type "text/plain";',
     '  }',
-    wantHttps
-      ? '  location / { return 301 https://$host$request_uri; }'
-      : proxyBlock(panelPort),
+    proxyBlock(panelPort),
     '}',
     '',
   ].join('\n');
+}
 
+async function nginxHttpsBody(domain, panelPort) {
+  const lines = [
+    `# Orbit Panel — auto-generated`,
+    'server {',
+    '  listen 80;',
+    '  listen [::]:80;',
+    `  server_name ${domain};`,
+    '  location ^~ /.well-known/acme-challenge/ {',
+    '    root /var/www/html;',
+    '    default_type "text/plain";',
+    '  }',
+    '  location / { return 301 https://$host$request_uri; }',
+    '}',
+    '',
+    'server {',
+    '  listen 443 ssl;',
+    '  listen [::]:443 ssl;',
+    '  http2 on;',
+    `  server_name ${domain};`,
+    `  ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;`,
+    `  ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;`,
+  ];
+  if (await sudoFileExists('/etc/letsencrypt/options-ssl-nginx.conf')) {
+    lines.push('  include /etc/letsencrypt/options-ssl-nginx.conf;');
+  }
+  if (await sudoFileExists('/etc/letsencrypt/ssl-dhparams.pem')) {
+    lines.push('  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;');
+  }
+  lines.push(proxyBlock(panelPort), '}', '');
+  return lines.join('\n');
+}
+
+async function writeNginxSite(site, body) {
   const tmp = `/tmp/orbit-nginx-${Date.now()}.conf`;
   fs.writeFileSync(tmp, body, 'utf8');
   await exec('sudo', ['-n', 'mkdir', '-p', '/var/www/html'], { timeout: 10_000 }).catch(() => {});
@@ -161,45 +206,34 @@ async function configureNginx(domain, panelPort, logLine, opts = {}) {
   } catch { /* may use conf.d */ }
   await exec('sudo', ['-n', 'nginx', '-t'], { timeout: 20_000 });
   await exec('sudo', ['-n', 'systemctl', 'reload', 'nginx'], { timeout: 20_000 });
-  logLine('ok', `nginx VHost für ${domain} aktiv.`);
+}
 
-  if (wantHttps) {
-    const gotCert = await tryCertbotWebroot(domain, logLine);
-    if (gotCert) {
-      body = [
-        `# Orbit Panel — auto-generated`,
-        'server {',
-        '  listen 80;',
-        '  listen [::]:80;',
-        `  server_name ${domain};`,
-        '  location ^~ /.well-known/acme-challenge/ {',
-        '    root /var/www/html;',
-        '    default_type "text/plain";',
-        '  }',
-        '  location / { return 301 https://$host$request_uri; }',
-        '}',
-        '',
-        'server {',
-        '  listen 443 ssl http2;',
-        '  listen [::]:443 ssl http2;',
-        `  server_name ${domain};`,
-        `  ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;`,
-        `  ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;`,
-        '  include /etc/letsencrypt/options-ssl-nginx.conf;',
-        '  ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;',
-        proxyBlock(panelPort),
-        '}',
-        '',
-      ].join('\n');
-      const tmp2 = `/tmp/orbit-nginx-ssl-${Date.now()}.conf`;
-      fs.writeFileSync(tmp2, body, 'utf8');
-      await exec('sudo', ['-n', 'cp', tmp2, site], { timeout: 15_000 });
-      await exec('sudo', ['-n', 'nginx', '-t'], { timeout: 20_000 });
-      await exec('sudo', ['-n', 'systemctl', 'reload', 'nginx'], { timeout: 20_000 });
-      logLine('ok', `HTTPS für ${domain} aktiv.`);
-    }
+async function configureNginx(domain, panelPort, logLine, opts = {}) {
+  const site = nginxSitePath(domain);
+  const wantHttps = opts.https !== false;
+
+  // ACME braucht immer HTTP+webroot zuerst (kein Redirect ohne 443).
+  await writeNginxSite(site, nginxHttpOnlyBody(domain, panelPort));
+  logLine('ok', `nginx VHost für ${domain} aktiv (HTTP).`);
+
+  if (!wantHttps) {
+    return { ok: true, stack: 'nginx', configPath: site, https: false };
   }
-  return { ok: true, stack: 'nginx', configPath: site };
+
+  const gotCert = await tryCertbotWebroot(domain, logLine);
+  if (gotCert) {
+    try {
+      await writeNginxSite(site, await nginxHttpsBody(domain, panelPort));
+      logLine('ok', `HTTPS für ${domain} aktiv.`);
+      return { ok: true, stack: 'nginx', configPath: site, https: true };
+    } catch (err) {
+      logLine('warn', `HTTPS-VHost fehlgeschlagen, bleibe auf HTTP: ${String(err.message || err).slice(0, 140)}`);
+      await writeNginxSite(site, nginxHttpOnlyBody(domain, panelPort)).catch(() => {});
+    }
+  } else {
+    logLine('warn', `Kein Zertifikat für ${domain} — Panel läuft weiter über HTTP (kein HTTPS-Redirect ohne 443).`);
+  }
+  return { ok: true, stack: 'nginx', configPath: site, https: false };
 }
 
 async function configureApache(domain, panelPort, logLine) {
@@ -247,8 +281,7 @@ async function configureCaddy(domain, panelPort, logLine) {
 }
 
 async function tryCertbotWebroot(domain, logLine) {
-  const live = `/etc/letsencrypt/live/${domain}/fullchain.pem`;
-  if (fs.existsSync(live)) {
+  if (await hasLetsEncryptCert(domain)) {
     logLine('info', `Zertifikat für ${domain} bereits vorhanden.`);
     return true;
   }
@@ -259,10 +292,18 @@ async function tryCertbotWebroot(domain, logLine) {
       '-n', 'certbot', 'certonly', '--webroot', '-w', '/var/www/html',
       '-d', domain,
       '--non-interactive', '--agree-tos', '--register-unsafely-without-email',
+      '--keep-until-expiring',
     ], { timeout: 300_000 });
-    logLine('ok', `Let's Encrypt Zertifikat für ${domain}.`);
-    return fs.existsSync(live);
+    const ok = await hasLetsEncryptCert(domain);
+    if (ok) logLine('ok', `Let's Encrypt Zertifikat für ${domain}.`);
+    else logLine('warn', `certbot lief, aber Zertifikat für ${domain} fehlt.`);
+    return ok;
   } catch (err) {
+    // Race: Cert kann trotzdem existieren (Renewal-Skip / bereits ausgestellt).
+    if (await hasLetsEncryptCert(domain)) {
+      logLine('info', `Zertifikat für ${domain} vorhanden (trotz certbot-Fehler).`);
+      return true;
+    }
     logLine('warn', `certbot: ${String(err.message || err).slice(0, 160)}`);
     return false;
   }
@@ -351,7 +392,6 @@ export async function applyPanelAccess(opts, logLine = () => {}) {
   } else {
     const domain = parseDomainInput(opts.domain);
     const useHttps = opts.https !== false;
-    publicUrl = useHttps ? `https://${domain}` : `http://${domain}`;
     // 0.0.0.0: Domain via nginx + Fallback IP:Port
     bindHost = '0.0.0.0';
     requireTls = '0';
@@ -364,12 +404,18 @@ export async function applyPanelAccess(opts, logLine = () => {}) {
       logLine,
       { https: useHttps },
     );
+    const httpsOk = proxy.ok && (
+      proxy.stack === 'caddy'
+        ? useHttps
+        : Boolean(proxy.https)
+    );
+    publicUrl = httpsOk ? `https://${domain}` : `http://${domain}`;
     if (!proxy.ok) {
       nextSteps.push(proxy.message || 'Reverse-Proxy konnte nicht eingerichtet werden.');
       nextSteps.push(`DNS: ${domain} → Server-IP, dann nginx/Apache manuell auf 127.0.0.1:${panelPort}.`);
-    } else if (useHttps && proxy.stack === 'nginx') {
-      nextSteps.push('Falls HTTPS noch fehlt: DNS prüfen, dann certbot --nginx -d ' + domain);
-    } else if (useHttps && proxy.stack === 'apache') {
+    } else if (useHttps && !httpsOk && proxy.stack === 'nginx') {
+      nextSteps.push('HTTPS noch nicht aktiv — Panel läuft vorerst per HTTP. DNS/Cloudflare (Full SSL) prüfen.');
+    } else if (useHttps && !httpsOk && proxy.stack === 'apache') {
       nextSteps.push('Apache: certbot --apache -d ' + domain);
     }
     nextSteps.push(`Öffentliche Panel-URL: ${publicUrl}`);
