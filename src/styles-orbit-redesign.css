@@ -1,0 +1,369 @@
+/* Orbit Panel — Komplett-Redesign (Shell/Dock unverändert) */
+
+:root {
+  --bg: #020408;
+  --bg-2: #0a1018;
+  --card: rgba(10, 16, 26, 0.85);
+  --glass: rgba(12, 20, 32, 0.72);
+  --line: rgba(120, 180, 200, 0.12);
+  --line-strong: rgba(46, 230, 197, 0.45);
+  --text: #eef6fb;
+  --muted: #8ba3b5;
+  --faint: #5c7285;
+  --accent: #2ee6c5;
+  --accent-2: #6ef0d8;
+  --ok: #2ee6c5;
+  --warn: #f0b429;
+  --bad: #ff6b7a;
+  --info: #5eb8ff;
+  --radius: 16px;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  --glow: 0 0 48px rgba(46, 230, 197, 0.08);
+}
+
+body {
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(46, 230, 197, 0.07), transparent),
+    radial-gradient(ellipse 40% 30% at 100% 50%, rgba(94, 184, 255, 0.04), transparent);
+}
+
+.orbit-veil {
+  background:
+    radial-gradient(42% 36% at 8% 0%, rgba(46, 230, 197, 0.06), transparent 68%),
+    linear-gradient(180deg, #040810 0%, #020408 55%, #020408 100%) !important;
+}
+
+/* Dock + Top cap — bewusst nicht anfassen (nur Akzent-Farben) */
+.orbit-dock .dock-item.active { background: rgba(46, 230, 197, 0.12) !important; }
+.orbit-dock .dock-item.active .dock-ico { color: var(--accent) !important; }
+.dock-home {
+  border-color: rgba(46, 230, 197, 0.3) !important;
+  background: rgba(46, 230, 197, 0.06) !important;
+}
+.mark svg path, .mark svg circle { stroke: var(--accent); fill: var(--accent); }
+
+.orbit-stage {
+  width: min(1280px, calc(100% - 28px)) !important;
+  padding: 16px 0 32px !important;
+}
+
+/* —— Workspace & Typo —— */
+.o-page, .nx-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: nx-in 0.35s ease-out;
+}
+@keyframes nx-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.o-page-head, .nx-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px 24px;
+  align-items: end;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.o-eyebrow, .nx-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.o-page-head h1, .nx-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+.o-page-desc, .nx-lead {
+  margin: 8px 0 0;
+  max-width: 52ch;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.o-toolbar, .nx-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* —— Bento grid —— */
+.nx-bento {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+}
+.nx-span-12 { grid-column: span 12; }
+.nx-span-8 { grid-column: span 8; }
+.nx-span-6 { grid-column: span 6; }
+.nx-span-4 { grid-column: span 4; }
+.nx-span-3 { grid-column: span 3; }
+
+@media (max-width: 900px) {
+  .nx-span-8, .nx-span-6, .nx-span-4, .nx-span-3 { grid-column: span 12; }
+}
+
+/* —— Panels —— */
+.o-card, .nx-panel {
+  position: relative;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: linear-gradient(165deg, rgba(14, 22, 34, 0.95), rgba(8, 12, 20, 0.88));
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.o-card::before, .nx-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(46, 230, 197, 0.06), transparent 42%);
+  opacity: 0.6;
+}
+.o-card > *, .nx-panel > * { position: relative; z-index: 1; }
+.o-card-flush, .nx-panel-flush { padding: 0; }
+.o-card h3, .nx-panel h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* —— Metrics —— */
+.o-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (max-width: 768px) {
+  .o-metric-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.o-metric {
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.25);
+}
+.o-metric-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.o-metric-value {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.65rem;
+  font-weight: 800;
+  font-family: var(--display);
+  letter-spacing: -0.02em;
+}
+.o-metric-hint { font-size: 11px; color: var(--muted); font-style: normal; }
+.o-metric-bar {
+  display: block;
+  height: 3px;
+  margin-top: 12px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--info));
+  max-width: 100%;
+}
+
+/* —— Buttons & inputs —— */
+.btn {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  font-weight: 650;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.btn:hover { border-color: rgba(46, 230, 197, 0.35); background: rgba(46, 230, 197, 0.08); }
+.btn-primary {
+  border-color: rgba(46, 230, 197, 0.5);
+  background: linear-gradient(180deg, rgba(46, 230, 197, 0.22), rgba(46, 230, 197, 0.08));
+  color: #fff;
+}
+.btn-danger { border-color: rgba(255, 107, 122, 0.45); background: rgba(255, 107, 122, 0.12); }
+
+input, select, textarea {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35);
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: rgba(46, 230, 197, 0.45);
+  box-shadow: 0 0 0 3px rgba(46, 230, 197, 0.1);
+}
+
+.badge.ok { background: rgba(46, 230, 197, 0.15); color: var(--ok); }
+.badge.bad { background: rgba(255, 107, 122, 0.15); color: var(--bad); }
+
+/* —— Tables → Kartenzeilen —— */
+.table-wrap { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+.o-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.o-table thead {
+  background: rgba(0, 0, 0, 0.35);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+.o-table th, .o-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.o-table tbody tr:hover { background: rgba(46, 230, 197, 0.04); }
+
+/* —— Dashboard command deck —— */
+.nx-deck {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 14px;
+}
+@media (max-width: 860px) { .nx-deck { grid-template-columns: 1fr; } }
+
+.nx-hero-panel {
+  padding: 24px;
+  min-height: 200px;
+}
+.nx-hero-panel h2 {
+  margin: 12px 0 4px;
+  font-family: var(--display);
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1;
+}
+.nx-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.nx-stat-pill {
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+}
+.nx-stat-pill b { display: block; font-size: 18px; font-family: var(--display); }
+
+.nx-player-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.nx-player-row:last-child { border-bottom: 0; }
+
+/* —— More hub —— */
+.more-page .more-group h3 {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+.more-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+.more-card {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.28);
+  min-height: 88px;
+  transition: transform 0.12s, border-color 0.12s;
+}
+.more-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(46, 230, 197, 0.35);
+  background: rgba(46, 230, 197, 0.06);
+}
+.more-card b { font-size: 14px; display: block; margin-bottom: 6px; }
+.more-card span { font-size: 12px; color: var(--muted); line-height: 1.35; }
+
+/* —— Resources —— */
+.res-group { margin-bottom: 12px; }
+.res-group-head {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 14px 16px;
+}
+.res-group-head.open {
+  border-color: rgba(46, 230, 197, 0.35);
+  background: rgba(46, 230, 197, 0.05);
+}
+.nx-res-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  padding: 12px 0 4px;
+}
+.nx-res-card {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.25);
+}
+.nx-res-card .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* —— Fx strip —— */
+.fx-strip {
+  border-color: rgba(46, 230, 197, 0.15);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* —— Split pages —— */
+.nx-split {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .nx-split { grid-template-columns: 1fr; }
+}
+
+.o-empty {
+  padding: 32px 20px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+}
+
+.chart { filter: drop-shadow(0 0 12px rgba(46, 230, 197, 0.15)); }

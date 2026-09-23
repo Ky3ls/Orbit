@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="menu.css" />
+</head>
+<body>
+  <div id="app" class="hidden">
+    <header>
+      <div>
+        <h1>Orbit</h1>
+        <p id="who" class="sub"></p>
+      </div>
+      <button type="button" class="ghost" id="btnClose">Esc</button>
+    </header>
+    <nav class="tabs">
+      <button type="button" data-tab="main" class="active">Main</button>
+      <button type="button" data-tab="players">Spieler</button>
+    </nav>
+    <section id="tab-main" class="tab">
+      <div class="grid">
+        <button type="button" data-act="heal">Heal</button>
+      </div>
+      <label class="field">Ankündigung
+        <input id="announceMsg" placeholder="Nachricht…" />
+      </label>
+      <button type="button" class="primary" data-act="announce">Ankündigen</button>
+    </section>
+    <section id="tab-players" class="tab hidden">
+      <button type="button" class="ghost sm" data-act="refreshPlayers">Aktualisieren</button>
+      <ul id="plist"></ul>
+    </section>
+  </div>
+  <script src="menu.js"></script>
+</body>
+</html>

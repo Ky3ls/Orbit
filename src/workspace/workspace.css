@@ -1,0 +1,479 @@
+/* ═══ ORBIT WORKSPACE v4 — neue Struktur (Top-Nav + Split-Konsole) ═══ */
+
+body.orbit-ws {
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.ws {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* —— Header —— */
+.ws-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-elevated);
+  z-index: 30;
+}
+
+.ws-header-start { display: flex; align-items: center; gap: 8px; }
+.ws-header-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ws-burger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+}
+.ws-burger span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--muted);
+}
+
+.ws-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1rem;
+  text-decoration: none;
+  color: var(--text);
+}
+.ws-logo .mark { width: 32px; height: 32px; animation: none; }
+
+.ws-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ws-nav::-webkit-scrollbar { display: none; }
+
+.ws-nav-link {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  border: 0;
+  background: transparent;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ws-nav-link:hover { color: var(--text); background: var(--accent-dim); }
+.ws-nav-link.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.ws-nav-drop { position: relative; }
+.ws-drop-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  z-index: 50;
+}
+.ws-drop-item {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+}
+.ws-drop-item:hover { background: var(--accent-dim); color: var(--text); }
+
+.ws-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 0;
+}
+.ws-tone-online { color: var(--ok); }
+.ws-tone-offline { color: var(--bad); }
+.ws-tone-starting { color: var(--warn); }
+
+.ws-btn-ghost {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ws-btn-ghost:hover, .ws-btn-ghost.active { border-color: var(--accent); color: var(--accent); }
+
+.ws-user {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.ws-profile-menu, .ws-power-menu { right: 0; top: calc(100% + 8px); }
+
+.ws-banner {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 8px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.25);
+  background: rgba(251, 191, 36, 0.06);
+}
+
+/* —— Body split —— */
+.ws-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 0;
+}
+.ws[data-console="1"] .ws-body {
+  grid-template-columns: 1fr min(42vw, 520px);
+}
+
+.ws-main {
+  overflow: auto;
+  min-width: 0;
+  padding: 0;
+}
+
+.ws-console-pane {
+  border-left: 1px solid rgba(var(--accent-rgb), 0.25);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+/* —— Module (Seiten) —— */
+.ws-module {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.ws-module-flush .ws-module-content {
+  padding: 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ws-module-flush .ws-module-content > .ws-split {
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+}
+
+.ws-module-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-elevated);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.ws-kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.ws-h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-family: var(--display);
+}
+.ws-lead { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.ws-module-bar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.ws-module-content {
+  padding: 20px;
+  flex: 1;
+}
+
+/* —— Dashboard zones —— */
+.ws-dash {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: calc(100dvh - 52px);
+}
+.ws-dash-command {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 20px;
+  align-items: center;
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--bg-2), var(--bg));
+}
+.ws-dash-command h2 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 800;
+  font-family: var(--display);
+  line-height: 1;
+}
+.ws-dash-command h2 em {
+  font-style: normal;
+  color: var(--accent);
+}
+.ws-dash-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ws-dash-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+.ws-dash-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-auto-rows: minmax(120px, auto);
+  gap: 1px;
+  background: var(--line);
+  flex: 1;
+}
+
+.ws-zone {
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+}
+.ws-zone-wide { grid-column: span 4; }
+.ws-zone-tall { grid-row: span 2; min-height: 280px; }
+.ws-zone:not(.ws-zone-wide):not([class*="span"]) { grid-column: span 2; }
+
+.ws-zone-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.ws-zone-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.ws-zone-body {
+  padding: 16px;
+  flex: 1;
+  overflow: auto;
+}
+
+/* —— Split layout (Spieler etc.) —— */
+.ws-split {
+  display: grid;
+  grid-template-columns: var(--ws-aside, 300px) minmax(0, 1fr);
+  min-height: calc(100dvh - 120px);
+  margin: -20px;
+}
+.ws-split-aside {
+  border-right: 1px solid var(--line);
+  padding: 16px;
+  background: var(--bg-elevated);
+  overflow: auto;
+  min-height: 0;
+  min-width: 0;
+}
+.ws-split-main {
+  overflow: auto;
+  padding: 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.ws-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ws-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-elevated);
+  position: sticky;
+  top: 0;
+}
+.ws-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.ws-table tr:hover td { background: rgba(var(--accent-rgb), 0.04); }
+
+.ws-online-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-online-chip:hover { border-color: var(--accent); }
+.ws-online-chip.active { border-color: var(--accent); background: var(--accent-dim); }
+
+.ws-res-list { display: flex; flex-direction: column; }
+.ws-res-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.ws-res-row:hover { background: var(--accent-dim); }
+
+.res-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.res-group-head.open,
+.res-group-head:hover {
+  border-color: rgba(var(--accent-rgb), 0.35) !important;
+}
+.res-group-body.ws-res-list {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+/* Mobile */
+.ws-mobile-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+}
+.ws-mobile-backdrop {
+  flex: 1;
+  border: 0;
+  background: color-mix(in srgb, var(--bg) 40%, transparent);
+}
+.ws-mobile-sheet-inner {
+  width: min(300px, 85vw);
+  background: var(--bg-2);
+  border-right: 1px solid var(--line);
+  padding: 16px;
+  overflow: auto;
+}
+.ws-mobile-link {
+  display: block;
+  padding: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: 8px;
+}
+.ws-mobile-link:hover { background: var(--accent-dim); color: var(--accent); }
+.ws-mobile-group {
+  margin: 16px 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+@media (max-width: 900px) {
+  .ws-burger { display: flex; }
+  .ws-nav { display: none; }
+  .ws[data-console="1"] .ws-body { grid-template-columns: 1fr; }
+  .ws-console-pane {
+    position: fixed;
+    inset: 52px 0 0 0;
+    z-index: 40;
+    border-left: 0;
+    border-top: 1px solid rgba(var(--accent-rgb), 0.3);
+  }
+  .ws-dash-grid { grid-template-columns: 1fr; }
+  .ws-zone-wide, .ws-zone { grid-column: span 1 !important; }
+  .ws-split { grid-template-columns: 1fr; }
+  .ws-split-aside { max-height: 200px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .ws-module-flush .ws-module-content { overflow: visible; }
+}
+
+/* Alte Panel-Layouts im Workspace ausblenden */
+body.orbit-ws .orbit-dock,
+body.orbit-ws .orbit-cap,
+body.orbit-ws .orbit-stage,
+body.orbit-ws .ob-app,
+body.orbit-ws .os-app {
+  display: none !important;
+}
+
+body.orbit-ws .ws-module .o-page,
+body.orbit-ws .ws-module .ob-screen {
+  max-width: none;
+  margin: 0;
+}

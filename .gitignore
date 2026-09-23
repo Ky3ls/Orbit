@@ -1,0 +1,10 @@
+node_modules
+dist
+data
+*.sqlite
+*.credentials
+.env
+.env.*
+*.log
+.npm
+

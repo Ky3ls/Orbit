@@ -1,0 +1,260 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api, mergeLines } from '../api.js';
+import { consoleLineVisible } from '../appearance.js';
+import { stripAnsi } from '../consoleFormat.js';
+import { fmtTime } from '../format.js';
+import { useAppearance } from '../hooks/useAppearance.js';
+import { useFxStatus } from '../hooks/useFxStatus.js';
+
+const MIN_H = 220;
+const MAX_H = 620;
+const DEFAULT_H = 340;
+const QUICK = ['status', 'players', 'refresh', 'say Willkommen auf dem Server'];
+
+/**
+ * @param {{
+ *   variant?: 'drawer' | 'page' | 'side' | 'cockpit',
+ *   open?: boolean,
+ *   onClose?: () => void,
+ *   height?: number,
+ *   onHeight?: (n: number) => void,
+ * }} props
+ */
+export default function LiveConsole({
+  variant = 'drawer',
+  open = true,
+  onClose,
+  height,
+  onHeight,
+}) {
+  const active = variant === 'page' || variant === 'side' || variant === 'cockpit' || open;
+  const fx = useFxStatus(active ? 4000 : 30_000);
+  const [prefs] = useAppearance();
+  const [targets, setTargets] = useState([]);
+  const [targetId, setTargetId] = useState('');
+  const [lines, setLines] = useState([]);
+  const [command, setCommand] = useState('');
+  const [err, setErr] = useState('');
+  const [sending, setSending] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [histIdx, setHistIdx] = useState(-1);
+  const box = useRef(null);
+  const drag = useRef(null);
+  const stick = useRef(true);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!active) return;
+    api('/api/servers').then((d) => setTargets(d.servers || [])).catch(() => {});
+    api('/api/settings').then((d) => setTargetId(String(d.settings?.consoleTargetServerId || ''))).catch(() => {});
+  }, [active]);
+
+  async function setConsoleTarget(id) {
+    await api('/api/servers/console-target', { method: 'POST', body: { id: id || '' } });
+    setTargetId(String(id || ''));
+  }
+
+  useEffect(() => {
+    if (!active) return undefined;
+    const es = new EventSource('/api/stream');
+    es.addEventListener('console', (e) => {
+      const incoming = JSON.parse(e.data);
+      setLines((prev) => mergeLines(prev, incoming));
+    });
+    es.onerror = () => {};
+    return () => es.close();
+  }, [active]);
+
+  const visible = useMemo(
+    () => lines.filter((line) => consoleLineVisible(line, prefs?.console)),
+    [lines, prefs?.console],
+  );
+
+  useEffect(() => {
+    if (active && stick.current && box.current) {
+      box.current.scrollTop = box.current.scrollHeight;
+    }
+  }, [visible, active]);
+
+  useEffect(() => {
+    if (!active || variant !== 'drawer') return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active, onClose, variant]);
+
+  function onDragStart(e) {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = height || DEFAULT_H;
+    drag.current = { startY, startH };
+    const move = (ev) => {
+      if (!drag.current) return;
+      const next = Math.min(MAX_H, Math.max(MIN_H, drag.current.startH + (drag.current.startY - ev.clientY)));
+      onHeight?.(next);
+    };
+    const up = () => {
+      drag.current = null;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  async function send(cmd) {
+    const line = (cmd ?? command).trim();
+    if (!line || sending) return;
+    setErr('');
+    setSending(true);
+    try {
+      await api('/api/console', { method: 'POST', body: { command: line } });
+      setHistory((prev) => [line, ...prev.filter((c) => c !== line)].slice(0, 40));
+      setHistIdx(-1);
+      setCommand('');
+    } catch (error) {
+      setErr(error.message);
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
+    }
+  }
+
+  function onScroll() {
+    const el = box.current;
+    if (!el) return;
+    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'ArrowUp' && history.length) {
+      e.preventDefault();
+      const next = Math.min(histIdx + 1, history.length - 1);
+      setHistIdx(next);
+      setCommand(history[next]);
+    }
+    if (e.key === 'ArrowDown' && histIdx >= 0) {
+      e.preventDefault();
+      const next = histIdx - 1;
+      setHistIdx(next);
+      setCommand(next < 0 ? '' : history[next]);
+    }
+  }
+
+  if (variant === 'drawer' && !open) return null;
+
+  const h = height || DEFAULT_H;
+  const rootClass = variant === 'page'
+    ? 'live-console live-console-page'
+    : variant === 'side'
+      ? 'live-console live-console-side'
+      : variant === 'cockpit'
+        ? 'live-console live-console-cockpit'
+        : 'live-console live-console-drawer';
+
+  return (
+    <div
+      className={rootClass}
+      style={variant === 'drawer' ? { height: h } : undefined}
+      role={variant === 'drawer' ? 'dialog' : 'region'}
+      aria-label="Live-Konsole"
+    >
+      {variant === 'drawer' && (
+        <button type="button" className="lc-resize" aria-label="Höhe ändern" onPointerDown={onDragStart} />
+      )}
+      <header className="lc-head">
+        <div className="lc-title">
+          <span className={`lc-pulse${active ? ' on' : ''}`} aria-hidden="true" />
+          <div>
+            <strong>Live-Konsole</strong>
+            <span className="lc-sub">
+              {fx.fxCommandReady ? 'Stream aktiv · Befehle werden ausgeführt' : 'Nur Log-Stream · Steuerung nicht verbunden'}
+            </span>
+          </div>
+        </div>
+        {targets.length > 0 && (
+          <select
+            className="lc-chip"
+            style={{ maxWidth: 160 }}
+            value={targetId}
+            onChange={(e) => setConsoleTarget(e.target.value)}
+            title="Konsolen-Zielinstanz"
+          >
+            <option value="">Aktiver Server</option>
+            {targets.map((s) => (
+              <option key={s.id} value={s.id}>{s.name} :{s.port}</option>
+            ))}
+          </select>
+        )}
+        <div className="lc-quick">
+          {QUICK.map((q) => (
+            <button
+              key={q}
+              type="button"
+              className="lc-chip"
+              disabled={!fx.fxCommandReady || sending}
+              onClick={() => send(q)}
+            >
+              {q.split(' ')[0]}
+            </button>
+          ))}
+        </div>
+        <div className="lc-actions">
+          {(variant === 'drawer' || variant === 'side') && (
+            <>
+              <Link className="btn btn-sm" to="/panel" onClick={onClose}>Cockpit</Link>
+              <button type="button" className="btn btn-sm" onClick={onClose}>Schließen</button>
+            </>
+          )}
+          {variant !== 'cockpit' && (
+            <button type="button" className="btn btn-sm" onClick={() => setLines([])}>Leeren</button>
+          )}
+          {variant === 'cockpit' && (
+            <button type="button" className="btn btn-sm" onClick={() => setLines([])}>CLR</button>
+          )}
+        </div>
+      </header>
+      <div className="lc-term" ref={box} onScroll={onScroll}>
+        {visible.length === 0 && (
+          <div className="lc-empty">
+            {lines.length ? 'Keine Zeilen — Filter aktiv (Aussehen).' : 'Warte auf FX-Ausgabe…'}
+          </div>
+        )}
+        {visible.map((line) => (
+          <div key={line.id} className={`lc-line ${line.level || 'info'}`}>
+            <span className="lc-ts">{fmtTime(line.t)}</span>
+            <span className="lc-prompt">›</span>
+            <span className="lc-text">{stripAnsi(line.text)}</span>
+          </div>
+        ))}
+        <div className="lc-caret" aria-hidden="true">▌</div>
+      </div>
+      {err && <div className="lc-err">{err}</div>}
+      <form
+        className="lc-form"
+        onSubmit={(e) => { e.preventDefault(); send(); }}
+      >
+        <span className="lc-prompt" aria-hidden="true">fx</span>
+        <input
+          ref={inputRef}
+          className="mono"
+          placeholder={fx.fxCommandReady ? 'Befehl — Pfeil hoch/runter für Verlauf' : 'Konsole nicht verbunden'}
+          value={command}
+          onChange={(e) => setCommand(e.target.value)}
+          onKeyDown={onKeyDown}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={!fx.fxCommandReady}
+        />
+        <button className="btn btn-primary btn-sm" type="submit" disabled={sending || !fx.fxCommandReady}>
+          {sending ? '…' : 'Senden'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+export { DEFAULT_H as LIVE_CONSOLE_DEFAULT_H, MIN_H, MAX_H };

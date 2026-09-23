@@ -1,0 +1,15 @@
+name: Orbit Minimal YAML
+variables:
+  SERVER: $SERVER
+tasks:
+  - action: download_file
+    url: https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip
+    path: resources/[standalone]/oxmysql.zip
+  - action: unzip
+    file: resources/[standalone]/oxmysql.zip
+    dest: resources/[standalone]/oxmysql
+  - action: append_file
+    file: server.cfg
+    data: ensure oxmysql
+  - action: ensure
+    resource: orbit_bridge

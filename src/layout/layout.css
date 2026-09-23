@@ -1,0 +1,301 @@
+/**
+ * ORBIT LAYOUT v3 — nur Struktur (kein Theme-Overlay)
+ * Grid: Sidebar | Main | Console-Rail
+ */
+
+.os-app {
+  --os-sidebar-w: 248px;
+  --os-top-h: 52px;
+  --os-console-h: var(--console-h, 320px);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: var(--os-sidebar-w) 1fr;
+  grid-template-rows: 1fr auto;
+  grid-template-areas:
+    "sidebar main"
+    "console console";
+  background: var(--bg);
+}
+
+.os-app[data-console="1"] {
+  grid-template-rows: 1fr var(--os-console-h);
+}
+
+/* —— Sidebar —— */
+.os-sidebar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 12px;
+  border-right: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35);
+  overflow-y: auto;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.os-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 16px;
+  font-family: var(--display);
+  font-weight: 800;
+  text-transform: lowercase;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  color: inherit;
+}
+.os-sidebar-brand .mark { width: 32px; height: 32px; animation: none; box-shadow: none; }
+
+.os-sidebar-label {
+  display: block;
+  padding: 12px 10px 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.os-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.os-sidebar-link svg { width: 20px; height: 20px; flex-shrink: 0; }
+.os-sidebar-link:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
+.os-sidebar-link.active {
+  background: rgba(var(--accent-rgb), 0.12);
+  color: #fff;
+}
+
+/* —— Main column —— */
+.os-main-col {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding-bottom: 24px;
+}
+
+@media (max-width: 960px) {
+  .os-main-col {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.os-app[data-console="1"] .os-main-col {
+  padding-bottom: 0;
+}
+
+.os-topstrip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--os-top-h);
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.os-topstrip-live { display: flex; flex-wrap: wrap; gap: 8px; }
+.os-pill {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--muted);
+}
+.os-topstrip-actions { position: relative; display: flex; align-items: center; gap: 8px; }
+.os-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+.os-banner {
+  margin: 0 20px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 193, 108, 0.35);
+  font-size: 13px;
+}
+
+.os-canvas-host {
+  flex: 1;
+  overflow: auto;
+  padding: 0 20px 24px;
+}
+
+/* —— Console rail (volle Breite unter Main+Sidebar) —— */
+.os-console-rail {
+  grid-area: console;
+  position: relative;
+  z-index: 40;
+  min-height: 0;
+}
+.os-console-rail .live-console-drawer {
+  position: relative;
+  left: 0;
+  right: 0;
+  bottom: auto;
+  height: 100% !important;
+  max-height: var(--os-console-h);
+}
+
+/* —— Screen (Seiten-Inhalt) —— */
+.os-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.os-screen-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: end;
+  padding: 20px 0 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+.os-kicker {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.os-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 800;
+  line-height: 1.1;
+}
+.os-lead { margin: 8px 0 0; color: var(--muted); font-size: 14px; max-width: 50ch; }
+.os-screen-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.os-tabs {
+  display: flex;
+  gap: 4px;
+  margin: -8px 0 16px;
+  overflow-x: auto;
+}
+.os-screen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 24px;
+}
+
+/* —— Canvas grid —— */
+.os-canvas {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+}
+.os-cell { min-width: 0; }
+.os-span-12 { grid-column: span 12; }
+.os-span-8 { grid-column: span 8; }
+.os-span-6 { grid-column: span 6; }
+.os-span-4 { grid-column: span 4; }
+.os-span-3 { grid-column: span 3; }
+
+.os-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.os-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.os-block-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.os-layout-grid .os-block-content {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+}
+.os-layout-split .os-block-content {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+/* Kacheln — ersetzen o-card im neuen Setup */
+.os-tile {
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  min-height: 0;
+}
+.os-tile-flush { padding: 0; overflow: hidden; }
+
+/* Legacy o-card innerhalb os-screen: an Tile-Struktur anbinden */
+.os-screen .o-card,
+.os-screen .nx-panel {
+  border-radius: 14px;
+  margin: 0;
+}
+
+/* Mobile: Sidebar aus, Dock bleibt */
+.os-mobile-dock { display: none; }
+
+@media (max-width: 960px) {
+  .os-app {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "main"
+      "console";
+  }
+  .os-sidebar { display: none; }
+  .os-mobile-dock {
+    display: grid !important;
+    position: fixed;
+    left: 50%;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: 50;
+  }
+  .os-span-8, .os-span-6, .os-span-4, .os-span-3 { grid-column: span 12; }
+  .os-layout-split .os-block-content { grid-template-columns: 1fr; }
+}

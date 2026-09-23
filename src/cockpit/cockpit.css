@@ -1,0 +1,308 @@
+/* ORBIT Cockpit — schlicht, schwarz/orange, Konsole rechts */
+
+.ws[data-cockpit='1'] {
+  background: var(--bg);
+}
+.ws[data-cockpit='1'] .ws-header {
+  position: relative;
+  z-index: 20;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.ws[data-cockpit='1'] .ws-body {
+  grid-template-columns: 1fr !important;
+}
+.ws[data-cockpit='1'] .ws-main {
+  padding: 0;
+  overflow: hidden;
+  min-height: 0;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+}
+.ws[data-cockpit='1'] .ws-main > * {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
+.ck {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) 1fr;
+  height: calc(100dvh - 52px);
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.ck-hud {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-right: 1px solid var(--line);
+  background: var(--bg-2);
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.ck-hud-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.ck-tag {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+.ck-host {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.ck-meta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ck-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+.ck-ring-glow { display: none; }
+.ck-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.ck-ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 8;
+}
+.ck-ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+.ck-ring-inner { display: none; }
+.ck-ring-core {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.ck-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+  margin-bottom: 4px;
+}
+.ck-live-dot.on {
+  background: var(--ok);
+}
+.ck-ring-num {
+  font-family: var(--mono);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.ck-ring-cap {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.ck-ring-sub {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.ck-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ck-tile {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  position: relative;
+}
+.ck-tile span {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.ck-tile strong {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 1.2rem;
+}
+.ck-tile i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  display: block;
+  max-width: 100%;
+}
+
+.ck-power {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.ck-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ck-jump a {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+.ck-jump a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ck-feed-label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.ck-feed-scroll {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+.ck-chip {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+.ck-chip em {
+  font-style: normal;
+  color: var(--muted);
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.ck-feed-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ck-terminal {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.ck-term-frame {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.ck-corner { display: none; }
+
+.live-console-cockpit {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.live-console-cockpit .lc-head,
+.live-console-cockpit .lc-form {
+  flex-shrink: 0;
+}
+.live-console-cockpit .lc-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.live-console-cockpit .lc-title strong {
+  font-size: 13px;
+  color: var(--text);
+}
+.live-console-cockpit .lc-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+.live-console-cockpit .lc-term {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg-elevated);
+}
+.live-console-cockpit .lc-form {
+  border-top: 1px solid var(--line);
+  background: var(--card);
+}
+.live-console-cockpit .lc-form input {
+  background: var(--bg-2);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+@media (max-width: 900px) {
+  .ck {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 38vh) minmax(0, 1fr);
+    height: calc(100dvh - 52px);
+    overflow: hidden;
+  }
+  .ck-hud {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
