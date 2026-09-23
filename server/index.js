@@ -2124,86 +2124,131 @@ async function handleApi(req, res, url) {
     if (body.confirm !== true && body.confirm !== '1') {
       return json(res, 400, { error: 'Bestätigung fehlt (confirm: true).' });
     }
-    const mode = body.mode === 'full' ? 'full' : 'setup';
-    const deleteServers = body.deleteServers === true || body.deleteServers === '1';
+    /** wipe = Server+Setup-Daten weg, danach Wizard. keep = nur Wizard, Ordner bleiben. */
+    const wipe = body.wipe === true || body.wipe === '1'
+      || body.deleteServers === true || body.deleteServers === '1'
+      || body.mode === 'wipe';
     const settings = settingMap(db);
     const pathsToDelete = [];
-    try {
-      for (const row of listOrbitServers(db)) {
-        if (row.data_path) pathsToDelete.push(row.data_path);
+    const pushPath = (p) => {
+      const abs = String(p || '').replace(/\/$/, '');
+      if (abs && abs.startsWith('/') && abs !== '/' && abs !== '/root' && abs !== '/opt') {
+        pathsToDelete.push(abs);
       }
-      if (settings.fxDataPath) pathsToDelete.push(settings.fxDataPath);
+    };
+    try {
+      for (const row of listOrbitServers(db)) pushPath(row.data_path);
+    } catch { /* */ }
+    pushPath(settings.fxDataPath);
+    pushPath(settings.orbitServersRoot || ORBIT_SERVERS_ROOT);
+    // Unterordner von /opt/orbit/servers
+    try {
+      const root = settings.orbitServersRoot || ORBIT_SERVERS_ROOT;
+      if (root && fs.existsSync(root)) {
+        for (const name of fs.readdirSync(root)) {
+          const full = path.join(root, name);
+          if (fs.statSync(full).isDirectory()) pushPath(full);
+        }
+      }
     } catch { /* */ }
 
     try {
       await stopFxProcess(settings, logLine, { stopAll: true });
     } catch (err) {
-      logLine('warn', `Setup-Reset: FX stop — ${err.message}`);
+      logLine('warn', `Reset: FX stop — ${err.message}`);
     }
-    // Port freimachen abwarten
     const lastPort = Number(settings.fivemPort) || 30120;
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < 12; i += 1) {
       const probe = await checkPortInUse(lastPort, '127.0.0.1');
       if (!probe.inUse) break;
       await new Promise((r) => setTimeout(r, 400));
     }
 
-    try {
-      db.prepare('UPDATE orbit_servers SET is_active = 0').run();
-    } catch { /* */ }
-
-    if (deleteServers) {
+    const deleted = [];
+    const failed = [];
+    if (wipe) {
       const seen = new Set();
-      for (const p of pathsToDelete) {
-        const abs = String(p || '').replace(/\/$/, '');
-        if (!abs || !abs.startsWith('/') || seen.has(abs)) continue;
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const exec = promisify(execFile);
+      for (const abs of pathsToDelete) {
+        if (seen.has(abs)) continue;
         seen.add(abs);
+        // servers-root selbst nicht löschen, nur Inhalt (oben als Kinder)
+        if (abs === String(ORBIT_SERVERS_ROOT).replace(/\/$/, '')) continue;
         if (!fs.existsSync(abs)) continue;
         try {
-          fs.rmSync(abs, { recursive: true, force: true });
-          logLine('warn', `Server-Ordner gelöscht: ${abs}`);
+          await exec('sudo', ['-n', 'rm', '-rf', abs], { timeout: 120_000 });
+          deleted.push(abs);
+          logLine('warn', `Gelöscht: ${abs}`);
         } catch (err) {
-          // root-owned: sudo rm
           try {
-            const { execFile } = await import('node:child_process');
-            const { promisify } = await import('node:util');
-            const exec = promisify(execFile);
-            await exec('sudo', ['-n', 'rm', '-rf', abs], { timeout: 60_000 });
-            logLine('warn', `Server-Ordner per sudo gelöscht: ${abs}`);
+            fs.rmSync(abs, { recursive: true, force: true });
+            deleted.push(abs);
           } catch (e2) {
-            logLine('bad', `Löschen ${abs}: ${err.message} / ${e2.message}`);
+            failed.push(abs);
+            logLine('bad', `Löschen fehlgeschlagen ${abs}: ${err.message}`);
           }
         }
       }
-      try {
-        db.prepare('DELETE FROM orbit_servers').run();
-      } catch { /* */ }
-    }
-
-    setSetting(db, 'setupDone', '0');
-    setSetting(db, 'activeOrbitServerId', '');
-    setSetting(db, 'fxDataPath', '');
-    setSetting(db, 'fivemPort', '');
-    if (mode === 'full' || deleteServers) {
+      try { db.prepare('DELETE FROM orbit_servers').run(); } catch { /* */ }
+      try { db.prepare('DELETE FROM resources').run(); } catch { /* */ }
       for (const k of [
-        'hostname', 'project', 'profileMode', 'profileRecipe',
-        'orbitServerName', 'orbitServerSlug', 'serverLabel',
-        ...(mode === 'full' ? ['mysqlDsn'] : []),
+        'fxDataPath', 'hostname', 'project', 'profileMode', 'profileRecipe',
+        'orbitServerName', 'orbitServerSlug', 'serverLabel', 'mysqlDsn',
+        'activeOrbitServerId', 'fivemPort', 'fxControlMode',
       ]) {
         try { db.prepare('DELETE FROM settings WHERE k = ?').run(k); } catch { /* */ }
       }
+    } else {
+      try { db.prepare('UPDATE orbit_servers SET is_active = 0').run(); } catch { /* */ }
+      setSetting(db, 'activeOrbitServerId', '');
     }
 
-    audit(db, me.username, 'setup.reset', `${mode}${deleteServers ? '+delete' : ''}`, ip);
-    logLine('info', deleteServers
-      ? 'Zurückgesetzt — Server-Ordner gelöscht, Port frei, Wizard offen.'
-      : 'Einrichtung neu — Server deaktiviert (Ordner bleiben, können übernommen werden).');
+    setSetting(db, 'setupDone', '0');
+    audit(db, me.username, 'setup.reset', wipe ? `wipe:${deleted.length}` : 'setup-only', ip);
+    logLine('ok', wipe
+      ? `Alles gelöscht (${deleted.length} Pfade) — Setup startet.`
+      : 'Einrichtung neu — Ordner bleiben.');
     return json(res, 200, {
       ok: true,
       setup: false,
-      mode,
-      deleteServers,
+      wipe,
+      redirect: '/setup',
+      deleted,
+      failed,
       servers: listOrbitServers(db),
+    });
+  }
+
+  if (method === 'POST' && pathname === '/api/settings/uninstall') {
+    if (me.role !== 'owner') return json(res, 403, { error: 'Nur Inhaber.' });
+    const body = await readBody(req);
+    if (String(body.confirmPhrase || '').trim().toUpperCase() !== 'ORBIT LÖSCHEN') {
+      return json(res, 400, { error: 'Bitte exakt „ORBIT LÖSCHEN“ zur Bestätigung eingeben.' });
+    }
+    const settings = settingMap(db);
+    try {
+      await stopFxProcess(settings, logLine, { stopAll: true });
+    } catch { /* */ }
+    audit(db, me.username, 'orbit.uninstall', 'full', ip);
+    logLine('warn', 'Orbit-Deinstallation gestartet — Panel geht offline.');
+    const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'uninstall-orbit.sh');
+    // Antwort zuerst, dann uninstall (Dienst stirbt)
+    setTimeout(async () => {
+      try {
+        const { execFile } = await import('node:child_process');
+        execFile('sudo', ['-n', 'bash', script, '--yes'], { timeout: 300_000 }, (err) => {
+          if (err) logLine('bad', `Uninstall: ${err.message}`);
+        });
+      } catch (err) {
+        logLine('bad', `Uninstall start: ${err.message}`);
+      }
+    }, 800);
+    return json(res, 200, {
+      ok: true,
+      uninstalling: true,
+      message: 'Orbit wird deinstalliert. Das Panel geht in wenigen Sekunden offline — kein Setup mehr.',
     });
   }
 
