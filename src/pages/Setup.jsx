@@ -154,13 +154,20 @@ export default function Setup({ onDone, userName = '' }) {
     return () => clearTimeout(t);
   }, [step, refreshPanelPreview]);
 
-  const probePort = useCallback((p) => {
+  const probePort = useCallback((p, free = false) => {
     const n = Number(p);
     if (!n) return;
-    api('/api/setup/check-port', { method: 'POST', body: { port: n } })
+    api('/api/setup/check-port', {
+      method: 'POST',
+      body: {
+        port: n,
+        dataPath: dataPath.trim() || undefined,
+        freePort: free === true,
+      },
+    })
       .then(setPortStatus)
       .catch(() => setPortStatus(null));
-  }, []);
+  }, [dataPath]);
 
   useEffect(() => {
     if (step !== 5) return undefined;
@@ -532,8 +539,16 @@ export default function Setup({ onDone, userName = '' }) {
                 {portStatus && (
                   <p className={`setup-port-hint ${portStatus.available && !portStatus.orbitConflict ? 'ok' : 'bad'}`}>
                     {portStatus.inUse && 'Port ist belegt.'}
-                    {!portStatus.inUse && portStatus.orbitConflict && `Reserviert für „${portStatus.orbitConflict.name}“.`}
+                    {!portStatus.inUse && portStatus.orbitConflict && `Aktiv belegt von „${portStatus.orbitConflict.name}“.`}
                     {portStatus.available && !portStatus.orbitConflict && 'Port ist frei.'}
+                    {portStatus.inUse && (
+                      <>
+                        {' '}
+                        <button type="button" className="btn btn-sm" style={{ width: 'auto', marginLeft: 8 }} onClick={() => probePort(port, true)}>
+                          FX stoppen &amp; freigeben
+                        </button>
+                      </>
+                    )}
                   </p>
                 )}
                 <label className="field"><span>OneSync</span>
