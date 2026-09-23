@@ -7,29 +7,72 @@ import { ORBIT_ARTIFACTS_ROOT } from './config.js';
 const exec = promisify(execFile);
 
 const ARTIFACT_CHANNEL = 'https://runtime.fivem.net/artifacts/fivem/build_proot_linux/master/';
+const CHANGELOG_API = 'https://changelogs-live.fivem.net/api/changelog/versions/linux/server';
+
+/** @type {{ recommended?: string, latest?: string, recommended_download?: string, latest_download?: string } | null} */
+let changelogCache = null;
+let changelogAt = 0;
 
 export function artifactsRoot() {
   return ORBIT_ARTIFACTS_ROOT;
 }
 
-export async function fetchRecommendedBuild() {
-  const res = await fetch(`${ARTIFACT_CHANNEL}recommended.json`, { signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error('Artifact-Liste nicht erreichbar.');
-  const data = await res.json();
-  return String(data.recommended || data.latest || '').trim();
+async function fetchChangelog() {
+  if (changelogCache && Date.now() - changelogAt < 60_000) return changelogCache;
+  const res = await fetch(CHANGELOG_API, { signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) throw new Error(`Changelog-API nicht erreichbar (${res.status}).`);
+  changelogCache = await res.json();
+  changelogAt = Date.now();
+  return changelogCache;
 }
 
-export async function listRecentBuilds(limit = 12) {
+export async function fetchRecommendedBuild() {
+  try {
+    const data = await fetchChangelog();
+    const build = String(data.recommended || data.latest || '').trim();
+    if (build) return build;
+  } catch {
+    /* HTML-Fallback */
+  }
+  const { builds } = await listRecentBuildsFromIndex(1);
+  if (!builds.length) throw new Error('Artifact-Liste nicht erreichbar.');
+  return String(builds[0]);
+}
+
+async function listRecentBuildsFromIndex(limit = 12) {
   const res = await fetch(ARTIFACT_CHANNEL, { signal: AbortSignal.timeout(20_000) });
   if (!res.ok) throw new Error('Artifact-Index nicht erreichbar.');
   const html = await res.text();
-  const builds = [...html.matchAll(/href="(\d+)-[^"]+\/"/g)].map((m) => m[1]);
+  // Neue Index-Seite: href="./35945-<hash>/" oder ".../fx.tar.xz"
+  const builds = [...html.matchAll(/href="\.?\/?(\d+)-[a-f0-9]+(?:\/(?:fx\.tar\.xz)?)?"/gi)]
+    .map((m) => m[1]);
   const unique = [...new Set(builds)].map(Number).filter((n) => n > 0).sort((a, b) => b - a);
+  return { builds: unique.slice(0, limit), html };
+}
+
+export async function listRecentBuilds(limit = 12) {
+  const { builds } = await listRecentBuildsFromIndex(limit);
   let recommended = '';
   try {
     recommended = await fetchRecommendedBuild();
   } catch { /* optional */ }
-  return { recommended, builds: unique.slice(0, limit) };
+  return { recommended, builds };
+}
+
+async function resolveArtifactUrl(buildNum) {
+  try {
+    const data = await fetchChangelog();
+    for (const key of ['recommended_download', 'latest_download', 'optional_download', 'critical_download']) {
+      const url = String(data[key] || '');
+      if (url.includes(`/${buildNum}-`) && url.includes('fx.tar')) return url;
+    }
+  } catch { /* index fallback */ }
+
+  const { html } = await listRecentBuildsFromIndex(50);
+  const folder = html.match(new RegExp(`(?:href="\\.?/?)(${buildNum}-[a-f0-9]+)(?:/|/)`, 'i'))?.[1]
+    || html.match(new RegExp(`(${buildNum}-[a-f0-9]+)/fx\\.tar\\.xz`, 'i'))?.[1];
+  if (!folder) throw new Error(`Build ${buildNum} nicht im Artifact-Index gefunden.`);
+  return `${ARTIFACT_CHANNEL}${folder}/fx.tar.xz`;
 }
 
 export function installedArtifacts() {
@@ -58,11 +101,7 @@ export async function installArtifact(build, onLog = () => {}) {
     return { path: dest, build: buildNum, skipped: true };
   }
   fs.mkdirSync(dest, { recursive: true });
-  const idx = await fetch(ARTIFACT_CHANNEL, { signal: AbortSignal.timeout(20_000) });
-  const idxHtml = await idx.text();
-  const folder = idxHtml.match(new RegExp(`href="(${buildNum}-[a-f0-9]+)/"`))?.[1];
-  if (!folder) throw new Error(`Build ${buildNum} nicht im Artifact-Index gefunden.`);
-  const url = `${ARTIFACT_CHANNEL}${folder}/fx.tar.xz`;
+  const url = await resolveArtifactUrl(buildNum);
   const archive = path.join(dest, 'fx.tar.xz');
   onLog(`Lade Artifact ${buildNum}…`);
   const res = await fetch(url, { signal: AbortSignal.timeout(600_000) });
