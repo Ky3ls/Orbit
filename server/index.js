@@ -100,7 +100,7 @@ import { refreshInstanceMonitors } from './instanceMonitor.js';
 import { pollOrbitLogDrops } from './fxLogTail.js';
 import { resolveConsoleSettings } from './consoleSettings.js';
 import { fxCommandReady } from './rcon.js';
-import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
+import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady, hydrateConsoleFromFxLog } from './fxSupervisor.js';
 import { logLine, runtime, pushSeries, setLogHook, snapshot } from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -2423,6 +2423,7 @@ const boot = (async () => {
   try {
     ensureIngameToken(db);
     const s = settingMap(db);
+    if (s.fxDataPath) hydrateConsoleFromFxLog(s.fxDataPath, logLine, '1', 400);
     syncOrbitSystemResource(s.fxServerRoot || FX_SERVER_ROOT, s.fxDataPath || '', (t) => logLine('info', t));
     if (supervisorConsoleReady(s)) {
       hotDeployOrbit(db, (cmd) => sendSupervisorCommand(s, cmd), s.fxServerRoot, s.fxDataPath, (t) => logLine('info', t));
