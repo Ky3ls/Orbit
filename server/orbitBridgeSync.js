@@ -1,12 +1,32 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { HOST, PORT, FX_SERVER_ROOT } from './config.js';
 import { setSetting, settingMap } from './db.js';
 
 const PANEL_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BRIDGE_SRC = path.join(PANEL_ROOT, 'resources', 'orbit_bridge');
+const PANEL_USER = process.env.ORBIT_USER || 'orbit';
+
+function sudoRun(args) {
+  execFileSync('sudo', ['-n', ...args], { timeout: 120_000, stdio: 'pipe' });
+}
+
+/** Löschen — bei EACCES per sudo (root-owned Reste). */
+function rmRf(target) {
+  if (!target || !fs.existsSync(target)) return;
+  try {
+    fs.rmSync(target, { recursive: true, force: true });
+  } catch (err) {
+    if (err.code === 'EACCES' || err.code === 'EPERM' || err.code === 'ENOTEMPTY') {
+      sudoRun(['rm', '-rf', target]);
+      return;
+    }
+    throw err;
+  }
+}
 
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
@@ -17,6 +37,23 @@ function copyDir(src, dest) {
     if (ent.isDirectory()) copyDir(from, to);
     else fs.copyFileSync(from, to);
   }
+}
+
+/** Kopie inkl. Fallback sudo cp -a + chown orbit. */
+function installDir(src, dest) {
+  rmRf(dest);
+  try {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    copyDir(src, dest);
+  } catch (err) {
+    if (err.code !== 'EACCES' && err.code !== 'EPERM') throw err;
+    sudoRun(['mkdir', '-p', dest]);
+    sudoRun(['cp', '-a', `${src}/.`, dest]);
+    sudoRun(['chown', '-R', `${PANEL_USER}:${PANEL_USER}`, dest]);
+  }
+  try {
+    sudoRun(['chown', '-R', `${PANEL_USER}:${PANEL_USER}`, dest]);
+  } catch { /* optional */ }
 }
 
 /** Interner HTTP-Endpunkt, den FX immer erreichen kann. */
@@ -43,7 +80,16 @@ export function ensureOrbitInServerCfg(dataPath, onLog = () => {}) {
   let raw = fs.readFileSync(cfg, 'utf8');
   if (/^\s*ensure\s+orbit\b/mi.test(raw)) return false;
   raw = `${raw.trimEnd()}\n\n## Orbit Admin-Menü (system_resources — auto)\nensure orbit\n`;
-  fs.writeFileSync(cfg, raw);
+  try {
+    fs.writeFileSync(cfg, raw);
+  } catch (err) {
+    if (err.code === 'EACCES' || err.code === 'EPERM') {
+      const tmp = `/tmp/orbit-cfg-${Date.now()}.cfg`;
+      fs.writeFileSync(tmp, raw);
+      sudoRun(['cp', tmp, cfg]);
+      sudoRun(['chown', `${PANEL_USER}:${PANEL_USER}`, cfg]);
+    } else throw err;
+  }
   onLog(`ensure orbit → ${cfg}`);
   return true;
 }
@@ -59,15 +105,13 @@ export function syncOrbitSystemResource(fxServerRoot, dataPath, onLog = () => {}
   }
   const fxRoot = String(fxServerRoot || FX_SERVER_ROOT).replace(/\/$/, '');
   const sysDest = path.join(fxRoot, 'alpine/opt/cfx-server/citizen/system_resources/orbit');
-  fs.rmSync(sysDest, { recursive: true, force: true });
-  copyDir(BRIDGE_SRC, sysDest);
+  installDir(BRIDGE_SRC, sysDest);
   onLog(`orbit → system_resources (${sysDest})`);
 
   let dataDest = '';
   if (dataPath) {
     dataDest = path.join(String(dataPath).replace(/\/$/, ''), 'resources', '[orbit]', 'orbit');
-    fs.rmSync(dataDest, { recursive: true, force: true });
-    copyDir(BRIDGE_SRC, dataDest);
+    installDir(BRIDGE_SRC, dataDest);
     onLog(`orbit → datadir (${dataDest})`);
     ensureOrbitInServerCfg(dataPath, onLog);
   }

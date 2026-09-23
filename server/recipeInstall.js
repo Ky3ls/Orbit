@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import mysql from 'mysql2/promise';
 import { RECIPE_PACKS, renderProfileCfgBlock } from './recipeProfiles.js';
@@ -10,10 +10,19 @@ const exec = promisify(execFile);
 
 export { RECIPE_PACKS } from './recipeProfiles.js';
 
+function rmRfSafe(target) {
+  if (!target || !fs.existsSync(target)) return;
+  try {
+    rmRfSafe(target);
+  } catch {
+    execFileSync('sudo', ['-n', 'rm', '-rf', target], { timeout: 120_000 });
+  }
+}
+
 async function gitClone(url, destDir, depth = 1) {
   fs.mkdirSync(path.dirname(destDir), { recursive: true });
   if (fs.existsSync(path.join(destDir, '.git'))) return { skipped: true };
-  if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
+  if (fs.existsSync(destDir)) rmRfSafe(destDir);
   await exec('git', ['clone', '--depth', String(depth), url, destDir], { timeout: 300_000 });
   return { skipped: false };
 }
@@ -33,7 +42,7 @@ function flattenResourceDir(dest) {
     for (const name of fs.readdirSync(tmp)) {
       fs.renameSync(path.join(tmp, name), path.join(dest, name));
     }
-    fs.rmSync(tmp, { recursive: true, force: true });
+    rmRfSafe(tmp);
   }
 }
 
@@ -73,7 +82,7 @@ async function clonePromote(url, resourcesRoot, destGroup, promoteSubdir, depth,
   await gitClone(url, tmp, depth);
   const srcRoot = promoteSubdir ? path.join(tmp, promoteSubdir) : tmp;
   if (!fs.existsSync(srcRoot)) {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    rmRfSafe(tmp);
     throw new Error(`Repo ohne Ordner ${promoteSubdir || '/'}`);
   }
   fs.mkdirSync(dest, { recursive: true });
@@ -81,7 +90,7 @@ async function clonePromote(url, resourcesRoot, destGroup, promoteSubdir, depth,
     if (name.startsWith('.')) continue;
     const from = path.join(srcRoot, name);
     const to = path.join(dest, name);
-    if (fs.existsSync(to)) fs.rmSync(to, { recursive: true, force: true });
+    if (fs.existsSync(to)) rmRfSafe(to);
     fs.renameSync(from, to);
   }
   // SQL-Ordner aus Repo-Root neben resources ablegen (nicht als Resource scannen)
@@ -91,11 +100,11 @@ async function clonePromote(url, resourcesRoot, destGroup, promoteSubdir, depth,
     fs.mkdirSync(sqlDest, { recursive: true });
     for (const name of fs.readdirSync(sqlSrc)) {
       const to = path.join(sqlDest, name);
-      if (fs.existsSync(to)) fs.rmSync(to, { recursive: true, force: true });
+      if (fs.existsSync(to)) rmRfSafe(to);
       fs.renameSync(path.join(sqlSrc, name), to);
     }
   }
-  fs.rmSync(tmp, { recursive: true, force: true });
+  rmRfSafe(tmp);
   return { skipped: false };
 }
 
@@ -260,6 +269,18 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
       results.sql = { imported: 0, failed: 1, error: err.message };
     }
   }
+
+  // Temp-Clones + Ownership aufräumen
+  try {
+    for (const name of fs.readdirSync(resources)) {
+      if (name.startsWith('.orbit_clone_') || name.endsWith('.__hoist')) {
+        rmRfSafe(path.join(resources, name));
+      }
+    }
+  } catch { /* */ }
+  try {
+    execFileSync('sudo', ['-n', 'chown', '-R', 'orbit:orbit', resources], { timeout: 60_000 });
+  } catch { /* */ }
 
   syncOrbitBridgeToDataPath(dataPath, onLog);
 
