@@ -43,7 +43,7 @@ function renderOrbitCfg({ name, project, port, maxClients, locale, tags, onesync
     os,
     '',
     '# set sv_licenseKey "…"  # in server.cfg ergänzen',
-    '# set mysql_connection_string "mysql://user:pass@127.0.0.1/db"',
+    '# mysql_connection_string wird vom Orbit-Setup gesetzt',
     '',
     ensures,
     '',

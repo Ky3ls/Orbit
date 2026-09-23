@@ -12,13 +12,25 @@ export const RECIPE_PACKS = {
   esx: {
     title: 'ESX Legacy (Profil)',
     profile: 'esx',
-    ensures: ['oxmysql', 'es_extended', 'ox_lib', 'esx_identity', 'esx_multicharacter', 'hardcap', 'chat'],
+    // FiveM startet Ressourcen in [core]/ und [esx_addons]/ per Ordner-ensure
+    ensures: ['oxmysql', 'ox_lib', '[core]', '[esx_addons]', 'hardcap', 'chat'],
     zips: [
       { name: 'oxmysql', url: 'https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip', dest: '[standalone]/oxmysql' },
       { name: 'ox_lib', url: 'https://github.com/overextended/ox_lib/releases/latest/download/ox_lib.zip', dest: '[standalone]/ox_lib' },
     ],
     clones: [
-      { url: 'https://github.com/esx-framework/esx_core.git', dest: '[core]/esx_core', depth: 1 },
+      {
+        url: 'https://github.com/esx-framework/esx_core.git',
+        dest: '[core]',
+        promote: '[core]',
+        depth: 1,
+      },
+      {
+        url: 'https://github.com/esx-framework/ESX-Legacy-Addons.git',
+        dest: '[esx_addons]',
+        promote: '[esx_addons]',
+        depth: 1,
+      },
     ],
     cfgBlock: `
 # --- Orbit Profil: ESX Legacy ---
@@ -26,10 +38,9 @@ setr esx:locale "de"
 setr inventory:framework "esx"
 {{MYSQL_LINE}}
 ensure oxmysql
-ensure es_extended
 ensure ox_lib
-ensure esx_identity
-ensure esx_multicharacter
+ensure [core]
+ensure [esx_addons]
 `,
   },
   qb: {
@@ -56,7 +67,7 @@ export function renderProfileCfgBlock(pack, { mysqlConnection = '' } = {}) {
   const mysql = String(mysqlConnection || '').trim();
   const mysqlLine = mysql
     ? `set mysql_connection_string "${mysql.replace(/"/g, '')}"`
-    : '# set mysql_connection_string "mysql://user:pass@127.0.0.1/orbit?charset=utf8mb4"';
+    : '# set mysql_connection_string "…"';
   const block = String(pack.cfgBlock || '').replace('{{MYSQL_LINE}}', mysqlLine);
   return block.trim();
 }

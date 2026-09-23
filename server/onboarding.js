@@ -76,7 +76,7 @@ export function defaultDbName(serverName) {
 export async function provisionMysqlDatabase(opts) {
   const dbName = safeIdent(opts.dbName);
   const appUser = safeIdent(opts.appUser || 'orbit');
-  const appPass = String(opts.appPassword || randomBytes(10).toString('base64url'));
+  const appPass = String(opts.appPassword || randomBytes(12).toString('hex'));
   const passSql = appPass.replace(/'/g, "''");
   const sql = [
     `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,

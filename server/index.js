@@ -44,6 +44,7 @@ import { patchCfgServerOpts } from './cfgPatch.js';
 import { mergeCfgSecrets, parseCfgIntegrations, parseServerCfg, probeFiveM, readCfg, redactCfg, readHost, syncActiveCfgPath, validateCfg, writeCfg } from './fivem.js';
 import { orbitServerProfile } from './orbitServer.js';
 import {
+  activateOrbitServer,
   buildSettingsForServer,
   createAndActivateOrbitServer,
   getActiveOrbitServer,
@@ -1062,6 +1063,25 @@ async function handleApi(req, res, url) {
         if (!dataPath) {
           return json(res, 400, { error: 'Datenordner für vorhandenen Server fehlt.' });
         }
+        // Vorhandenen Orbit-Server wieder aktivieren oder neu eintragen
+        let row = db.prepare('SELECT * FROM orbit_servers WHERE data_path = ?').get(dataPath);
+        if (!row) {
+          const slug = String(hostname || 'server').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'server';
+          const info = db.prepare(`
+            INSERT INTO orbit_servers (slug, name, data_path, fx_root, port, max_clients, is_active, created)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+          `).run(
+            `${slug}-${Date.now().toString(36)}`,
+            hostname,
+            dataPath,
+            settingsBefore.fxServerRoot || '',
+            port,
+            slots,
+            Date.now(),
+          );
+          row = db.prepare('SELECT * FROM orbit_servers WHERE id = ?').get(info.lastInsertRowid);
+        }
+        activateOrbitServer(db, row.id);
         const parsed = readCfg();
         const now = Date.now();
         const insert = db.prepare('INSERT OR IGNORE INTO resources (name, actual, updated) VALUES (?, ?, ?)');
@@ -1069,6 +1089,14 @@ async function handleApi(req, res, url) {
         imported = parsed.resources.length;
         if (parsed.pub.hostname) hostname = parsed.pub.hostname;
         if (parsed.pub.maxClients) slots = parsed.pub.maxClients;
+        try {
+          const integr = parseCfgIntegrations(parsed.raw || fs.readFileSync(path.join(dataPath, 'server.cfg'), 'utf8'));
+          if (integr.mysqlDsn) {
+            mysqlDsn = integr.mysqlDsn;
+            setSetting(db, 'mysqlDsn', integr.mysqlDsn);
+          }
+        } catch { /* */ }
+        logLine('ok', `Vorhandener Server aktiviert: ${dataPath}`);
       } catch (err) {
         return json(res, 500, { error: err.message || 'Die vorhandene server.cfg konnte nicht gelesen werden.' });
       }
@@ -1265,7 +1293,7 @@ async function handleApi(req, res, url) {
         setSetting(db, 'panelAccessMode', panelResult.mode);
         setSetting(db, 'panelPort', String(panelResult.panelPort));
         for (const line of panelResult.nextSteps || []) nextSteps.push(line);
-        schedulePanelServiceRestart();
+        schedulePanelServiceRestart(panelResult.restartDelayMs || 1200);
         panelRestart = true;
         audit(db, me.username, 'setup.panel', panelResult.mode, ip);
       } catch (err) {
@@ -2059,6 +2087,8 @@ async function handleApi(req, res, url) {
     if (body.confirm !== true && body.confirm !== '1') {
       return json(res, 400, { error: 'Bestätigung fehlt (confirm: true).' });
     }
+    const mode = body.mode === 'full' ? 'full' : 'setup';
+    const deleteServers = body.deleteServers === true || body.deleteServers === '1';
     const settings = settingMap(db);
     try {
       if (orbitControlMode(settings) === 'orbit') {
@@ -2069,10 +2099,53 @@ async function handleApi(req, res, url) {
     } catch (err) {
       logLine('warn', `Setup-Reset: FX stop — ${err.message}`);
     }
+
+    // Alle Orbit-Server deaktivieren (bleiben in DB, außer full+delete)
+    try {
+      db.prepare('UPDATE orbit_servers SET is_active = 0').run();
+    } catch { /* table fehlt ggf. */ }
+
+    if (mode === 'full' && deleteServers) {
+      const rows = listOrbitServers(db);
+      for (const row of rows) {
+        const p = String(row.data_path || '');
+        if (p && p.startsWith('/') && fs.existsSync(p)) {
+          try {
+            fs.rmSync(p, { recursive: true, force: true });
+            logLine('warn', `Server-Ordner gelöscht: ${p}`);
+          } catch (err) {
+            logLine('bad', `Löschen ${p}: ${err.message}`);
+          }
+        }
+      }
+      try {
+        db.prepare('DELETE FROM orbit_servers').run();
+      } catch { /* */ }
+    }
+
     setSetting(db, 'setupDone', '0');
-    audit(db, me.username, 'setup.reset', '', ip);
-    logLine('info', 'Einrichtung zurückgesetzt — Wizard erneut verfügbar.');
-    return json(res, 200, { ok: true, setup: false });
+    setSetting(db, 'activeOrbitServerId', '');
+    if (mode === 'full') {
+      // Panel bleibt, aber Server-Bindung / Profil zurück
+      for (const k of [
+        'fxDataPath', 'hostname', 'project', 'profileMode', 'profileRecipe',
+        'orbitServerName', 'orbitServerSlug', 'serverLabel', 'mysqlDsn',
+      ]) {
+        try { db.prepare('DELETE FROM settings WHERE k = ?').run(k); } catch { /* */ }
+      }
+    }
+
+    audit(db, me.username, 'setup.reset', `${mode}${deleteServers ? '+delete' : ''}`, ip);
+    logLine('info', mode === 'full'
+      ? `Orbit zurückgesetzt${deleteServers ? ' (Server-Ordner gelöscht)' : ''}.`
+      : 'Einrichtung neu — Server deaktiviert, Ordner bleiben.');
+    return json(res, 200, {
+      ok: true,
+      setup: false,
+      mode,
+      deleteServers,
+      servers: listOrbitServers(db),
+    });
   }
 
   if (method === 'POST' && pathname === '/api/settings/rescan') {
