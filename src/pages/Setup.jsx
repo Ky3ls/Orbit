@@ -257,7 +257,7 @@ export default function Setup({ onDone }) {
             {step === 0 && (
               <>
                 <h1>System-Check</h1>
-                <p className="lede">Pfade, FX-Artifact und MySQL — bevor der Server angelegt wird.</p>
+                <p className="lede">Orbit-Pfade unter /opt/orbit — FX wird automatisch nach artifacts/ geladen.</p>
                 <div className="setup-checks">
                   <CheckRow
                     ok={preflight?.paths?.issues?.length === 0}
@@ -281,8 +281,10 @@ export default function Setup({ onDone }) {
                   <CheckRow
                     ok={preflight?.artifact}
                     warn={!preflight?.artifact}
-                    title="FX-Artifact"
-                    detail={preflight?.artifact ? 'Binary vorhanden oder wird beim Abschluss geladen' : 'Wird beim Abschluss automatisch installiert'}
+                    title="FXServer (in Orbit)"
+                    detail={preflight?.artifact
+                      ? 'FX-Binary unter /opt/orbit/artifacts vorhanden'
+                      : 'Wird beim Abschluss nach /opt/orbit/artifacts geladen'}
                   />
                 </div>
                 <div className="setup-actions-inline">

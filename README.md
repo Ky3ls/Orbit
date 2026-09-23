@@ -1,12 +1,12 @@
 # Orbit
 
-Web-Panel für FiveM/FXServer: Start/Stop, Live-Konsole, Ressourcen, Multi-Server und schlankes Ingame-Menü.
-Alles unter **`/opt/orbit`** — Panel, Daten, FX-Builds und Server-Instanzen.
+Web-Panel **und** FiveM/FXServer in einem. Auf einem frischen Linux-Server reicht die Installation — danach im Browser einen Server anlegen. FX wird automatisch nach `/opt/orbit/artifacts` geladen, Server-Daten liegen unter `/opt/orbit/servers`.
 
 ## Voraussetzungen
 
 - Linux (root/sudo)
 - Git, Node.js 20+, npm, unzip, xz-utils
+- Internet (FX-Artifact-Download beim Setup)
 
 ## Installation
 
@@ -23,32 +23,30 @@ curl -fsSL https://raw.githubusercontent.com/Ky3ls/Orbit/main/scripts/install-or
   | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/Orbit.git bash
 ```
 
-Struktur nach dem Install:
+Danach alles unter einem Pfad:
 
 ```
-/opt/orbit/           Panel (dieses Repo)
-/opt/orbit/data/      Panel-Datenbank
-/opt/orbit/artifacts/ FXServer-Builds
-/opt/orbit/servers/   Server-Datenordner
+/opt/orbit/              Panel + Code
+/opt/orbit/data/         Panel-DB
+/opt/orbit/artifacts/    FXServer-Builds (wird beim Setup geladen)
+/opt/orbit/servers/      deine FiveM-Server (cfg, resources, …)
 ```
 
-Dienst: `orbit` · Port: **40220** · System-User: `orbit`
+Dienst: `orbit` · Port: **40220** · User: `orbit`
 
-Optional mit öffentlicher URL:
-
-```bash
-sudo ORBIT_PUBLIC_URL=https://panel.example.com bash scripts/install-orbit.sh
-```
-
-## Ersteinrichtung
+## Ersteinrichtung (frischer Server)
 
 1. Browser: `http://DEINE-SERVER-IP:40220`
-2. Setup-Wizard: Master-Account → Zugang → optional Framework → Port → Datenbank → License → Start
-3. Cockpit: Konsole, Start/Stop, Ressourcen
+2. Master-Account anlegen
+3. Setup-Wizard: Name, Port, optional Framework, MySQL, License
+4. Orbit lädt das empfohlene FX-Artifact und legt den Server unter `/opt/orbit/servers/…` an
+5. Start — fertig
 
-Später: **Einstellungen** → Instanzen, FX Builds, Prod (License / MySQL).
+Kein separates `FXServer`-Download, kein `run.sh` von Hand, kein fremder Datenordner nötig.
 
 **Ingame:** `/orbit` oder `/tx` — Heal, Announce, Spielerliste, Kick.
+
+Weitere Server später: **Einstellungen → Instanzen**.
 
 ## Update
 
@@ -66,5 +64,3 @@ sudo systemctl restart orbit
 systemctl status orbit
 journalctl -u orbit -f
 ```
-
-FX Start/Stop nur über das Panel.
