@@ -52,16 +52,44 @@ export async function detectMysqlService() {
   }
 }
 
+/**
+ * Installiert MariaDB nur wenn noch kein MySQL/MariaDB-Dienst existiert.
+ * Bestehende Installationen werden nie angefasst (kein apt, kein Restart).
+ */
 export async function installMysql(logLine = () => {}) {
-  logLine('info', 'MySQL/MariaDB Installation (apt)…');
+  const existing = await detectMysqlService();
+  if (existing.running) {
+    logLine('ok', `MySQL/MariaDB läuft bereits (${existing.service}) — Installation übersprungen.`);
+    return existing;
+  }
+  if (existing.installed) {
+    logLine('info', 'MySQL/MariaDB installiert, Dienst starten…');
+    for (const svc of ['mysql', 'mariadb']) {
+      try {
+        await exec('sudo', ['-n', 'systemctl', 'enable', '--now', svc], { timeout: 60_000 });
+        break;
+      } catch { /* next */ }
+    }
+    const st = await detectMysqlService();
+    if (st.running) {
+      logLine('ok', `Dienst ${st.service} gestartet.`);
+      return st;
+    }
+    throw new Error('MySQL ist installiert, startet aber nicht. Bitte systemctl status mysql prüfen.');
+  }
+
+  logLine('info', 'Kein MySQL gefunden — MariaDB wird installiert (apt)…');
   await exec('sudo', ['-n', 'apt-get', 'update', '-qq'], { timeout: 180_000 });
   await exec('sudo', [
     '-n', 'env', 'DEBIAN_FRONTEND=noninteractive',
     'apt-get', 'install', '-y', '-qq', 'mariadb-server',
   ], { timeout: 600_000 });
-  await exec('sudo', ['-n', 'systemctl', 'enable', '--now', 'mariadb'], { timeout: 60_000 });
+  await exec('sudo', ['-n', 'systemctl', 'enable', '--now', 'mariadb'], { timeout: 60_000 }).catch(async () => {
+    await exec('sudo', ['-n', 'systemctl', 'enable', '--now', 'mysql'], { timeout: 60_000 });
+  });
   const st = await detectMysqlService();
   if (!st.running) throw new Error('MariaDB installiert, Dienst läuft nicht.');
+  logLine('ok', 'MariaDB installiert und gestartet.');
   return st;
 }
 
