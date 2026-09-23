@@ -930,8 +930,22 @@ async function handleApi(req, res, url) {
       } catch (err) {
         return json(res, 400, { error: err.message });
       }
+      // FX zuerst nach /opt/orbit/artifacts, dann Server-Daten unter /opt/orbit/servers
+      let fxRoot = settingsBefore.fxServerRoot || '';
       try {
-        const fxRoot = settingsBefore.fxServerRoot || '';
+        const hasFx = fxRoot && fs.existsSync(path.join(fxRoot, 'alpine/opt/cfx-server/FXServer'));
+        if (!hasFx && body.installArtifact !== false) {
+          const build = await fetchRecommendedBuild();
+          const installed = await installArtifact(build, (t) => logLine('info', t));
+          fxRoot = installed.path;
+          setSetting(db, 'fxServerRoot', fxRoot);
+          setSetting(db, 'fxArtifactBuild', installed.build);
+          logLine('ok', `FX Artifact ${installed.build} → ${fxRoot}`);
+        }
+      } catch (err) {
+        return json(res, 500, { error: `FX-Download: ${err.message}` });
+      }
+      try {
         const { row, result } = createAndActivateOrbitServer(db, {
           name: hostname,
           project,
@@ -1010,23 +1024,35 @@ async function handleApi(req, res, url) {
     runtime.hostname = hostname;
     runtime.maxClients = slots;
 
-    const settingsAfter = settingMap(db);
-    let serverStarted = false;
-    let artifactBuild = settingsAfter.fxArtifactBuild || '';
+    // Fallback: FX nachziehen (z. B. existing/migrate ohne Binary)
+    let artifactBuild = settingMap(db).fxArtifactBuild || '';
     try {
-      const root = settingsAfter.fxServerRoot || '';
-      const hasFx = root && fs.existsSync(path.join(root, 'alpine/opt/cfx-server/FXServer'));
+      let root = settingMap(db).fxServerRoot || '';
+      let hasFx = root && fs.existsSync(path.join(root, 'alpine/opt/cfx-server/FXServer'));
       if (!hasFx && body.installArtifact !== false) {
         const build = await fetchRecommendedBuild();
         const installed = await installArtifact(build, (t) => logLine('info', t));
         setSetting(db, 'fxServerRoot', installed.path);
         setSetting(db, 'fxArtifactBuild', installed.build);
         artifactBuild = installed.build;
-        logLine('ok', `FX Artifact ${installed.build} installiert.`);
+        root = installed.path;
+        hasFx = true;
+        logLine('ok', `FX Artifact ${installed.build} → ${installed.path}`);
+      } else if (hasFx) {
+        artifactBuild = settingMap(db).fxArtifactBuild || artifactBuild;
+      }
+      if (hasFx && root) {
+        const activeRow = getActiveOrbitServer(db);
+        if (activeRow) {
+          db.prepare('UPDATE orbit_servers SET fx_root = ? WHERE id = ?').run(root, activeRow.id);
+        }
       }
     } catch (err) {
-      nextSteps.push(`FX Build manuell unter Einstellungen → FX Builds installieren (${err.message})`);
+      nextSteps.push(`FX Build: unter Einstellungen → FX Builds installieren (${err.message})`);
     }
+
+    const settingsAfter = settingMap(db);
+    let serverStarted = false;
     try {
       const cfgFile = dataPath ? path.join(dataPath, 'server.cfg') : '';
       const integr = cfgFile && fs.existsSync(cfgFile)

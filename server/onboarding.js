@@ -8,6 +8,9 @@ import { ORBIT_SERVERS_ROOT } from './config.js';
 import { prodReadiness } from './prodConfig.js';
 import { settingMap } from './db.js';
 import { detectTxAdminEnvironment } from './txAdminMigration.js';
+import { installedArtifacts } from './artifacts.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const exec = promisify(execFile);
 
@@ -124,11 +127,18 @@ export async function buildSetupPreflight(db) {
       txAdminAdmins: det.txAdminAdmins,
     };
   } catch { /* Host ohne systemd */ }
+  const readyArtifacts = installedArtifacts().filter((a) => a.ready);
+  const fxRoot = settings.fxServerRoot || '';
+  const hasFxBinary = Boolean(
+    (fxRoot && fs.existsSync(path.join(fxRoot, 'alpine/opt/cfx-server/FXServer')))
+    || readyArtifacts.length > 0,
+  );
   return {
     paths,
     mysql,
     port: { ...portCheck, orbitConflict: orbitPortConflict(db, port) },
-    artifact: Boolean(settings.fxServerRoot && settings.fxArtifactBuild),
+    artifact: hasFxBinary,
+    artifactPath: fxRoot || readyArtifacts[0]?.path || '',
     serversRoot,
     defaultServersRoot: ORBIT_SERVERS_ROOT,
     txadmin,
