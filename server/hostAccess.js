@@ -4,7 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
-export const PANEL_USER = process.env.ORBIT_USER || 'tx2';
+export const PANEL_USER = process.env.ORBIT_USER || 'orbit';
 
 export function canListDirectory(dir) {
   if (!dir || !fs.existsSync(dir)) return false;

@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# Orbit Panel — Installation (Linux, root empfohlen)
+# Orbit — alles unter /opt/orbit
 #
-#   sudo git clone https://github.com/Ky3ls/Orbit.git /opt/tx2
-#   cd /opt/tx2 && sudo bash scripts/install-orbit.sh
+#   sudo git clone https://github.com/Ky3ls/Orbit.git /opt/orbit
+#   cd /opt/orbit && sudo bash scripts/install-orbit.sh
 #
 # Einzeiler:
 #   curl -fsSL https://raw.githubusercontent.com/Ky3ls/Orbit/main/scripts/install-orbit.sh \
 #     | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/Orbit.git bash
-#
-# Optional: ORBIT_INSTALL_DIR ORBIT_PUBLIC_URL ORBIT_PORT ORBIT_GIT_URL
 set -euo pipefail
 
-INSTALL_DIR="${ORBIT_INSTALL_DIR:-/opt/tx2}"
-ARTIFACTS="${ORBIT_ARTIFACTS_ROOT:-/opt/orbit/artifacts}"
-SERVERS="${ORBIT_SERVERS_ROOT:-/opt/orbit/servers}"
-USER_NAME="${ORBIT_USER:-tx2}"
+INSTALL_DIR="${ORBIT_INSTALL_DIR:-/opt/orbit}"
+ARTIFACTS="${ORBIT_ARTIFACTS_ROOT:-$INSTALL_DIR/artifacts}"
+SERVERS="${ORBIT_SERVERS_ROOT:-$INSTALL_DIR/servers}"
+DATA_DIR="${ORBIT_DATA_DIR:-$INSTALL_DIR/data}"
+USER_NAME="${ORBIT_USER:-orbit}"
 PANEL_PORT="${ORBIT_PORT:-40220}"
 PUBLIC_URL="${ORBIT_PUBLIC_URL:-}"
 GIT_URL="${ORBIT_GIT_URL:-https://github.com/Ky3ls/Orbit.git}"
+SERVICE_NAME=orbit
 
 need_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -65,17 +65,22 @@ echo "==> Orbit Installer"
 ensure_pkgs
 
 id "$USER_NAME" &>/dev/null || useradd -r -m -d "/home/$USER_NAME" -s /bin/bash "$USER_NAME"
-mkdir -p "$INSTALL_DIR" "$ARTIFACTS" "$SERVERS" /opt/orbit
-chown -R "$USER_NAME:$USER_NAME" "$ARTIFACTS" "$SERVERS" /opt/orbit
+mkdir -p "$INSTALL_DIR" "$ARTIFACTS" "$SERVERS" "$DATA_DIR"
 
 resolve_source
 
 echo "==> Dateien → $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 if have rsync; then
-  rsync -a --delete --exclude node_modules --exclude dist --exclude data --exclude .git "$SRC/" "$INSTALL_DIR/"
+  rsync -a --delete \
+    --exclude node_modules --exclude dist --exclude data \
+    --exclude artifacts --exclude servers --exclude .git \
+    "$SRC/" "$INSTALL_DIR/"
 else
-  tar -cf - --exclude=node_modules --exclude=dist --exclude=data --exclude=.git -C "$SRC" . | tar -xf - -C "$INSTALL_DIR"
+  tar -cf - \
+    --exclude=node_modules --exclude=dist --exclude=data \
+    --exclude=artifacts --exclude=servers --exclude=.git \
+    -C "$SRC" . | tar -xf - -C "$INSTALL_DIR"
 fi
 chown -R "$USER_NAME:$USER_NAME" "$INSTALL_DIR"
 
@@ -87,13 +92,20 @@ runuser -u "$USER_NAME" -- npm run build
 ENV_LINES="Environment=NODE_ENV=production
 Environment=ORBIT_ARTIFACTS_ROOT=$ARTIFACTS
 Environment=ORBIT_SERVERS_ROOT=$SERVERS
-Environment=PORT=$PANEL_PORT"
+Environment=ORBIT_PANEL_PORT=$PANEL_PORT
+Environment=ORBIT_BIND_HOST=0.0.0.0"
 if [[ -n "$PUBLIC_URL" ]]; then
   ENV_LINES="$ENV_LINES
 Environment=ORBIT_PUBLIC_URL=$PUBLIC_URL"
 fi
 
-cat > /etc/systemd/system/tx2.service <<EOF
+# alten tx2-Dienst entfernen falls noch vorhanden
+systemctl stop tx2.service 2>/dev/null || true
+systemctl disable tx2.service 2>/dev/null || true
+rm -f /etc/systemd/system/tx2.service
+rm -rf /etc/systemd/system/tx2.service.d
+
+cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
 Description=Orbit Panel
 After=network.target
@@ -112,10 +124,10 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable tx2
-systemctl restart tx2
+systemctl enable "$SERVICE_NAME"
+systemctl restart "$SERVICE_NAME"
 sleep 1
-systemctl is-active tx2 >/dev/null && echo "==> Dienst tx2 aktiv" || echo "==> WARNUNG: systemctl status tx2"
+systemctl is-active "$SERVICE_NAME" >/dev/null && echo "==> Dienst $SERVICE_NAME aktiv" || echo "==> WARNUNG: systemctl status $SERVICE_NAME"
 
 HOST_HINT="${PUBLIC_URL:-http://$(hostname -I 2>/dev/null | awk '{print $1}'):$PANEL_PORT}"
 cat <<EOF
@@ -126,12 +138,11 @@ cat <<EOF
  Panel:    $HOST_HINT
  Port:     $PANEL_PORT
  Pfad:     $INSTALL_DIR
- FX/Daten: $ARTIFACTS  ·  $SERVERS
+ Daten:    $DATA_DIR
+ FX:       $ARTIFACTS
+ Server:   $SERVERS
 
- Nächster Schritt:
-   Browser öffnen → Setup-Wizard
-   (Account, Server, Datenbank, License, Start)
-
- Logs: journalctl -u tx2 -f
+ Nächster Schritt: Browser → Setup-Wizard
+ Logs: journalctl -u $SERVICE_NAME -f
 ========================================
 EOF

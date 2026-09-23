@@ -6,8 +6,8 @@ import { promisify } from 'node:util';
 import { ORIGIN, PORT } from './config.js';
 
 const exec = promisify(execFile);
-const TX2_UNIT = 'tx2';
-const DROP_IN = `/etc/systemd/system/${TX2_UNIT}.service.d/orbit-panel.conf`;
+const ORBIT_UNIT = 'orbit';
+const DROP_IN = `/etc/systemd/system/${ORBIT_UNIT}.service.d/orbit-panel.conf`;
 
 export const DEFAULT_PANEL_PORT = 40220;
 
@@ -240,15 +240,15 @@ async function writeSystemdDropIn(env, logLine) {
   const lines = ['[Service]', ...Object.entries(env).map(([k, v]) => `Environment=${k}=${v}`), ''];
   const tmp = `/tmp/orbit-systemd-${Date.now()}.conf`;
   fs.writeFileSync(tmp, lines.join('\n'), 'utf8');
-  await exec('sudo', ['-n', 'mkdir', '-p', '/etc/systemd/system/tx2.service.d'], { timeout: 10_000 });
+  await exec('sudo', ['-n', 'mkdir', '-p', '/etc/systemd/system/orbit.service.d'], { timeout: 10_000 });
   await exec('sudo', ['-n', 'cp', tmp, DROP_IN], { timeout: 10_000 });
   await exec('sudo', ['-n', 'systemctl', 'daemon-reload'], { timeout: 20_000 });
-  logLine('info', 'systemd tx2.service.d aktualisiert.');
+  logLine('info', 'systemd orbit.service.d aktualisiert.');
 }
 
 export function schedulePanelServiceRestart() {
   setTimeout(() => {
-    execFile('sudo', ['-n', 'systemctl', 'restart', TX2_UNIT], () => {
+    execFile('sudo', ['-n', 'systemctl', 'restart', ORBIT_UNIT], () => {
       setTimeout(() => process.exit(0), 200);
     });
   }, 600);

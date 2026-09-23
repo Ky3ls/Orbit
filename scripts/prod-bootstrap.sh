@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
-# Einmalige Prod-Pfade + Rechte (root auf Strato o. ä.)
+# Einmalige Prod-Pfade + Rechte
 set -euo pipefail
-ARTIFACTS="${ORBIT_ARTIFACTS_ROOT:-/opt/orbit/artifacts}"
-SERVERS="${ORBIT_SERVERS_ROOT:-/opt/orbit/servers}"
-USER_NAME="${ORBIT_USER:-tx2}"
+INSTALL_DIR="${ORBIT_INSTALL_DIR:-/opt/orbit}"
+ARTIFACTS="${ORBIT_ARTIFACTS_ROOT:-$INSTALL_DIR/artifacts}"
+SERVERS="${ORBIT_SERVERS_ROOT:-$INSTALL_DIR/servers}"
+USER_NAME="${ORBIT_USER:-orbit}"
 
-mkdir -p "$ARTIFACTS" "$SERVERS" "/opt/orbit"
+mkdir -p "$ARTIFACTS" "$SERVERS" "$INSTALL_DIR/data"
 id "$USER_NAME" &>/dev/null || useradd -r -m -s /bin/bash "$USER_NAME"
-chown -R "$USER_NAME:$USER_NAME" "$ARTIFACTS" "$SERVERS" "/opt/orbit"
-
-if [[ -d /opt/tx2 ]]; then
-  chown -R "$USER_NAME:$USER_NAME" /opt/tx2/data /opt/tx2/dist 2>/dev/null || true
-fi
+chown -R "$USER_NAME:$USER_NAME" "$ARTIFACTS" "$SERVERS" "$INSTALL_DIR/data" 2>/dev/null || true
 
 echo "OK: $ARTIFACTS und $SERVERS für $USER_NAME"
-echo "Danach im Panel: Einstellungen → Host & Instanzen → Prod (License + MySQL)"
