@@ -2160,6 +2160,9 @@ async function handleApi(req, res, url) {
 
     try {
       await forceFreeGamePort(settings, logLine, Number(settings.fivemPort) || 30120);
+    } catch (err) {
+      logLine('warn', `Reset: FX stop — ${err.message}`);
+    }
 
     const deleted = [];
     const failed = [];
@@ -2226,7 +2229,7 @@ async function handleApi(req, res, url) {
     }
     const settings = settingMap(db);
     try {
-      await stopFxProcess(settings, logLine, { stopAll: true });
+      await forceFreeGamePort(settings, logLine, Number(settings.fivemPort) || 30120);
     } catch { /* */ }
     audit(db, me.username, 'orbit.uninstall', 'full', ip);
     logLine('warn', 'Orbit-Deinstallation gestartet — Panel geht offline.');
