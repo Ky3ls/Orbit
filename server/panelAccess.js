@@ -134,10 +134,15 @@ function proxyBlock(panelPort) {
 /** live/ ist root-only — orbit darf nicht fs.existsSync nutzen. */
 async function sudoFileExists(filePath) {
   try {
-    await exec('sudo', ['-n', 'test', '-f', filePath], { timeout: 5000 });
+    await exec('sudo', ['-n', '/usr/bin/test', '-f', filePath], { timeout: 5000 });
     return true;
   } catch {
-    return false;
+    try {
+      await exec('sudo', ['-n', '/bin/test', '-f', filePath], { timeout: 5000 });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -178,9 +183,8 @@ async function nginxHttpsBody(domain, panelPort) {
     '}',
     '',
     'server {',
-    '  listen 443 ssl;',
-    '  listen [::]:443 ssl;',
-    '  http2 on;',
+    '  listen 443 ssl http2;',
+    '  listen [::]:443 ssl http2;',
     `  server_name ${domain};`,
     `  ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;`,
     `  ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;`,
