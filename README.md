@@ -37,12 +37,14 @@ Dienst: `orbit` · Port: **40220** · User: `orbit`
 ## Ersteinrichtung (frischer Server)
 
 1. Dienst starten → **PIN** erscheint im Terminal / `journalctl -u orbit`
-2. Browser: `http://DEINE-IP:40220` → PIN eingeben → **Konto verknüpfen** (Cfx.re)
-3. Backup-Passwort setzen → **Master-Account erstellen** (danach bist du eingeloggt)
-4. Setup-Wizard: Name → Deploy-Typ → Template → Netzwerk → DB → License
-5. Orbit lädt FX und legt den Server unter `/opt/orbit/servers/…` an
+2. Browser: `http://DEINE-IP:40220` → PIN → **Cfx.re verknüpfen**
+3. Backup-Passwort → Master-Account (danach eingeloggt)
+4. Setup-Wizard inkl. **Panel-Zugang** (IP:Port **oder Domain**)
+5. Bei Domain: nach Abschluss automatische Weiterleitung auf die neue URL
 
-Keine Marketing-Landing — Einstieg ist PIN → Cfx → Master → Setup.
+Der Installer legt `/etc/sudoers.d/orbit` an (mkdir/chown/setfacl u. a.), damit Datenordner
+unter `/root/…` und `/home/…` nutzbar sind. Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram`.
+
 
 **Ingame:** `/orbit` oder `/tx` — Heal, Announce, Spielerliste, Kick.
 
