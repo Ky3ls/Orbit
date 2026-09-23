@@ -176,3 +176,16 @@
   word-break: break-all;
   user-select: all;
 }
+
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.field-hint code {
+  font-size: 11px;
+  color: var(--text);
+}

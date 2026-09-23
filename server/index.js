@@ -915,7 +915,7 @@ async function handleApi(req, res, url) {
     try {
       const prov = await provisionMysqlDatabase({
         dbName,
-        rootPassword: body.mysqlRootPassword !== undefined ? str(body.mysqlRootPassword, 128) : undefined,
+        rootPassword: str(body.mysqlRootPassword, 128) || undefined,
         appUser: str(body.appUser, 32) || 'orbit',
       });
       setSetting(db, 'mysqlDsn', prov.dsn);
@@ -999,7 +999,7 @@ async function handleApi(req, res, url) {
           appPassword: typeof body.dbPassword === 'string' && body.dbPassword.length >= 6
             ? body.dbPassword.slice(0, 128)
             : undefined,
-          rootPassword: body.mysqlRootPassword !== undefined ? str(body.mysqlRootPassword, 128) : undefined,
+          rootPassword: str(body.mysqlRootPassword, 128) || undefined,
         });
         mysqlDsn = prov.dsn;
         setSetting(db, 'mysqlDsn', mysqlDsn);
