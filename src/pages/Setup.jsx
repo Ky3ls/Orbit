@@ -544,7 +544,20 @@ export default function Setup({ onDone, userName = '' }) {
                     {portStatus.inUse && (
                       <>
                         {' '}
-                        <button type="button" className="btn btn-sm" style={{ width: 'auto', marginLeft: 8 }} onClick={() => probePort(port, true)}>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          style={{ width: 'auto', marginLeft: 8 }}
+                          disabled={busy}
+                          onClick={async () => {
+                            setBusy(true);
+                            try {
+                              await probePort(port, true);
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}
+                        >
                           FX stoppen &amp; freigeben
                         </button>
                       </>
