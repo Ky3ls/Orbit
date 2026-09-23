@@ -39,6 +39,7 @@ const TEMPLATES = [
 const STEPS = [
   { id: 'welcome', label: 'Start' },
   { id: 'name', label: 'Name' },
+  { id: 'panel', label: 'Panel' },
   { id: 'deploy', label: 'Deploy' },
   { id: 'template', label: 'Template' },
   { id: 'network', label: 'Netzwerk' },
@@ -85,12 +86,14 @@ export default function Setup({ onDone, userName = '' }) {
   const [panelDomain, setPanelDomain] = useState('');
   const [panelPublicHost, setPanelPublicHost] = useState('');
   const [panelStack, setPanelStack] = useState('auto');
+  const [panelPreview, setPanelPreview] = useState(null);
   const [createDatabase, setCreateDatabase] = useState(true);
   const [dbName, setDbName] = useState('');
   const [mysqlRootPassword, setMysqlRootPassword] = useState('');
   const [licenseKey, setLicenseKey] = useState('');
   const [autoStart, setAutoStart] = useState(true);
   const [result, setResult] = useState(null);
+  const [redirectTo, setRedirectTo] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -107,6 +110,27 @@ export default function Setup({ onDone, userName = '' }) {
     if (deploy === 'existing' || deploy === 'custom') setUseCustomPath(true);
   }, [deploy]);
 
+  const refreshPanelPreview = useCallback(() => {
+    api('/api/setup/panel-access/preview', {
+      method: 'POST',
+      body: {
+        mode: panelMode,
+        panelPort: Number(panelPort),
+        publicHost: panelPublicHost.trim() || undefined,
+        domain: panelDomain.trim() || undefined,
+        https: panelMode === 'domain',
+      },
+    })
+      .then(setPanelPreview)
+      .catch(() => setPanelPreview(null));
+  }, [panelMode, panelPort, panelPublicHost, panelDomain]);
+
+  useEffect(() => {
+    if (step !== 2) return undefined;
+    const t = setTimeout(refreshPanelPreview, 350);
+    return () => clearTimeout(t);
+  }, [step, refreshPanelPreview]);
+
   const probePort = useCallback((p) => {
     const n = Number(p);
     if (!n) return;
@@ -116,7 +140,7 @@ export default function Setup({ onDone, userName = '' }) {
   }, []);
 
   useEffect(() => {
-    if (step !== 4) return;
+    if (step !== 5) return undefined;
     const t = setTimeout(() => probePort(port), 400);
     return () => clearTimeout(t);
   }, [port, step, probePort]);
@@ -138,7 +162,7 @@ export default function Setup({ onDone, userName = '' }) {
   }, [useCustomPath]);
 
   useEffect(() => {
-    if (step !== 4 || !useCustomPath) return;
+    if (step !== 5 || !useCustomPath) return undefined;
     const t = setTimeout(() => probePath(serversRoot, dataPath), 400);
     return () => clearTimeout(t);
   }, [step, useCustomPath, serversRoot, dataPath, probePath]);
@@ -191,8 +215,17 @@ export default function Setup({ onDone, userName = '' }) {
         },
       });
       setResult(data);
-      setStep(7);
+      setStep(8);
       onDone();
+
+      const url = String(data.panelUrl || '').replace(/\/$/, '');
+      if (panelMode === 'domain' && url && /^https?:\/\//i.test(url)) {
+        const dest = `${url}/panel`;
+        setRedirectTo(dest);
+        window.setTimeout(() => {
+          window.location.assign(dest);
+        }, 2800);
+      }
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -201,16 +234,16 @@ export default function Setup({ onDone, userName = '' }) {
   }
 
   function goNext() {
-    if (step === 2 && deploy !== 'popular') {
-      setStep(4);
+    if (step === 3 && deploy !== 'popular') {
+      setStep(5);
       return;
     }
     setStep((s) => Math.min(STEPS.length - 1, s + 1));
   }
 
   function goBack() {
-    if (step === 4 && deploy !== 'popular') {
-      setStep(2);
+    if (step === 5 && deploy !== 'popular') {
+      setStep(3);
       return;
     }
     setStep((s) => Math.max(0, s - 1));
@@ -219,12 +252,18 @@ export default function Setup({ onDone, userName = '' }) {
   const canNext = useMemo(() => {
     if (step === 0) return true;
     if (step === 1) return name.trim().length >= 2;
-    if (step === 2) return Boolean(deploy);
-    if (step === 3) {
+    if (step === 2) {
+      const pp = Number(panelPort);
+      if (!Number.isFinite(pp) || pp < 1024 || pp > 65535) return false;
+      if (panelMode === 'domain') return panelDomain.trim().includes('.');
+      return true;
+    }
+    if (step === 3) return Boolean(deploy);
+    if (step === 4) {
       if (deploy === 'remote') return /^https:\/\//i.test(recipeUrl.trim());
       return Boolean(recipe);
     }
-    if (step === 4) {
+    if (step === 5) {
       const p = Number(port);
       const m = Number(maxClients);
       if (!Number.isFinite(p) || p < 1) return false;
@@ -238,16 +277,20 @@ export default function Setup({ onDone, userName = '' }) {
       }
       return true;
     }
-    if (step === 5) {
+    if (step === 6) {
       if (deploy === 'existing') return true;
       if (createDatabase) return Boolean(preflight?.mysql?.running);
       return true;
     }
-    if (step === 6) return licenseKey.trim().length > 8;
+    if (step === 7) return licenseKey.trim().length > 8;
     return false;
-  }, [step, name, deploy, recipe, recipeUrl, port, maxClients, portStatus, pathStatus, useCustomPath, serversRoot, dataPath, preflight, createDatabase, licenseKey]);
+  }, [
+    step, name, deploy, recipe, recipeUrl, port, maxClients, portStatus, pathStatus,
+    useCustomPath, serversRoot, dataPath, preflight, createDatabase, licenseKey,
+    panelMode, panelPort, panelDomain,
+  ]);
 
-  const isLastAction = step === 6;
+  const isLastAction = step === 7;
   const greet = userName || 'Admin';
 
   return (
@@ -268,7 +311,7 @@ export default function Setup({ onDone, userName = '' }) {
             onStepChange={setStep}
             canNext={canNext}
             busy={busy}
-            showNav={step < 7}
+            showNav={step < 8}
             hideBack={step === 0}
             isLastAction={isLastAction}
             completeLabel="Server aufsetzen & starten"
@@ -316,6 +359,64 @@ export default function Setup({ onDone, userName = '' }) {
             {step === 2 && (
               <>
                 <div className="setup-step-num">3</div>
+                <h1>Panel-Zugang</h1>
+                <p className="lede">
+                  Panel per <code className="mono">IP:{DEFAULT_PANEL_PORT}</code> oder eigene Domain mit HTTPS.
+                </p>
+                <div className="deploy-list" style={{ marginBottom: 16 }}>
+                  <button type="button" className={`deploy-card${panelMode === 'port' ? ' on' : ''}`} onClick={() => setPanelMode('port')}>
+                    <div className="deploy-card-top"><b>IP & Port</b></div>
+                    <span>Direkt erreichbar — z. B. {panelAccess?.directPortUrl || `http://…:${DEFAULT_PANEL_PORT}`}</span>
+                  </button>
+                  <button type="button" className={`deploy-card${panelMode === 'domain' ? ' on' : ''}`} onClick={() => setPanelMode('domain')}>
+                    <div className="deploy-card-top"><b>Domain / HTTPS</b></div>
+                    <span>Eigene Domain — Reverse-Proxy wird eingerichtet. Nach dem Setup wirst du dorthin weitergeleitet.</span>
+                  </button>
+                </div>
+                <label className="field">
+                  <span>Panel-Port (intern / bei IP-Zugang)</span>
+                  <input className="mono" type="number" min={1024} max={65535} value={panelPort} onChange={(e) => setPanelPort(e.target.value)} />
+                </label>
+                {panelMode === 'port' && (
+                  <label className="field">
+                    <span>Öffentliche IP (optional)</span>
+                    <input className="mono" placeholder={panelAccess?.publicIp || 'automatisch'} value={panelPublicHost} onChange={(e) => setPanelPublicHost(e.target.value)} />
+                  </label>
+                )}
+                {panelMode === 'domain' && (
+                  <>
+                    <label className="field">
+                      <span>Domain fürs Panel</span>
+                      <input className="mono" autoFocus placeholder="panel.deine-domain.de" value={panelDomain} onChange={(e) => setPanelDomain(e.target.value)} />
+                    </label>
+                    <label className="field">
+                      <span>Webserver (Reverse-Proxy)</span>
+                      <select value={panelStack} onChange={(e) => setPanelStack(e.target.value)}>
+                        <option value="auto">Automatisch ({panelAccess?.suggestedStack || 'nginx'})</option>
+                        {(panelAccess?.stacks || []).map((s) => (
+                          <option key={s.id} value={s.id} disabled={!s.installed}>
+                            {s.label}{s.active ? ' · aktiv' : s.installed ? ' · installiert' : ' · fehlt'}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p className="muted" style={{ fontSize: 13 }}>
+                      DNS muss auf diesen Server zeigen. Beim Abschluss: VHost + Dienst-URL.
+                      {panelAccess?.stacks?.every((s) => !s.installed) ? ' Kein Webserver erkannt — nginx empfohlen oder IP:Port wählen.' : ''}
+                    </p>
+                  </>
+                )}
+                {panelPreview?.previewUrl && (
+                  <p className="setup-port-hint ok" style={{ marginTop: 12 }}>
+                    Vorschau: <span className="mono">{panelPreview.previewUrl}</span>
+                  </p>
+                )}
+              </>
+            )}
+
+            {step === 3 && (
+              <>
+                <div className="setup-step-num">4</div>
                 <h1>Deployment Type</h1>
                 <p className="lede">Wie soll der Server aufgesetzt werden?</p>
                 <div className="deploy-list">
@@ -337,9 +438,9 @@ export default function Setup({ onDone, userName = '' }) {
               </>
             )}
 
-            {step === 3 && (
+            {step === 4 && (
               <>
-                <div className="setup-step-num">4</div>
+                <div className="setup-step-num">5</div>
                 <h1>{deploy === 'remote' ? 'Recipe-URL' : 'Template wählen'}</h1>
                 {deploy === 'remote' ? (
                   <label className="field">
@@ -371,9 +472,9 @@ export default function Setup({ onDone, userName = '' }) {
               </>
             )}
 
-            {step === 4 && (
+            {step === 5 && (
               <>
-                <div className="setup-step-num">5</div>
+                <div className="setup-step-num">6</div>
                 <h1>Netzwerk</h1>
                 <p className="lede">Game-Port und optional eigener Datenordner.</p>
                 <div className="row">
@@ -412,7 +513,12 @@ export default function Setup({ onDone, userName = '' }) {
                         {(pathStatus.issues || []).map((i) => (
                           <p key={i} className="setup-port-hint bad">{i}</p>
                         ))}
-                        {pathStatus.ok && <p className="setup-port-hint ok">Pfad ist nutzbar.</p>}
+                        {(pathStatus.warnings || []).map((w) => (
+                          <p key={w} className="setup-port-hint ok">{w}</p>
+                        ))}
+                        {pathStatus.ok && !(pathStatus.warnings || []).length && (
+                          <p className="setup-port-hint ok">Pfad ist nutzbar.</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -420,9 +526,9 @@ export default function Setup({ onDone, userName = '' }) {
               </>
             )}
 
-            {step === 5 && (
+            {step === 6 && (
               <>
-                <div className="setup-step-num">6</div>
+                <div className="setup-step-num">7</div>
                 <h1>Datenbank</h1>
                 {deploy === 'existing' ? (
                   <p className="lede">Vorhandener Server — DB belassen wir unverändert.</p>
@@ -455,9 +561,9 @@ export default function Setup({ onDone, userName = '' }) {
               </>
             )}
 
-            {step === 6 && (
+            {step === 7 && (
               <>
-                <div className="setup-step-num">7</div>
+                <div className="setup-step-num">8</div>
                 <h1>Keys & Start</h1>
                 <label className="field"><span>sv_licenseKey</span>
                   <input type="password" value={licenseKey} onChange={(e) => setLicenseKey(e.target.value)} placeholder="cfxk_…" autoComplete="off" />
@@ -471,20 +577,38 @@ export default function Setup({ onDone, userName = '' }) {
                   <div className="res-line"><span>Deploy</span><b>{deploy}</b></div>
                   <div className="res-line"><span>Template</span><b>{deploy === 'popular' ? recipe : '—'}</b></div>
                   <div className="res-line"><span>Game-Port</span><b>{port}</b></div>
+                  <div className="res-line">
+                    <span>Panel</span>
+                    <b className="mono" style={{ fontSize: 12 }}>{panelPreview?.previewUrl || (panelMode === 'port' ? `:${panelPort}` : panelDomain)}</b>
+                  </div>
                 </article>
               </>
             )}
 
-            {step === 7 && result && (
+            {step === 8 && result && (
               <>
                 <h1>Fertig</h1>
                 <p className="lede">
                   {result.serverStarted ? 'Server wurde aufgesetzt und gestartet.' : 'Server wurde aufgesetzt.'}
                 </p>
                 {result.serverStarted && <Badge tone="ok">FX läuft</Badge>}
-                <div className="row" style={{ gap: 8, marginTop: 20 }}>
-                  <a className="btn btn-primary" style={{ width: 'auto', display: 'inline-flex' }} href="/panel">Zum Cockpit</a>
-                </div>
+                {result.panelUrl && (
+                  <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>
+                    Panel: <a className="mono" href={result.panelUrl}>{result.panelUrl}</a>
+                    {result.panelRestart ? ' · Dienst wird neu gestartet…' : ''}
+                  </p>
+                )}
+                {redirectTo ? (
+                  <p className="setup-port-hint ok" style={{ marginTop: 16 }}>
+                    Weiterleitung zu <span className="mono">{redirectTo}</span> …
+                  </p>
+                ) : (
+                  <div className="row" style={{ gap: 8, marginTop: 20 }}>
+                    <a className="btn btn-primary" style={{ width: 'auto', display: 'inline-flex' }} href={result.panelUrl ? `${String(result.panelUrl).replace(/\/$/, '')}/panel` : '/panel'}>
+                      Zum Cockpit
+                    </a>
+                  </div>
+                )}
               </>
             )}
           </Stepper>
