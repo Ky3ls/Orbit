@@ -15,7 +15,7 @@ export function normalizeServerPath(p) {
   return resolved.replace(/\/+$/, '') || '/';
 }
 
-function isBlocked(absPath) {
+export function isBlockedPath(absPath) {
   const low = normalizeServerPath(absPath).toLowerCase();
   for (const prefix of BLOCKED_PREFIXES) {
     if (low === prefix || low.startsWith(`${prefix}/`)) return true;
@@ -28,7 +28,7 @@ export function resolveOrbitServersRoot(custom, fallback) {
   if (!trimmed) return String(fallback || '').replace(/\/$/, '');
   const root = normalizeServerPath(trimmed);
   if (!path.isAbsolute(root)) throw new Error('Server-Basisordner muss ein absoluter Pfad sein.');
-  if (isBlocked(root)) throw new Error('Dieser Pfad ist nicht erlaubt.');
+  if (isBlockedPath(root)) throw new Error('Dieser Pfad ist nicht erlaubt.');
   return root;
 }
 
@@ -37,14 +37,24 @@ export function resolveCustomDataPath(custom) {
   if (!trimmed) return '';
   const dataPath = normalizeServerPath(trimmed);
   if (!path.isAbsolute(dataPath)) throw new Error('Server-Datenordner muss ein absoluter Pfad sein.');
-  if (isBlocked(dataPath)) throw new Error('Dieser Pfad ist nicht erlaubt.');
+  if (isBlockedPath(dataPath)) throw new Error('Dieser Pfad ist nicht erlaubt.');
   return dataPath;
 }
 
+function canWrite(dir) {
+  try {
+    fs.accessSync(dir, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Prüft Schreibbarkeit / Belegung für Setup-UI.
+ * Prüft Pfad für Setup-UI.
+ * Fehlende Schreibrechte sind kein Hard-Error, wenn sudo/ACL eingerichtet werden kann.
  */
-export function probeServerPath({ serversRoot = '', dataPath = '', defaultRoot = '' }) {
+export function probeServerPath({ serversRoot = '', dataPath = '', defaultRoot = '', canElevate = false }) {
   const issues = [];
   const warnings = [];
   let resolvedRoot = '';
@@ -61,15 +71,13 @@ export function probeServerPath({ serversRoot = '', dataPath = '', defaultRoot =
       } else {
         warnings.push('Ordner wird beim Setup angelegt.');
       }
-      const parent = path.dirname(resolvedData);
-      ensureWritable(parent, issues);
-      if (fs.existsSync(resolvedData)) ensureWritable(resolvedData, issues);
+      noteAccess(resolvedData, issues, warnings, canElevate);
     } else if (serversRoot) {
       resolvedRoot = resolveOrbitServersRoot(serversRoot, defaultRoot);
       if (!fs.existsSync(resolvedRoot)) {
         warnings.push('Basisordner wird beim Setup angelegt.');
       }
-      ensureWritable(resolvedRoot, issues, true);
+      noteAccess(resolvedRoot, issues, warnings, canElevate);
     }
   } catch (err) {
     issues.push(err.message);
@@ -84,24 +92,31 @@ export function probeServerPath({ serversRoot = '', dataPath = '', defaultRoot =
   };
 }
 
-function ensureWritable(dir, issues, allowMissing = false) {
-  if (!dir) return;
-  if (!fs.existsSync(dir)) {
-    if (!allowMissing) {
-      const parent = path.dirname(dir);
-      if (fs.existsSync(parent)) {
-        try {
-          fs.accessSync(parent, fs.constants.W_OK);
-        } catch {
-          issues.push(`Keine Schreibrechte auf ${parent}.`);
-        }
-      }
+function noteAccess(target, issues, warnings, canElevate) {
+  if (!target) return;
+  if (fs.existsSync(target)) {
+    if (canWrite(target)) return;
+    if (canElevate) {
+      warnings.push(`Schreibrechte für User orbit werden beim Abschluss eingerichtet (${target}).`);
+      return;
     }
+    issues.push(`Keine Schreibrechte auf ${target}.`);
     return;
   }
-  try {
-    fs.accessSync(dir, fs.constants.W_OK);
-  } catch {
-    issues.push(`Keine Schreibrechte auf ${dir}.`);
+  let cur = path.dirname(target);
+  while (cur && cur !== '/' && !fs.existsSync(cur)) cur = path.dirname(cur);
+  if (!cur || cur === '/') {
+    if (canElevate) {
+      warnings.push('Ordner wird mit sudo angelegt.');
+      return;
+    }
+    issues.push(`Elternordner nicht erreichbar für ${target}.`);
+    return;
   }
+  if (canWrite(cur)) return;
+  if (canElevate) {
+    warnings.push(`Zugriff auf ${cur} wird beim Abschluss freigeschaltet.`);
+    return;
+  }
+  issues.push(`Keine Schreibrechte auf ${cur}.`);
 }

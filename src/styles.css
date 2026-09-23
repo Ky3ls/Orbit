@@ -176,7 +176,24 @@ input, select, textarea {
   border-radius: 12px;
   padding: 12px 12px;
   outline: none;
+  color: var(--text);
+  color-scheme: dark;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: #111;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23ff7a1a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+select option,
+select optgroup {
+  background: #111;
+  color: #f5f5f5;
 }
 input[type='checkbox'],
 input[type='radio'] {
