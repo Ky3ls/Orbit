@@ -26,7 +26,7 @@ export default function Admins() {
       <PageHeader
         eyebrow="System"
         title="Team"
-        description="Nur der Inhaber legt Accounts an. Passwörter brauchen 12 Zeichen, einen Buchstaben und eine Zahl."
+        description="Nur der Inhaber legt Accounts an. Passwörter brauchen mind. 6 Zeichen."
       />
       {err && <div className="err">{err}</div>}
       <PanelCard>
