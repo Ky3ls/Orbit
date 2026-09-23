@@ -158,7 +158,10 @@ export default function App() {
               <Settings
                 user={session.user}
                 onUser={(user) => setSession({ ...session, user })}
-                onSetupReset={() => setSession({ ...session, setup: false })}
+                onSetupReset={() => {
+                  setSession({ ...session, setup: false });
+                  window.location.assign('/setup');
+                }}
               />
             }
           />

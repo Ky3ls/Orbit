@@ -120,9 +120,13 @@ orbit ALL=(root) NOPASSWD: /usr/sbin/nginx, /usr/bin/nginx
 orbit ALL=(root) NOPASSWD: /usr/sbin/a2enmod, /usr/sbin/a2ensite
 orbit ALL=(root) NOPASSWD: /usr/bin/apt-get
 orbit ALL=(root) NOPASSWD: /usr/bin/mysql, /usr/bin/mariadb
+orbit ALL=(root) NOPASSWD: /usr/bin/certbot
+orbit ALL=(root) NOPASSWD: /bin/rm, /usr/bin/rm
+orbit ALL=(root) NOPASSWD: /bin/bash /opt/orbit/scripts/uninstall-orbit.sh, /usr/bin/bash /opt/orbit/scripts/uninstall-orbit.sh
 SUDOEOF
 chmod 440 /etc/sudoers.d/orbit
 visudo -cf /etc/sudoers.d/orbit >/dev/null
+chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
 
 cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]

@@ -298,80 +298,82 @@ export default function Settings({ user, onUser, onSetupReset }) {
             </div>
           </SettingsGroup>
         )}
-        {user.role === 'owner' && (
-          <SettingsGroup
-            title="Einrichtung & Reset"
-            lead="Setup neu starten oder alles löschen. „Nur Einrichtung“ behält Ordner (werden übernommen). „+ Server löschen“ entfernt die Datenordner und gibt den Port frei."
-          >
-            <div className="actions" style={{ flexWrap: 'wrap', gap: 10 }}>
-              <button
-                type="button"
-                className="btn"
-                style={{ width: 'auto' }}
-                disabled={resetBusy}
-                onClick={async () => {
-                  if (!window.confirm('Nur Einrichtung neu starten? FX wird gestoppt, Ordner bleiben und können im Wizard wiederverwendet werden.')) return;
-                  setResetBusy(true);
-                  setErr('');
-                  try {
-                    await api('/api/settings/reset-setup', { method: 'POST', body: { confirm: true, mode: 'setup' } });
-                    onSetupReset?.();
-                  } catch (e) {
-                    setErr(e.message);
-                  } finally {
-                    setResetBusy(false);
-                  }
-                }}
-              >
-                {resetBusy ? '…' : 'Nur Einrichtung neu'}
-              </button>
-              <button
-                type="button"
-                className="btn"
-                style={{ width: 'auto' }}
-                disabled={resetBusy}
-                onClick={async () => {
-                  if (!window.confirm('Orbit zurücksetzen (ohne Server-Ordner zu löschen)? FX stoppt, Setup startet neu.')) return;
-                  setResetBusy(true);
-                  setErr('');
-                  try {
-                    await api('/api/settings/reset-setup', { method: 'POST', body: { confirm: true, mode: 'full', deleteServers: false } });
-                    onSetupReset?.();
-                  } catch (e) {
-                    setErr(e.message);
-                  } finally {
-                    setResetBusy(false);
-                  }
-                }}
-              >
-                Orbit zurücksetzen
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                style={{ width: 'auto' }}
-                disabled={resetBusy}
-                onClick={async () => {
-                  if (!window.confirm('WARNUNG: FX stoppen und ALLE Server-Ordner löschen? Danach frisches Setup möglich.')) return;
-                  if (!window.confirm('Wirklich alle Server-Daten löschen?')) return;
-                  setResetBusy(true);
-                  setErr('');
-                  try {
-                    await api('/api/settings/reset-setup', { method: 'POST', body: { confirm: true, mode: 'full', deleteServers: true } });
-                    onSetupReset?.();
-                  } catch (e) {
-                    setErr(e.message);
-                  } finally {
-                    setResetBusy(false);
-                  }
-                }}
-              >
-                Orbit + Server löschen
-              </button>
-            </div>
-          </SettingsGroup>
-        )}
       </form>
+
+      {user.role === 'owner' && (
+        <SettingsGroup
+          title="Zurücksetzen & Deinstallieren"
+          lead="Zwei getrennte Aktionen — nicht verwechseln."
+        >
+          <div className="st-sub">
+            <h3>Alles löschen &amp; neu einrichten</h3>
+            <p className="muted">Stoppt FX, löscht Server-Ordner, öffnet danach direkt den Setup-Wizard.</p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: 'auto' }}
+              disabled={resetBusy}
+              onClick={async () => {
+                if (!window.confirm('FX stoppen und ALLE Server-Ordner löschen, dann Setup starten?')) return;
+                if (!window.confirm('Wirklich alles löschen und neu einrichten?')) return;
+                setResetBusy(true);
+                setErr('');
+                try {
+                  const res = await api('/api/settings/reset-setup', {
+                    method: 'POST',
+                    body: { confirm: true, wipe: true },
+                  });
+                  setMsg(`Gelöscht: ${(res.deleted || []).length} Ordner — Setup startet…`);
+                  onSetupReset?.({ redirect: '/setup', wipe: true });
+                } catch (e) {
+                  setErr(e.message || 'Löschen fehlgeschlagen');
+                } finally {
+                  setResetBusy(false);
+                }
+              }}
+            >
+              {resetBusy ? 'Lösche…' : 'Alles löschen & Setup starten'}
+            </button>
+          </div>
+          <div className="st-sub" style={{ marginTop: 20 }}>
+            <h3>Orbit komplett deinstallieren</h3>
+            <p className="muted">
+              Entfernt Panel, Dienst und Installation. <b>Kein Setup danach</b> — Orbit ist weg.
+              Neu nur über das GitHub-Install-Skript.
+            </p>
+            <button
+              type="button"
+              className="btn btn-danger"
+              style={{ width: 'auto' }}
+              disabled={resetBusy}
+              onClick={async () => {
+                const phrase = window.prompt('Zum Bestätigen exakt eingeben: ORBIT LÖSCHEN');
+                if (phrase == null) return;
+                if (String(phrase).trim().toUpperCase() !== 'ORBIT LÖSCHEN') {
+                  setErr('Abgebrochen — Phrase falsch.');
+                  return;
+                }
+                if (!window.confirm('Orbit jetzt unwiderruflich deinstallieren? Das Panel geht offline.')) return;
+                setResetBusy(true);
+                setErr('');
+                try {
+                  const res = await api('/api/settings/uninstall', {
+                    method: 'POST',
+                    body: { confirmPhrase: 'ORBIT LÖSCHEN' },
+                  });
+                  setMsg(res.message || 'Deinstallation läuft…');
+                  window.setTimeout(() => { window.location.href = 'about:blank'; }, 2500);
+                } catch (e) {
+                  setErr(e.message || 'Deinstallation fehlgeschlagen');
+                  setResetBusy(false);
+                }
+              }}
+            >
+              {resetBusy ? '…' : 'Orbit komplett deinstallieren'}
+            </button>
+          </div>
+        </SettingsGroup>
+      )}
 
       <SettingsGroup title="Account & Sicherheit" lead="Passwort, Cfx.re, 2FA und aktive Sitzungen.">
         <form onSubmit={password} className="st-sub">
