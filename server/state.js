@@ -26,7 +26,7 @@ export const runtime = {
 };
 
 const MAX_SERIES = 180;
-const MAX_CONSOLE = 400;
+const MAX_CONSOLE = 2500;
 
 /** @type {((level: string, text: string) => void) | null} */
 let logHook = null;

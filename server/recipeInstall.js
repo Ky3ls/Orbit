@@ -13,9 +13,11 @@ export { RECIPE_PACKS } from './recipeProfiles.js';
 function rmRfSafe(target) {
   if (!target || !fs.existsSync(target)) return;
   try {
-    rmRfSafe(target);
+    fs.rmSync(target, { recursive: true, force: true });
   } catch {
-    execFileSync('sudo', ['-n', 'rm', '-rf', target], { timeout: 120_000 });
+    try {
+      execFileSync('sudo', ['-n', 'rm', '-rf', target], { timeout: 120_000 });
+    } catch { /* ignore */ }
   }
 }
 
@@ -134,21 +136,26 @@ function collectSqlFiles(rootDir) {
   files.sort((a, b) => {
     const score = (f) => {
       const base = path.basename(f).toLowerCase();
+      const norm = f.replace(/\\/g, '/');
+      // Core-Schema zuerst — sonst scheitert legacy.sql an schon angelegten Addon-Tabellen
       if (base === 'legacy.sql' || base === 'esx.sql') return 0;
-      if (base.includes('legacy')) return 1;
-      if (f.includes(`${path.sep}_sql${path.sep}`)) return 0;
-      return 2;
+      if (norm.includes('/.orbit-sql/') || norm.includes('/[sql]/')) return 0;
+      if (base === 'es_extended.sql') return 1;
+      if (base.includes('legacy')) return 2;
+      if (/\/esx_(identity|multicharacter|skin)\.sql$/i.test(norm)) return 3;
+      return 10;
     };
     return score(a) - score(b) || a.localeCompare(b);
   });
   return files;
 }
 
-/** CREATE DATABASE / USE entfernen — wir importieren in die Orbit-DSN-DB. */
+/** CREATE/ALTER/USE-DB entfernen — Import immer in die Orbit-DSN-DB. */
 function sanitizeSqlForImport(sql) {
   return String(sql || '')
     .replace(/^\s*CREATE\s+DATABASE\b[^;]*;/gim, '')
-    .replace(/^\s*USE\s+[`'"]?\w+[`'"]?\s*;/gim, '')
+    .replace(/^\s*ALTER\s+DATABASE\b[^;]*;/gim, '')
+    .replace(/^\s*USE\s+[`'"]?[\w-]+[`'"]?\s*;/gim, '')
     .trim();
 }
 
@@ -182,8 +189,15 @@ export async function importResourceSqlFiles(resourcesRoot, dsn, onLog = () => {
         imported += 1;
         onLog(`SQL OK: ${rel}`);
       } catch (err) {
-        failed += 1;
-        onLog(`SQL Warnung (${rel}): ${String(err.message || err).slice(0, 160)}`);
+        const msg = String(err.message || err);
+        // Nach legacy.sql sind Core-Tabellen schon da — Addon/es_extended-Duplikate ok
+        if (/already exists|Duplicate|ER_TABLE_EXISTS/i.test(msg)) {
+          imported += 1;
+          onLog(`SQL Skip (bereits vorhanden): ${rel}`);
+        } else {
+          failed += 1;
+          onLog(`SQL Warnung (${rel}): ${msg.slice(0, 160)}`);
+        }
       }
     }
   } finally {
@@ -253,9 +267,11 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
 
   if (opts.importSql !== false && opts.mysqlConnection) {
     try {
-      const sqlRoots = [resources];
+      // .orbit-sql (legacy.sql) VOR resources — Core-Tabellen zuerst
+      const sqlRoots = [];
       const sideSql = path.join(dataPath, '.orbit-sql');
       if (fs.existsSync(sideSql)) sqlRoots.push(sideSql);
+      sqlRoots.push(resources);
       let imported = 0;
       let failed = 0;
       for (const root of sqlRoots) {
