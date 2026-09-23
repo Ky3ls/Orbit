@@ -88,7 +88,10 @@ export default function Setup({ onDone, userName = '' }) {
   const [panelStack, setPanelStack] = useState('auto');
   const [panelPreview, setPanelPreview] = useState(null);
   const [createDatabase, setCreateDatabase] = useState(true);
+  const [dbMode, setDbMode] = useState('create'); // create | reuse | skip
   const [dbName, setDbName] = useState('');
+  const [dbUser, setDbUser] = useState('');
+  const [mysqlConnection, setMysqlConnection] = useState('');
   const [mysqlRootPassword, setMysqlRootPassword] = useState('');
   const [licenseKey, setLicenseKey] = useState('');
   const [autoStart, setAutoStart] = useState(true);
@@ -198,9 +201,11 @@ export default function Setup({ onDone, userName = '' }) {
           locale,
           tags,
           licenseKey: licenseKey.trim(),
-          createDatabase: deploy === 'existing' ? false : createDatabase,
-          dbName: dbName.trim() || undefined,
-          mysqlRootPassword,
+          createDatabase: dbMode === 'create',
+          dbName: dbMode === 'create' ? (dbName.trim() || undefined) : undefined,
+          dbUser: dbMode === 'create' ? (dbUser.trim() || undefined) : undefined,
+          mysqlConnection: dbMode === 'reuse' ? mysqlConnection.trim() : undefined,
+          mysqlRootPassword: dbMode === 'create' ? mysqlRootPassword : undefined,
           startServer: autoStart,
           serversRoot: useCustomPath && !dataPath.trim() ? serversRoot.trim() : undefined,
           dataPath: useCustomPath && dataPath.trim() ? dataPath.trim() : undefined,
@@ -278,8 +283,9 @@ export default function Setup({ onDone, userName = '' }) {
       return true;
     }
     if (step === 6) {
-      if (deploy === 'existing') return true;
-      if (createDatabase) return Boolean(preflight?.mysql?.running);
+      if (!preflight?.mysql?.running && dbMode !== 'skip') return false;
+      if (dbMode === 'create') return true;
+      if (dbMode === 'reuse') return /^mysql:\/\//i.test(mysqlConnection.trim());
       return true;
     }
     if (step === 7) return licenseKey.trim().length > 8;
@@ -287,7 +293,7 @@ export default function Setup({ onDone, userName = '' }) {
   }, [
     step, name, deploy, recipe, recipeUrl, port, maxClients, portStatus, pathStatus,
     useCustomPath, serversRoot, dataPath, preflight, createDatabase, licenseKey,
-    panelMode, panelPort, panelDomain,
+    panelMode, panelPort, panelDomain, dbMode, mysqlConnection,
   ]);
 
   const isLastAction = step === 7;
@@ -530,33 +536,58 @@ export default function Setup({ onDone, userName = '' }) {
               <>
                 <div className="setup-step-num">7</div>
                 <h1>Datenbank</h1>
-                {deploy === 'existing' ? (
-                  <p className="lede">Vorhandener Server — DB belassen wir unverändert.</p>
-                ) : (
+                <p className="lede">
+                  Standard: neue Datenbank + User. Die Connection landet automatisch in der server.cfg.
+                </p>
+                {!preflight?.mysql?.running && (
+                  <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
+                    <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>MariaDB fehlt oder läuft nicht.</p>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={installMysql}>
+                      MariaDB installieren
+                    </button>
+                  </div>
+                )}
+                <div className="deploy-list" style={{ marginBottom: 16 }}>
+                  <button type="button" className={`deploy-card${dbMode === 'create' ? ' on' : ''}`} onClick={() => { setDbMode('create'); setCreateDatabase(true); }}>
+                    <div className="deploy-card-top"><b>Neue Datenbank</b><span className="deploy-tag">STANDARD</span></div>
+                    <span>Orbit legt DB + User an und schreibt mysql_connection_string in die server.cfg.</span>
+                  </button>
+                  <button type="button" className={`deploy-card${dbMode === 'reuse' ? ' on' : ''}`} onClick={() => { setDbMode('reuse'); setCreateDatabase(false); }}>
+                    <div className="deploy-card-top"><b>Vorhandene Connection</b></div>
+                    <span>Eigene mysql://…-URL verwenden (wird in die server.cfg geschrieben).</span>
+                  </button>
+                  <button type="button" className={`deploy-card${dbMode === 'skip' ? ' on' : ''}`} onClick={() => { setDbMode('skip'); setCreateDatabase(false); }}>
+                    <div className="deploy-card-top"><b>Später</b></div>
+                    <span>Keine DB jetzt — manuell in der server.cfg setzen.</span>
+                  </button>
+                </div>
+                {dbMode === 'create' && (
                   <>
-                    <p className="lede">MariaDB für ESX/QB — Orbit kann die DB anlegen.</p>
-                    {!preflight?.mysql?.running && (
-                      <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-                        <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={installMysql}>
-                          MariaDB installieren
-                        </button>
-                      </div>
-                    )}
-                    <label className="row">
-                      <input type="checkbox" checked={createDatabase} onChange={(e) => setCreateDatabase(e.target.checked)} />
-                      Datenbank automatisch anlegen
+                    <label className="field"><span>Datenbankname</span>
+                      <input
+                        className="mono"
+                        value={dbName}
+                        onChange={(e) => setDbName(e.target.value)}
+                        placeholder={`orbit_${name.toLowerCase().replace(/\W+/g, '_').slice(0, 24) || 'server'}`}
+                      />
                     </label>
-                    {createDatabase && (
-                      <>
-                        <label className="field"><span>Datenbankname</span>
-                          <input className="mono" value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder="orbit_rp" />
-                        </label>
-                        <label className="field"><span>MySQL root-Passwort (optional)</span>
-                          <input type="password" value={mysqlRootPassword} onChange={(e) => setMysqlRootPassword(e.target.value)} autoComplete="new-password" />
-                        </label>
-                      </>
-                    )}
+                    <label className="field"><span>DB-User (optional)</span>
+                      <input className="mono" value={dbUser} onChange={(e) => setDbUser(e.target.value)} placeholder="orbit" />
+                    </label>
+                    <label className="field"><span>MySQL root-Passwort (optional)</span>
+                      <input type="password" value={mysqlRootPassword} onChange={(e) => setMysqlRootPassword(e.target.value)} placeholder="Leer = sudo mysql auf dem Host" autoComplete="new-password" />
+                    </label>
                   </>
+                )}
+                {dbMode === 'reuse' && (
+                  <label className="field"><span>mysql_connection_string</span>
+                    <input
+                      className="mono"
+                      value={mysqlConnection}
+                      onChange={(e) => setMysqlConnection(e.target.value)}
+                      placeholder="mysql://user:pass@127.0.0.1/dbname?charset=utf8mb4"
+                    />
+                  </label>
                 )}
               </>
             )}
@@ -577,6 +608,10 @@ export default function Setup({ onDone, userName = '' }) {
                   <div className="res-line"><span>Deploy</span><b>{deploy}</b></div>
                   <div className="res-line"><span>Template</span><b>{deploy === 'popular' ? recipe : '—'}</b></div>
                   <div className="res-line"><span>Game-Port</span><b>{port}</b></div>
+                  <div className="res-line">
+                    <span>Datenbank</span>
+                    <b>{dbMode === 'create' ? (dbName.trim() || 'auto neu') : dbMode === 'reuse' ? 'vorhandene DSN' : 'später'}</b>
+                  </div>
                   <div className="res-line">
                     <span>Panel</span>
                     <b className="mono" style={{ fontSize: 12 }}>{panelPreview?.previewUrl || (panelMode === 'port' ? `:${panelPort}` : panelDomain)}</b>
