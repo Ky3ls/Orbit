@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Orbit Panel — Installation (Linux, root empfohlen)
 #
-#   sudo git clone https://github.com/Ky3ls/orbit.git /opt/tx2
+#   sudo git clone https://github.com/Ky3ls/Orbit.git /opt/tx2
 #   cd /opt/tx2 && sudo bash scripts/install-orbit.sh
 #
 # Einzeiler:
-#   curl -fsSL https://raw.githubusercontent.com/Ky3ls/orbit/main/scripts/install-orbit.sh \
-#     | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/orbit.git bash
+#   curl -fsSL https://raw.githubusercontent.com/Ky3ls/Orbit/main/scripts/install-orbit.sh \
+#     | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/Orbit.git bash
 #
 # Optional: ORBIT_INSTALL_DIR ORBIT_PUBLIC_URL ORBIT_PORT ORBIT_GIT_URL
 set -euo pipefail
@@ -17,7 +17,7 @@ SERVERS="${ORBIT_SERVERS_ROOT:-/opt/orbit/servers}"
 USER_NAME="${ORBIT_USER:-tx2}"
 PANEL_PORT="${ORBIT_PORT:-40220}"
 PUBLIC_URL="${ORBIT_PUBLIC_URL:-}"
-GIT_URL="${ORBIT_GIT_URL:-https://github.com/Ky3ls/orbit.git}"
+GIT_URL="${ORBIT_GIT_URL:-https://github.com/Ky3ls/Orbit.git}"
 
 need_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
