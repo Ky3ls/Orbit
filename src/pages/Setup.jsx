@@ -113,6 +113,22 @@ export default function Setup({ onDone, userName = '' }) {
     if (deploy === 'existing' || deploy === 'custom') setUseCustomPath(true);
   }, [deploy]);
 
+  // Datenordner immer prüfen, sobald ein Pfad gesetzt ist (unabhängig von Deploy/Domain)
+  useEffect(() => {
+    if (step !== 5) return undefined;
+    const d = dataPath.trim();
+    if (!d) {
+      setPathStatus(null);
+      return undefined;
+    }
+    const t = setTimeout(() => {
+      api('/api/setup/validate-path', { method: 'POST', body: { dataPath: d } })
+        .then(setPathStatus)
+        .catch(() => setPathStatus({ ok: false, issues: ['Pfad konnte nicht geprüft werden.'] }));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [step, dataPath]);
+
   const refreshPanelPreview = useCallback(() => {
     api('/api/setup/panel-access/preview', {
       method: 'POST',
@@ -147,28 +163,6 @@ export default function Setup({ onDone, userName = '' }) {
     const t = setTimeout(() => probePort(port), 400);
     return () => clearTimeout(t);
   }, [port, step, probePort]);
-
-  const probePath = useCallback((root, exact) => {
-    if (!useCustomPath) {
-      setPathStatus(null);
-      return;
-    }
-    const r = String(root || '').trim();
-    const d = String(exact || '').trim();
-    if (!r && !d) {
-      setPathStatus(null);
-      return;
-    }
-    api('/api/setup/validate-path', { method: 'POST', body: { serversRoot: r, dataPath: d } })
-      .then(setPathStatus)
-      .catch(() => setPathStatus({ ok: false, issues: ['Pfad konnte nicht geprüft werden.'] }));
-  }, [useCustomPath]);
-
-  useEffect(() => {
-    if (step !== 5 || !useCustomPath) return undefined;
-    const t = setTimeout(() => probePath(serversRoot, dataPath), 400);
-    return () => clearTimeout(t);
-  }, [step, useCustomPath, serversRoot, dataPath, probePath]);
 
   async function installMysql() {
     setBusy(true);
@@ -207,8 +201,8 @@ export default function Setup({ onDone, userName = '' }) {
           mysqlConnection: dbMode === 'reuse' ? mysqlConnection.trim() : undefined,
           mysqlRootPassword: dbMode === 'create' ? mysqlRootPassword : undefined,
           startServer: autoStart,
-          serversRoot: useCustomPath && !dataPath.trim() ? serversRoot.trim() : undefined,
-          dataPath: useCustomPath && dataPath.trim() ? dataPath.trim() : undefined,
+          serversRoot: !dataPath.trim() && serversRoot.trim() ? serversRoot.trim() : undefined,
+          dataPath: dataPath.trim() || undefined,
           panelAccess: {
             mode: panelMode,
             panelPort: Number(panelPort) || DEFAULT_PANEL_PORT,
@@ -274,10 +268,8 @@ export default function Setup({ onDone, userName = '' }) {
       if (!Number.isFinite(p) || p < 1) return false;
       if (!Number.isFinite(m) || m < 1) return false;
       if (portStatus?.inUse || portStatus?.orbitConflict) return false;
-      if (deploy === 'existing' || useCustomPath) {
-        const r = serversRoot.trim();
-        const d = dataPath.trim();
-        if (!r && !d) return false;
+      if (deploy === 'existing' && !dataPath.trim()) return false;
+      if (dataPath.trim()) {
         if (!pathStatus || !pathStatus.ok) return false;
       }
       return true;
@@ -481,8 +473,8 @@ export default function Setup({ onDone, userName = '' }) {
             {step === 5 && (
               <>
                 <div className="setup-step-num">6</div>
-                <h1>Netzwerk</h1>
-                <p className="lede">Game-Port und optional eigener Datenordner.</p>
+                <h1>Netzwerk & Datenordner</h1>
+                <p className="lede">Game-Port und Ordner für resources / server.cfg (unabhängig vom Panel-Domain).</p>
                 <div className="row">
                   <label className="field grow"><span>Game-Port</span><input value={port} onChange={(e) => setPort(e.target.value)} /></label>
                   <label className="field grow"><span>Slots</span><input value={maxClients} onChange={(e) => setMaxClients(e.target.value)} /></label>
@@ -503,32 +495,55 @@ export default function Setup({ onDone, userName = '' }) {
                 </label>
                 <label className="field"><span>Locale</span><input value={locale} onChange={(e) => setLocale(e.target.value)} /></label>
                 <label className="field"><span>Tags</span><input value={tags} onChange={(e) => setTags(e.target.value)} /></label>
-                {(deploy === 'existing' || deploy === 'custom' || useCustomPath) && (
-                  <div className="panel" style={{ padding: 12, marginTop: 8 }}>
-                    <label className="field">
-                      <span>{deploy === 'existing' ? 'Pfad zu server.cfg / resources' : 'Datenordner'}</span>
-                      <input
-                        className="mono"
-                        placeholder="/opt/orbit/servers/mein-server"
-                        value={dataPath}
-                        onChange={(e) => setDataPath(e.target.value)}
-                      />
-                    </label>
-                    {pathStatus && (
-                      <div style={{ marginTop: 8, fontSize: 13 }}>
-                        {(pathStatus.issues || []).map((i) => (
-                          <p key={i} className="setup-port-hint bad">{i}</p>
-                        ))}
-                        {(pathStatus.warnings || []).map((w) => (
-                          <p key={w} className="setup-port-hint ok">{w}</p>
-                        ))}
-                        {pathStatus.ok && !(pathStatus.warnings || []).length && (
-                          <p className="setup-port-hint ok">Pfad ist nutzbar.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
+
+                <div className="panel" style={{ padding: 12, marginTop: 12 }}>
+                  <label className="row" style={{ marginBottom: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={useCustomPath || deploy === 'existing'}
+                      disabled={deploy === 'existing'}
+                      onChange={(e) => {
+                        setUseCustomPath(e.target.checked);
+                        if (!e.target.checked) {
+                          setDataPath('');
+                          setPathStatus(null);
+                        }
+                      }}
+                    />
+                    Eigenen Datenordner festlegen
+                  </label>
+                  <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                    Hier liegen <code className="mono">server.cfg</code>, <code className="mono">resources/</code> usw.
+                    Standard ohne Haken: <code className="mono">{preflight?.defaultServersRoot || '/opt/orbit/servers'}/&lt;slug&gt;</code>
+                  </p>
+                  {(useCustomPath || deploy === 'existing' || dataPath) && (
+                    <>
+                      <label className="field">
+                        <span>Datenordner</span>
+                        <input
+                          className="mono"
+                          placeholder="/root/RoleplayServer oder /home/Roleplay"
+                          value={dataPath}
+                          onChange={(e) => setDataPath(e.target.value)}
+                          autoFocus={deploy === 'existing'}
+                        />
+                      </label>
+                      {pathStatus && (
+                        <div style={{ marginTop: 8, fontSize: 13 }}>
+                          {(pathStatus.issues || []).map((i) => (
+                            <p key={i} className="setup-port-hint bad">{i}</p>
+                          ))}
+                          {(pathStatus.warnings || []).map((w) => (
+                            <p key={w} className="setup-port-hint ok">{w}</p>
+                          ))}
+                          {pathStatus.ok && !(pathStatus.warnings || []).length && (
+                            <p className="setup-port-hint ok">Pfad ist nutzbar.</p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </>
             )}
 
