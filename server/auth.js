@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
-import { COOKIE, IDLE_MS, SESSION_MS, TICKET_COOKIE } from './config.js';
+import { COOKIE, COOKIE_SECURE, IDLE_MS, SESSION_MS, TICKET_COOKIE } from './config.js';
 
 const scrypt = promisify(crypto.scrypt);
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
@@ -69,7 +69,8 @@ export function randomToken() {
 }
 
 export function cookieHeader(name, value, maxAgeSec, sameSite = 'Strict') {
-  const parts = [`${name}=${encodeURIComponent(value)}`, 'HttpOnly', 'Secure', `SameSite=${sameSite}`, 'Path=/'];
+  const parts = [`${name}=${encodeURIComponent(value)}`, 'HttpOnly', `SameSite=${sameSite}`, 'Path=/'];
+  if (COOKIE_SECURE) parts.push('Secure');
   if (maxAgeSec === 0) parts.push('Max-Age=0');
   else parts.push(`Max-Age=${maxAgeSec}`);
   return parts.join('; ');

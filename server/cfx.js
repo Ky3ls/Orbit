@@ -20,12 +20,12 @@ export function ensureCfxKeys() {
   return { privateKey, publicKey };
 }
 
-export function cfxAuthorizeUrl({ clientId, nonce, publicKey }) {
+export function cfxAuthorizeUrl({ clientId, nonce, publicKey, redirectUri }) {
   const url = new URL('https://forum.cfx.re/user-api-key/new');
   url.searchParams.set('scopes', 'session_info');
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('nonce', nonce);
-  url.searchParams.set('auth_redirect', CFX_REDIRECT);
+  url.searchParams.set('auth_redirect', redirectUri || CFX_REDIRECT);
   url.searchParams.set('application_name', 'Orbit');
   url.searchParams.set('public_key', publicKey);
   url.searchParams.set('padding', 'pkcs1');

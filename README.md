@@ -36,13 +36,13 @@ Dienst: `orbit` · Port: **40220** · User: `orbit`
 
 ## Ersteinrichtung (frischer Server)
 
-1. Browser: `http://DEINE-SERVER-IP:40220`
-2. Master-Account anlegen
-3. Setup-Wizard: Name, Port, optional Framework, MySQL, License
-4. Orbit lädt das empfohlene FX-Artifact und legt den Server unter `/opt/orbit/servers/…` an
-5. Start — fertig
+1. Dienst starten → **PIN** erscheint im Terminal / `journalctl -u orbit`
+2. Browser: `http://DEINE-IP:40220` → PIN eingeben → **Konto verknüpfen** (Cfx.re)
+3. Backup-Passwort setzen → **Master-Account erstellen** (danach bist du eingeloggt)
+4. Setup-Wizard: Name → Deploy-Typ → Template → Netzwerk → DB → License
+5. Orbit lädt FX und legt den Server unter `/opt/orbit/servers/…` an
 
-Kein separates `FXServer`-Download, kein `run.sh` von Hand, kein fremder Datenordner nötig.
+Keine Marketing-Landing — Einstieg ist PIN → Cfx → Master → Setup.
 
 **Ingame:** `/orbit` oder `/tx` — Heal, Announce, Spielerliste, Kick.
 

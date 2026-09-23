@@ -1,0 +1,126 @@
+.orb-boot {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  position: relative;
+}
+
+.orb-boot-card {
+  width: min(420px, 100%);
+  padding: 28px 26px 24px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+  position: relative;
+  z-index: 1;
+}
+
+.orb-boot-status {
+  margin: 18px 0 8px;
+  font-size: 18px;
+  font-weight: 650;
+  color: #fff;
+}
+
+.orb-boot-status em {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.orb-autofill {
+  color: var(--accent) !important;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.orb-pin-row {
+  position: relative;
+}
+
+.orb-pin {
+  font-size: 28px !important;
+  letter-spacing: 0.35em;
+  text-align: center;
+  padding-right: 44px !important;
+}
+
+.orb-pin-ok {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ok);
+  font-size: 18px;
+}
+
+.orb-boot-meta {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.orb-boot-meta > div {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+}
+
+.orb-boot-meta b {
+  color: #fff;
+  font-weight: 560;
+}
+
+.orb-cfx-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--accent-dim);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+}
+
+.orb-cfx-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  color: #000;
+}
+
+.orb-cfx-id .eyebrow {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.orb-cfx-id strong {
+  font-size: 16px;
+}
+
+.orb-tos {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 14px 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.orb-tos input {
+  margin-top: 3px;
+}
+
+.orb-tos a {
+  color: var(--accent);
+}

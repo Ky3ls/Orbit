@@ -4,19 +4,46 @@ import Stepper from '../components/Stepper.jsx';
 import { Badge, Mark } from '../components/Ui.jsx';
 import './setup-wizard.css';
 
-const FRAMEWORKS = [
-  { id: 'blank', title: 'Minimal', text: 'OxMySQL + Basis — ohne Framework.' },
-  { id: 'esx', title: 'ESX Legacy', text: 'Profil mit ZIP/Git + CFG-Vorlage.' },
-  { id: 'qb', title: 'QBCore', text: 'QB-Core Basis-Recipe.' },
+const DEPLOYS = [
+  {
+    id: 'popular',
+    title: 'Beliebte Recipes',
+    tag: 'EMPFOHLEN',
+    text: 'Vorlage aus der Liste: ESX, QBCore oder Minimal — wie bei txAdmin.',
+  },
+  {
+    id: 'existing',
+    title: 'Vorhandene Server-Daten',
+    text: 'Bereits server.cfg + resources auf dem Host — Orbit übernimmt den Ordner.',
+  },
+  {
+    id: 'remote',
+    title: 'Remote-URL Template',
+    text: 'YAML-Recipe von einer HTTPS-URL laden und ausführen.',
+  },
+  {
+    id: 'custom',
+    title: 'Custom Template',
+    text: 'Leeres Profil — Ressourcen und CFG selbst pflegen.',
+  },
+];
+
+const TEMPLATES = [
+  { id: 'blank', title: 'CFX Default FiveM', tags: ['FIVEM'], text: 'Nur Basis-Ressourcen für einen FiveM-Server.' },
+  { id: 'esx', title: 'ESX Legacy', tags: ['ROLEPLAY', 'FIVEM'], text: 'Jobs, Housing, Fahrzeuge — populäres RP-Framework.' },
+  { id: 'qb', title: 'QBCore Framework', tags: ['ROLEPLAY', 'FIVEM'], text: 'Fortgeschrittenes RP-Framework.' },
+  { id: 'redm', title: 'CFX Default RedM', tags: ['REDM'], text: 'Basis-Ressourcen für RedM.' },
+  { id: 'vorp', title: 'VORP Core', tags: ['ROLEPLAY', 'REDM'], text: 'Führendes RP-Framework für RedM.' },
 ];
 
 const STEPS = [
-  { id: 'system', label: 'System' },
-  { id: 'panel', label: 'Panel-Zugang' },
-  { id: 'framework', label: 'Framework' },
+  { id: 'welcome', label: 'Start' },
+  { id: 'name', label: 'Name' },
+  { id: 'deploy', label: 'Deploy' },
+  { id: 'template', label: 'Template' },
   { id: 'network', label: 'Netzwerk' },
   { id: 'database', label: 'Datenbank' },
-  { id: 'keys', label: 'Keys & Start' },
+  { id: 'keys', label: 'Keys' },
   { id: 'done', label: 'Fertig' },
 ];
 
@@ -35,11 +62,13 @@ function CheckRow({ ok, warn, title, detail }) {
   );
 }
 
-export default function Setup({ onDone }) {
+export default function Setup({ onDone, userName = '' }) {
   const [step, setStep] = useState(0);
   const [preflight, setPreflight] = useState(null);
   const [name, setName] = useState('Mein Roleplay');
+  const [deploy, setDeploy] = useState('popular');
   const [recipe, setRecipe] = useState('esx');
+  const [recipeUrl, setRecipeUrl] = useState('');
   const [port, setPort] = useState(30120);
   const [maxClients, setMaxClients] = useState(48);
   const [onesync, setOnesync] = useState('on');
@@ -51,12 +80,11 @@ export default function Setup({ onDone }) {
   const [dataPath, setDataPath] = useState('');
   const [pathStatus, setPathStatus] = useState(null);
   const [panelAccess, setPanelAccess] = useState(null);
-  const [panelMode, setPanelMode] = useState('domain');
+  const [panelMode, setPanelMode] = useState('port');
   const [panelPort, setPanelPort] = useState(DEFAULT_PANEL_PORT);
   const [panelDomain, setPanelDomain] = useState('');
   const [panelPublicHost, setPanelPublicHost] = useState('');
   const [panelStack, setPanelStack] = useState('auto');
-  const [panelPreview, setPanelPreview] = useState(null);
   const [createDatabase, setCreateDatabase] = useState(true);
   const [dbName, setDbName] = useState('');
   const [mysqlRootPassword, setMysqlRootPassword] = useState('');
@@ -71,31 +99,13 @@ export default function Setup({ onDone }) {
   }, []);
 
   useEffect(() => { loadPreflight(); }, [loadPreflight]);
-
   useEffect(() => {
     api('/api/setup/panel-access').then(setPanelAccess).catch(() => {});
   }, []);
 
-  const refreshPanelPreview = useCallback(() => {
-    api('/api/setup/panel-access/preview', {
-      method: 'POST',
-      body: {
-        mode: panelMode,
-        panelPort: Number(panelPort),
-        publicHost: panelPublicHost.trim() || undefined,
-        domain: panelDomain.trim() || undefined,
-        https: true,
-      },
-    })
-      .then(setPanelPreview)
-      .catch(() => setPanelPreview(null));
-  }, [panelMode, panelPort, panelPublicHost, panelDomain]);
-
   useEffect(() => {
-    if (step !== 1) return;
-    const t = setTimeout(refreshPanelPreview, 350);
-    return () => clearTimeout(t);
-  }, [step, refreshPanelPreview]);
+    if (deploy === 'existing' || deploy === 'custom') setUseCustomPath(true);
+  }, [deploy]);
 
   const probePort = useCallback((p) => {
     const n = Number(p);
@@ -106,7 +116,7 @@ export default function Setup({ onDone }) {
   }, []);
 
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 4) return;
     const t = setTimeout(() => probePort(port), 400);
     return () => clearTimeout(t);
   }, [port, step, probePort]);
@@ -128,7 +138,7 @@ export default function Setup({ onDone }) {
   }, [useCustomPath]);
 
   useEffect(() => {
-    if (step !== 3 || !useCustomPath) return;
+    if (step !== 4 || !useCustomPath) return;
     const t = setTimeout(() => probePath(serversRoot, dataPath), 400);
     return () => clearTimeout(t);
   }, [step, useCustomPath, serversRoot, dataPath, probePath]);
@@ -153,17 +163,18 @@ export default function Setup({ onDone }) {
       const data = await api('/api/setup', {
         method: 'POST',
         body: {
-          deploy: 'popular',
+          deploy,
           name: name.trim(),
           project: name.trim(),
-          recipe,
+          recipe: deploy === 'popular' ? recipe : (deploy === 'custom' ? 'blank' : recipe),
+          recipeUrl: deploy === 'remote' ? recipeUrl.trim() : undefined,
           port: Number(port),
           maxClients: Number(maxClients),
           onesync,
           locale,
           tags,
           licenseKey: licenseKey.trim(),
-          createDatabase,
+          createDatabase: deploy === 'existing' ? false : createDatabase,
           dbName: dbName.trim() || undefined,
           mysqlRootPassword,
           startServer: autoStart,
@@ -180,7 +191,7 @@ export default function Setup({ onDone }) {
         },
       });
       setResult(data);
-      setStep(6);
+      setStep(7);
       onDone();
     } catch (e) {
       setErr(e.message);
@@ -189,25 +200,37 @@ export default function Setup({ onDone }) {
     }
   }
 
+  function goNext() {
+    if (step === 2 && deploy !== 'popular') {
+      setStep(4);
+      return;
+    }
+    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+  }
+
+  function goBack() {
+    if (step === 4 && deploy !== 'popular') {
+      setStep(2);
+      return;
+    }
+    setStep((s) => Math.max(0, s - 1));
+  }
+
   const canNext = useMemo(() => {
     if (step === 0) return true;
-    if (step === 1) {
-      const pp = Number(panelPort);
-      if (!Number.isFinite(pp) || pp < 1024 || pp > 65535) return false;
-      if (panelMode === 'domain') return panelDomain.trim().includes('.');
-      return true;
-    }
-    if (step === 2) {
-      return name.trim().length >= 2 && recipe;
-    }
+    if (step === 1) return name.trim().length >= 2;
+    if (step === 2) return Boolean(deploy);
     if (step === 3) {
+      if (deploy === 'remote') return /^https:\/\//i.test(recipeUrl.trim());
+      return Boolean(recipe);
+    }
+    if (step === 4) {
       const p = Number(port);
       const m = Number(maxClients);
       if (!Number.isFinite(p) || p < 1) return false;
       if (!Number.isFinite(m) || m < 1) return false;
-      if (portStatus?.inUse) return false;
-      if (portStatus?.orbitConflict) return false;
-      if (useCustomPath) {
+      if (portStatus?.inUse || portStatus?.orbitConflict) return false;
+      if (deploy === 'existing' || useCustomPath) {
         const r = serversRoot.trim();
         const d = dataPath.trim();
         if (!r && !d) return false;
@@ -215,17 +238,17 @@ export default function Setup({ onDone }) {
       }
       return true;
     }
-    if (step === 4) {
+    if (step === 5) {
+      if (deploy === 'existing') return true;
       if (createDatabase) return Boolean(preflight?.mysql?.running);
       return true;
     }
-    if (step === 5) {
-      return licenseKey.trim().length > 8;
-    }
+    if (step === 6) return licenseKey.trim().length > 8;
     return false;
-  }, [step, name, recipe, port, maxClients, portStatus, pathStatus, useCustomPath, serversRoot, dataPath, preflight, createDatabase, licenseKey, panelMode, panelPort, panelDomain]);
+  }, [step, name, deploy, recipe, recipeUrl, port, maxClients, portStatus, pathStatus, useCustomPath, serversRoot, dataPath, preflight, createDatabase, licenseKey]);
 
-  const isLastAction = step === 5;
+  const isLastAction = step === 6;
+  const greet = userName || 'Admin';
 
   return (
     <div className="wizard setup-wizard">
@@ -234,7 +257,6 @@ export default function Setup({ onDone }) {
         <header className="setup-head">
           <div className="brand-link"><Mark /> Orbit</div>
           <p className="eyebrow">Server-Einrichtung</p>
-          <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>Alles im Panel — nur der Host-Installer bleibt auf der Shell.</p>
         </header>
 
         <section className="wizard-body setup-body">
@@ -246,18 +268,22 @@ export default function Setup({ onDone }) {
             onStepChange={setStep}
             canNext={canNext}
             busy={busy}
-            showNav={step < 6}
+            showNav={step < 7}
             hideBack={step === 0}
             isLastAction={isLastAction}
             completeLabel="Server aufsetzen & starten"
             onComplete={finish}
-            onBack={() => setStep((s) => Math.max(0, s - 1))}
-            onNext={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+            onBack={goBack}
+            onNext={goNext}
           >
             {step === 0 && (
               <>
-                <h1>System-Check</h1>
-                <p className="lede">Orbit-Pfade unter /opt/orbit — FX wird automatisch nach artifacts/ geladen.</p>
+                <div className="setup-step-num">1</div>
+                <h1>Willkommen, {greet}!</h1>
+                <p className="lede">
+                  Profil <code className="mono">default</code> ist noch nicht konfiguriert.
+                  Richten wir den Server jetzt ein.
+                </p>
                 <div className="setup-checks">
                   <CheckRow
                     ok={preflight?.paths?.issues?.length === 0}
@@ -265,102 +291,46 @@ export default function Setup({ onDone }) {
                     title="Orbit-Pfade"
                     detail={(preflight?.paths?.ok || []).join(' · ') || 'Lade…'}
                   />
-                  {(preflight?.paths?.issues || []).map((i) => (
-                    <CheckRow key={i} ok={false} title="Hinweis" detail={i} />
-                  ))}
-                  <CheckRow
-                    ok={preflight?.mysql?.running}
-                    warn={preflight?.mysql?.installed && !preflight?.mysql?.running}
-                    title="MySQL / MariaDB"
-                    detail={preflight?.mysql?.running
-                      ? `Dienst aktiv (${preflight.mysql.service || 'mysql'})`
-                      : preflight?.mysql?.installed
-                        ? 'Installiert, Dienst nicht aktiv'
-                        : 'Nicht installiert — im nächsten Schritt Datenbank'}
-                  />
                   <CheckRow
                     ok={preflight?.artifact}
                     warn={!preflight?.artifact}
-                    title="FXServer (in Orbit)"
-                    detail={preflight?.artifact
-                      ? 'FX-Binary unter /opt/orbit/artifacts vorhanden'
-                      : 'Wird beim Abschluss nach /opt/orbit/artifacts geladen'}
+                    title="FXServer"
+                    detail={preflight?.artifact ? 'Artifact vorhanden' : 'Wird beim Abschluss geladen'}
                   />
-                </div>
-                <div className="setup-actions-inline">
-                  <button type="button" className="btn btn-sm" onClick={loadPreflight}>Erneut prüfen</button>
                 </div>
               </>
             )}
 
             {step === 1 && (
               <>
-                <h1>Panel-Zugang</h1>
-                <p className="lede">
-                  Direkt per <code className="mono">IP:Port</code> (Standard {DEFAULT_PANEL_PORT})
-                  oder eigene Domain mit Reverse-Proxy (nginx/Apache/Caddy).
-                </p>
-                <div className="template-list" style={{ marginBottom: 16 }}>
-                  <button type="button" className={`template-card${panelMode === 'port' ? ' on' : ''}`} onClick={() => setPanelMode('port')}>
-                    <b>IP & Port</b>
-                    <span>Direkt erreichbar — z. B. {panelAccess?.directPortUrl || `http://…:${DEFAULT_PANEL_PORT}`}</span>
-                  </button>
-                  <button type="button" className={`template-card${panelMode === 'domain' ? ' on' : ''}`} onClick={() => setPanelMode('domain')}>
-                    <b>Domain / HTTPS</b>
-                    <span>Eigene Domain — Reverse-Proxy wird eingerichtet</span>
-                  </button>
-                </div>
+                <div className="setup-step-num">2</div>
+                <h1>Servername</h1>
+                <p className="lede">Name, der in der Serverliste und im Panel erscheint.</p>
                 <label className="field">
-                  <span>Panel-Port (intern / bei IP-Zugang)</span>
-                  <input className="mono" type="number" min={1024} max={65535} value={panelPort} onChange={(e) => setPanelPort(e.target.value)} />
+                  <span>Name</span>
+                  <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Mein Roleplay" />
                 </label>
-                {panelMode === 'port' && (
-                  <label className="field">
-                    <span>Öffentliche IP (optional)</span>
-                    <input className="mono" placeholder={panelAccess?.publicIp || 'automatisch'} value={panelPublicHost} onChange={(e) => setPanelPublicHost(e.target.value)} />
-                  </label>
-                )}
-                {panelMode === 'domain' && (
-                  <>
-                    <label className="field">
-                      <span>Domain fürs Panel</span>
-                      <input className="mono" placeholder="panel.deine-domain.de" value={panelDomain} onChange={(e) => setPanelDomain(e.target.value)} />
-                    </label>
-                    <label className="field">
-                      <span>Webserver (Reverse-Proxy)</span>
-                      <select value={panelStack} onChange={(e) => setPanelStack(e.target.value)}>
-                        <option value="auto">Automatisch ({panelAccess?.suggestedStack || 'nginx'})</option>
-                        {(panelAccess?.stacks || []).map((s) => (
-                          <option key={s.id} value={s.id} disabled={!s.installed}>
-                            {s.label}{s.active ? ' · aktiv' : s.installed ? ' · installiert' : ' · fehlt'}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <p className="muted" style={{ fontSize: 13 }}>
-                      DNS muss auf diesen Server zeigen. Beim Abschluss: VHost + systemd-URL.
-                      {panelAccess?.stacks?.every((s) => !s.installed) ? ' Kein Webserver erkannt — nginx empfohlen oder IP:Port wählen.' : ''}
-                    </p>
-                  </>
-                )}
-                {panelPreview?.previewUrl && (
-                  <p className="setup-port-hint ok" style={{ marginTop: 12 }}>
-                    Vorschau: <span className="mono">{panelPreview.previewUrl}</span>
-                  </p>
-                )}
               </>
             )}
 
             {step === 2 && (
               <>
-                <h1>Server & Framework</h1>
-                <p className="lede">Name und Recipe-Profil — Ressourcen werden beim Abschluss auf dem Host geholt.</p>
-                <label className="field"><span>Servername</span><input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label>
-                <div className="template-list" style={{ marginTop: 16 }}>
-                  {FRAMEWORKS.map((f) => (
-                    <button key={f.id} type="button" className={`template-card${recipe === f.id ? ' on' : ''}`} onClick={() => setRecipe(f.id)}>
-                      <b>{f.title}</b>
-                      <span>{f.text}</span>
+                <div className="setup-step-num">3</div>
+                <h1>Deployment Type</h1>
+                <p className="lede">Wie soll der Server aufgesetzt werden?</p>
+                <div className="deploy-list">
+                  {DEPLOYS.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      className={`deploy-card${deploy === d.id ? ' on' : ''}`}
+                      onClick={() => setDeploy(d.id)}
+                    >
+                      <div className="deploy-card-top">
+                        <b>{d.title}</b>
+                        {d.tag && <span className="deploy-tag">{d.tag}</span>}
+                      </div>
+                      <span>{d.text}</span>
                     </button>
                   ))}
                 </div>
@@ -369,15 +339,50 @@ export default function Setup({ onDone }) {
 
             {step === 3 && (
               <>
+                <div className="setup-step-num">4</div>
+                <h1>{deploy === 'remote' ? 'Recipe-URL' : 'Template wählen'}</h1>
+                {deploy === 'remote' ? (
+                  <label className="field">
+                    <span>HTTPS Recipe-URL (YAML)</span>
+                    <input className="mono" value={recipeUrl} onChange={(e) => setRecipeUrl(e.target.value)} placeholder="https://…/recipe.yaml" />
+                  </label>
+                ) : (
+                  <div className="deploy-list">
+                    {TEMPLATES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`deploy-card${recipe === t.id ? ' on' : ''}`}
+                        onClick={() => setRecipe(t.id)}
+                      >
+                        <div className="deploy-card-top">
+                          <b>{t.title}</b>
+                          <span className="deploy-tags">
+                            {t.tags.map((tag) => (
+                              <i key={tag} className={`tag-pill ${tag === 'REDM' ? 'redm' : tag === 'FIVEM' ? 'fivem' : ''}`}>{tag}</i>
+                            ))}
+                          </span>
+                        </div>
+                        <span>{t.text}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {step === 4 && (
+              <>
+                <div className="setup-step-num">5</div>
                 <h1>Netzwerk</h1>
-                <p className="lede">Game-Port muss frei sein. Jede weitere Instanz später mit anderem Port.</p>
+                <p className="lede">Game-Port und optional eigener Datenordner.</p>
                 <div className="row">
                   <label className="field grow"><span>Game-Port</span><input value={port} onChange={(e) => setPort(e.target.value)} /></label>
                   <label className="field grow"><span>Slots</span><input value={maxClients} onChange={(e) => setMaxClients(e.target.value)} /></label>
                 </div>
                 {portStatus && (
                   <p className={`setup-port-hint ${portStatus.available && !portStatus.orbitConflict ? 'ok' : 'bad'}`}>
-                    {portStatus.inUse && 'Port ist belegt (Prozess lauscht bereits).'}
+                    {portStatus.inUse && 'Port ist belegt.'}
                     {!portStatus.inUse && portStatus.orbitConflict && `Reserviert für „${portStatus.orbitConflict.name}“.`}
                     {portStatus.available && !portStatus.orbitConflict && 'Port ist frei.'}
                   </p>
@@ -391,37 +396,13 @@ export default function Setup({ onDone }) {
                 </label>
                 <label className="field"><span>Locale</span><input value={locale} onChange={(e) => setLocale(e.target.value)} /></label>
                 <label className="field"><span>Tags</span><input value={tags} onChange={(e) => setTags(e.target.value)} /></label>
-                <label className="row" style={{ marginTop: 16 }}>
-                  <input
-                    type="checkbox"
-                    checked={useCustomPath}
-                    onChange={(e) => {
-                      setUseCustomPath(e.target.checked);
-                      if (!e.target.checked) setPathStatus(null);
-                    }}
-                  />
-                  Eigenen Server-Datenordner festlegen
-                </label>
-                {useCustomPath && (
+                {(deploy === 'existing' || deploy === 'custom' || useCustomPath) && (
                   <div className="panel" style={{ padding: 12, marginTop: 8 }}>
-                    <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
-                      Standard: <code className="mono">{preflight?.defaultServersRoot || '/opt/orbit/servers'}</code>/&lt;slug&gt;
-                    </p>
                     <label className="field">
-                      <span>Basisordner (Unterordner pro Server)</span>
+                      <span>{deploy === 'existing' ? 'Pfad zu server.cfg / resources' : 'Datenordner'}</span>
                       <input
                         className="mono"
-                        placeholder={preflight?.serversRoot || preflight?.defaultServersRoot || '/opt/orbit/servers'}
-                        value={serversRoot}
-                        onChange={(e) => setServersRoot(e.target.value)}
-                        disabled={Boolean(dataPath.trim())}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Oder exakter Datenpfad (ohne Unterordner)</span>
-                      <input
-                        className="mono"
-                        placeholder="/opt/fivem/live"
+                        placeholder="/opt/orbit/servers/mein-server"
                         value={dataPath}
                         onChange={(e) => setDataPath(e.target.value)}
                       />
@@ -431,12 +412,7 @@ export default function Setup({ onDone }) {
                         {(pathStatus.issues || []).map((i) => (
                           <p key={i} className="setup-port-hint bad">{i}</p>
                         ))}
-                        {(pathStatus.warnings || []).map((w) => (
-                          <p key={w} className="setup-port-hint ok">{w}</p>
-                        ))}
-                        {pathStatus.ok && !(pathStatus.warnings || []).length && (
-                          <p className="setup-port-hint ok">Pfad ist nutzbar.</p>
-                        )}
+                        {pathStatus.ok && <p className="setup-port-hint ok">Pfad ist nutzbar.</p>}
                       </div>
                     )}
                   </div>
@@ -444,91 +420,70 @@ export default function Setup({ onDone }) {
               </>
             )}
 
-            {step === 4 && (
+            {step === 5 && (
               <>
+                <div className="setup-step-num">6</div>
                 <h1>Datenbank</h1>
-                <p className="lede">MariaDB für ESX/QB. Orbit kann Server und Datenbank anlegen.</p>
-                {!preflight?.mysql?.running && (
-                  <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-                    <p className="muted" style={{ fontSize: 13 }}>MariaDB fehlt oder läuft nicht. Installation braucht <code className="mono">sudo</code> für User <code className="mono">tx2</code>.</p>
-                    <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={installMysql}>MariaDB installieren</button>
-                  </div>
-                )}
-                <label className="row">
-                  <input type="checkbox" checked={createDatabase} onChange={(e) => setCreateDatabase(e.target.checked)} />
-                  Datenbank automatisch anlegen
-                </label>
-                {createDatabase && (
+                {deploy === 'existing' ? (
+                  <p className="lede">Vorhandener Server — DB belassen wir unverändert.</p>
+                ) : (
                   <>
-                    <label className="field"><span>Datenbankname</span>
-                      <input className="mono" placeholder={`orbit_${name.toLowerCase().replace(/\W+/g, '_').slice(0, 20)}`} value={dbName} onChange={(e) => setDbName(e.target.value)} />
+                    <p className="lede">MariaDB für ESX/QB — Orbit kann die DB anlegen.</p>
+                    {!preflight?.mysql?.running && (
+                      <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
+                        <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={installMysql}>
+                          MariaDB installieren
+                        </button>
+                      </div>
+                    )}
+                    <label className="row">
+                      <input type="checkbox" checked={createDatabase} onChange={(e) => setCreateDatabase(e.target.checked)} />
+                      Datenbank automatisch anlegen
                     </label>
-                    <label className="field"><span>MySQL root-Passwort (optional)</span>
-                      <input type="password" value={mysqlRootPassword} onChange={(e) => setMysqlRootPassword(e.target.value)} placeholder="Leer = sudo mysql auf dem Host" autoComplete="new-password" />
-                    </label>
+                    {createDatabase && (
+                      <>
+                        <label className="field"><span>Datenbankname</span>
+                          <input className="mono" value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder="orbit_rp" />
+                        </label>
+                        <label className="field"><span>MySQL root-Passwort (optional)</span>
+                          <input type="password" value={mysqlRootPassword} onChange={(e) => setMysqlRootPassword(e.target.value)} autoComplete="new-password" />
+                        </label>
+                      </>
+                    )}
                   </>
                 )}
               </>
             )}
 
-            {step === 5 && (
+            {step === 6 && (
               <>
+                <div className="setup-step-num">7</div>
                 <h1>Keys & Start</h1>
-                <p className="lede">Cfx.re License und optional direkter FX-Start nach dem Setup.</p>
                 <label className="field"><span>sv_licenseKey</span>
                   <input type="password" value={licenseKey} onChange={(e) => setLicenseKey(e.target.value)} placeholder="cfxk_…" autoComplete="off" />
                 </label>
                 <label className="row">
                   <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
-                  FXServer nach Einrichtung starten (Orbit-Prozess)
+                  FXServer nach Einrichtung starten
                 </label>
                 <article className="panel setup-summary" style={{ marginTop: 16, padding: 12 }}>
                   <div className="res-line"><span>Server</span><b>{name}</b></div>
-                  <div className="res-line"><span>Framework</span><b>{recipe}</b></div>
+                  <div className="res-line"><span>Deploy</span><b>{deploy}</b></div>
+                  <div className="res-line"><span>Template</span><b>{deploy === 'popular' ? recipe : '—'}</b></div>
                   <div className="res-line"><span>Game-Port</span><b>{port}</b></div>
-                  <div className="res-line">
-                    <span>Panel-URL</span>
-                    <b className="mono" style={{ fontSize: 12 }}>{panelPreview?.previewUrl || '—'}</b>
-                  </div>
-                  <div className="res-line">
-                    <span>Datenordner</span>
-                    <b className="mono" style={{ fontSize: 12 }}>
-                      {useCustomPath
-                        ? (dataPath.trim() || `${serversRoot.trim() || preflight?.defaultServersRoot || '/opt/orbit/servers'}/<slug>`)
-                        : `${preflight?.defaultServersRoot || '/opt/orbit/servers'}/<slug>`}
-                    </b>
-                  </div>
-                  <div className="res-line"><span>DB</span><b>{createDatabase ? (dbName || 'auto') : 'manuell'}</b></div>
                 </article>
               </>
             )}
 
-            {step === 6 && result && (
+            {step === 7 && result && (
               <>
                 <h1>Fertig</h1>
                 <p className="lede">
-                  {result.serverStarted
-                    ? 'Server wurde aufgesetzt und gestartet.'
-                    : 'Server wurde aufgesetzt.'}
+                  {result.serverStarted ? 'Server wurde aufgesetzt und gestartet.' : 'Server wurde aufgesetzt.'}
                 </p>
                 {result.serverStarted && <Badge tone="ok">FX läuft</Badge>}
-                {result.panelUrl && (
-                  <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
-                    Panel: <a className="mono" href={result.panelUrl}>{result.panelUrl}</a>
-                    {result.panelRestart ? ' · Dienst wird neu gestartet…' : ''}
-                  </p>
-                )}
-                {result.dataPath && (
-                  <p className="muted mono" style={{ fontSize: 13, marginTop: 12 }}>{result.dataPath}</p>
-                )}
-                {(result.nextSteps || []).length > 0 && (
-                  <ul className="muted" style={{ marginTop: 12 }}>
-                    {result.nextSteps.map((s) => <li key={s}>{s}</li>)}
-                  </ul>
-                )}
                 <div className="row" style={{ gap: 8, marginTop: 20 }}>
                   <a className="btn btn-primary" style={{ width: 'auto', display: 'inline-flex' }} href="/panel">Zum Cockpit</a>
-                  <a className="btn" style={{ width: 'auto', display: 'inline-flex' }} href="/settings?tab=servers">Einstellungen</a>
                 </div>
               </>
             )}
