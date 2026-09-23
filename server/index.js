@@ -995,10 +995,12 @@ async function handleApi(req, res, url) {
       try {
         const prov = await provisionMysqlDatabase({
           dbName: str(body.dbName, 48) || defaultDbName(name),
+          appUser: str(body.dbUser, 32) || 'orbit',
           rootPassword: body.mysqlRootPassword !== undefined ? str(body.mysqlRootPassword, 128) : undefined,
         });
         mysqlDsn = prov.dsn;
         setSetting(db, 'mysqlDsn', mysqlDsn);
+        logLine('ok', `MySQL DB ${prov.dbName} + User ${prov.appUser} angelegt`);
       } catch (err) {
         return json(res, 400, { error: `Datenbank: ${err.message}` });
       }
@@ -1044,6 +1046,19 @@ async function handleApi(req, res, url) {
 
     if (deploy === 'existing') {
       try {
+        const customData = str(body.dataPath, 512);
+        if (customData) {
+          dataPath = resolveCustomDataPath(customData);
+          await prepareServerDataPath(dataPath, logLine);
+          setSetting(db, 'fxDataPath', dataPath);
+          setSetting(db, 'fxControlMode', 'orbit');
+          syncActiveCfgPath(settingMap(db));
+        } else {
+          dataPath = settingsBefore.fxDataPath || '';
+        }
+        if (!dataPath) {
+          return json(res, 400, { error: 'Datenordner für vorhandenen Server fehlt.' });
+        }
         const parsed = readCfg();
         const now = Date.now();
         const insert = db.prepare('INSERT OR IGNORE INTO resources (name, actual, updated) VALUES (?, ?, ?)');
@@ -1051,9 +1066,8 @@ async function handleApi(req, res, url) {
         imported = parsed.resources.length;
         if (parsed.pub.hostname) hostname = parsed.pub.hostname;
         if (parsed.pub.maxClients) slots = parsed.pub.maxClients;
-        dataPath = settingsBefore.fxDataPath || '';
-      } catch {
-        return json(res, 500, { error: 'Die vorhandene server.cfg konnte nicht gelesen werden.' });
+      } catch (err) {
+        return json(res, 500, { error: err.message || 'Die vorhandene server.cfg konnte nicht gelesen werden.' });
       }
     } else if (!skipNewServer) {
       let serversRootOpt = '';
@@ -1147,15 +1161,21 @@ async function handleApi(req, res, url) {
     if (recipeUrl) setSetting(db, 'recipeUrl', recipeUrl);
     if (dataPath && (licenseKey || mysqlDsn)) {
       try {
-        applyProdSecretsToCfg(path.join(dataPath, 'server.cfg'), {
+        const cfgFile = path.join(dataPath, 'server.cfg');
+        if (!fs.existsSync(cfgFile) && mysqlDsn) {
+          // minimale cfg, damit Connection nicht verloren geht
+          fs.writeFileSync(cfgFile, `# Orbit\nset mysql_connection_string "${mysqlDsn.replace(/"/g, '')}"\n`, 'utf8');
+        }
+        applyProdSecretsToCfg(cfgFile, {
           licenseKey,
           mysqlConnection: mysqlDsn,
         });
         if (mysqlDsn) setSetting(db, 'mysqlDsn', mysqlDsn);
         syncActiveCfgPath(settingMap(db));
         try {
-          syncCfgSecrets({ raw: fs.readFileSync(path.join(dataPath, 'server.cfg'), 'utf8') });
+          syncCfgSecrets({ raw: fs.readFileSync(cfgFile, 'utf8') });
         } catch { /* */ }
+        if (mysqlDsn) logLine('ok', `mysql_connection_string → ${cfgFile}`);
       } catch (err) {
         nextSteps.push(`CFG Secrets: ${err.message}`);
       }
