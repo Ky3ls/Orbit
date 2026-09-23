@@ -316,7 +316,7 @@ export default function Setup({ onDone, userName = '' }) {
   }, [
     step, name, deploy, recipe, recipeUrl, port, maxClients, portStatus, pathStatus,
     useCustomPath, serversRoot, dataPath, preflight, createDatabase, licenseKey,
-    panelMode, panelPort, panelDomain, dbMode, mysqlConnection,
+    panelMode, panelPort, panelDomain, dbMode, mysqlConnection, dbPassword,
   ]);
 
   const isLastAction = step === 7;
