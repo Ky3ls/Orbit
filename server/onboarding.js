@@ -23,9 +23,16 @@ export async function checkPortInUse(port, host = '127.0.0.1') {
   return { ok: true, port: p, inUse, available: !inUse };
 }
 
-export function orbitPortConflict(db, port) {
-  const row = listOrbitServers(db).find((s) => Number(s.port) === Number(port));
-  return row ? { id: row.id, name: row.name } : null;
+export function orbitPortConflict(db, port, { ignoreInactive = true, exceptDataPath = '' } = {}) {
+  const rows = listOrbitServers(db);
+  const except = String(exceptDataPath || '').replace(/\/$/, '');
+  const row = rows.find((s) => {
+    if (Number(s.port) !== Number(port)) return false;
+    if (except && String(s.data_path || '').replace(/\/$/, '') === except) return false;
+    if (ignoreInactive && !Number(s.is_active)) return false;
+    return true;
+  });
+  return row ? { id: row.id, name: row.name, dataPath: row.data_path } : null;
 }
 
 export async function detectMysqlService() {

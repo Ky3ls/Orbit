@@ -301,7 +301,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
         {user.role === 'owner' && (
           <SettingsGroup
             title="Einrichtung & Reset"
-            lead="Setup neu starten (Server bleiben) oder Orbit komplett zurücksetzen. Beim erneuten Setup kannst du einen bestehenden Ordner wählen und den Server wieder aktivieren."
+            lead="Setup neu starten oder alles löschen. „Nur Einrichtung“ behält Ordner (werden übernommen). „+ Server löschen“ entfernt die Datenordner und gibt den Port frei."
           >
             <div className="actions" style={{ flexWrap: 'wrap', gap: 10 }}>
               <button
@@ -310,7 +310,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 style={{ width: 'auto' }}
                 disabled={resetBusy}
                 onClick={async () => {
-                  if (!window.confirm('Nur Einrichtung neu starten? Alle Server werden deaktiviert, Ordner bleiben erhalten und können später wiedergewählt werden.')) return;
+                  if (!window.confirm('Nur Einrichtung neu starten? FX wird gestoppt, Ordner bleiben und können im Wizard wiederverwendet werden.')) return;
                   setResetBusy(true);
                   setErr('');
                   try {
@@ -331,7 +331,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 style={{ width: 'auto' }}
                 disabled={resetBusy}
                 onClick={async () => {
-                  if (!window.confirm('Orbit zurücksetzen (ohne Server-Ordner zu löschen)? Setup startet neu, Server bleiben auf der Disk.')) return;
+                  if (!window.confirm('Orbit zurücksetzen (ohne Server-Ordner zu löschen)? FX stoppt, Setup startet neu.')) return;
                   setResetBusy(true);
                   setErr('');
                   try {
@@ -352,7 +352,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 style={{ width: 'auto' }}
                 disabled={resetBusy}
                 onClick={async () => {
-                  if (!window.confirm('WARNUNG: Orbit zurücksetzen UND alle Server-Ordner löschen? Das kann nicht rückgängig gemacht werden.')) return;
+                  if (!window.confirm('WARNUNG: FX stoppen und ALLE Server-Ordner löschen? Danach frisches Setup möglich.')) return;
                   if (!window.confirm('Wirklich alle Server-Daten löschen?')) return;
                   setResetBusy(true);
                   setErr('');

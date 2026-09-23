@@ -801,8 +801,16 @@ async function handleApi(req, res, url) {
     if (me.role !== 'owner' && me.role !== 'admin') return json(res, 403, { error: 'Keine Berechtigung.' });
     const body = await readBody(req);
     const port = Number(body.port);
+    const exceptDataPath = str(body.dataPath, 512);
+    // Optional: FX freigeben wenn Owner und freePort gesetzt
+    if (body.freePort === true && me.role === 'owner') {
+      try {
+        await stopFxProcess(settingMap(db), logLine, { stopAll: true });
+        await new Promise((r) => setTimeout(r, 800));
+      } catch { /* */ }
+    }
     const check = await checkPortInUse(port, '127.0.0.1');
-    const conflict = orbitPortConflict(db, port);
+    const conflict = orbitPortConflict(db, port, { ignoreInactive: true, exceptDataPath });
     return json(res, 200, { ...check, orbitConflict: conflict });
   }
 
@@ -982,13 +990,32 @@ async function handleApi(req, res, url) {
       return json(res, 400, { error: 'Recipe-URL muss mit https:// beginnen.' });
     }
     const migratingTxAdmin = body.migrateFromTxAdmin === true && me.role === 'owner';
+    const dataPathHint = str(body.dataPath, 512);
+    // Vor Port-Check: laufenden FX stoppen (sonst „Port belegt“ nach Reset)
+    if (!migratingTxAdmin && me.role === 'owner') {
+      try {
+        await stopFxProcess(settingMap(db), logLine, { stopAll: true });
+      } catch (err) {
+        logLine('warn', `Setup: FX stop vor Port-Check — ${err.message}`);
+      }
+      // kurz warten bis Port frei
+      for (let i = 0; i < 8; i += 1) {
+        const probe = await checkPortInUse(port, '127.0.0.1');
+        if (!probe.inUse) break;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
     const portProbe = migratingTxAdmin ? { inUse: false, available: true } : await checkPortInUse(port, '127.0.0.1');
-    const portConflict = migratingTxAdmin ? null : orbitPortConflict(db, port);
+    const portConflict = migratingTxAdmin
+      ? null
+      : orbitPortConflict(db, port, { ignoreInactive: true, exceptDataPath: dataPathHint });
     if (!migratingTxAdmin && portProbe.inUse) {
-      return json(res, 400, { error: `Port ${port} ist auf diesem Host bereits belegt.` });
+      return json(res, 400, {
+        error: `Port ${port} ist noch belegt. FX stoppen oder anderen Port wählen.`,
+      });
     }
     if (!migratingTxAdmin && portConflict) {
-      return json(res, 400, { error: `Port ${port} ist bereits für „${portConflict.name}“ reserviert.` });
+      return json(res, 400, { error: `Port ${port} ist bereits für „${portConflict.name}“ aktiv.` });
     }
     const licenseKey = str(body.licenseKey, 128);
     let mysqlDsn = str(body.mysqlConnection, 280);
@@ -1145,6 +1172,7 @@ async function handleApi(req, res, url) {
           fxServerRoot: fxRoot,
           serversRoot: serversRootOpt || undefined,
           dataPath: dataPathOpt || undefined,
+          replaceExisting: body.replaceDataPath === true,
         });
         if (serversRootOpt) setSetting(db, 'orbitServersRoot', serversRootOpt);
         dataPath = result.fxDataPath;
@@ -1155,25 +1183,34 @@ async function handleApi(req, res, url) {
           panelUrl: ORIGIN,
           ingameToken,
         };
-        if (deploy === 'remote' && recipeUrl) {
-          const resRecipe = await fetch(recipeUrl, { signal: AbortSignal.timeout(120_000) });
-          if (!resRecipe.ok) throw new Error(`Recipe-URL ${resRecipe.status}`);
-          await runRecipeYaml(await resRecipe.text(), dataPath, (t) => logLine('info', t));
-        } else if (recipe === 'esx' || recipe === 'qb' || recipe === 'blank') {
-          await runRecipeInstall(recipe, dataPath, (t) => logLine('info', t), recipeOpts);
-        } else {
-          await runRecipeInstall('blank', dataPath, (t) => logLine('info', t), recipeOpts);
-          const cfgFile = path.join(dataPath, 'server.cfg');
-          let cfgText = fs.existsSync(cfgFile) ? fs.readFileSync(cfgFile, 'utf8') : '';
-          for (const resName of RECIPES[recipe] || RECIPES.blank) {
-            const line = `ensure ${resName}`;
-            if (!cfgText.includes(line)) cfgText += `\n${line}`;
+        // Bei Übernahme: Recipe nur wenn leer oder explizit neu
+        const resourcesDir = path.join(dataPath, 'resources');
+        const hasResources = fs.existsSync(resourcesDir)
+          && fs.readdirSync(resourcesDir).some((n) => n !== '.gitkeep' && !n.startsWith('.'));
+        const runRecipe = !result.reused || !hasResources || body.reinstallRecipe === true;
+        if (runRecipe) {
+          if (deploy === 'remote' && recipeUrl) {
+            const resRecipe = await fetch(recipeUrl, { signal: AbortSignal.timeout(120_000) });
+            if (!resRecipe.ok) throw new Error(`Recipe-URL ${resRecipe.status}`);
+            await runRecipeYaml(await resRecipe.text(), dataPath, (t) => logLine('info', t));
+          } else if (recipe === 'esx' || recipe === 'qb' || recipe === 'blank') {
+            await runRecipeInstall(recipe, dataPath, (t) => logLine('info', t), recipeOpts);
+          } else {
+            await runRecipeInstall('blank', dataPath, (t) => logLine('info', t), recipeOpts);
+            const cfgFile = path.join(dataPath, 'server.cfg');
+            let cfgText = fs.existsSync(cfgFile) ? fs.readFileSync(cfgFile, 'utf8') : '';
+            for (const resName of RECIPES[recipe] || RECIPES.blank) {
+              const line = `ensure ${resName}`;
+              if (!cfgText.includes(line)) cfgText += `\n${line}`;
+            }
+            fs.writeFileSync(cfgFile, cfgText.trim() + '\n', 'utf8');
           }
-          fs.writeFileSync(cfgFile, cfgText.trim() + '\n', 'utf8');
+        } else {
+          logLine('info', `Bestehenden Server übernommen (${dataPath}) — Recipe übersprungen.`);
         }
         syncResourcesFromDisk(db);
         imported = (RECIPES[recipe] || RECIPES.blank).length;
-        logLine('ok', `Orbit-Server „${row.name}“ unter ${dataPath}`);
+        logLine('ok', `Orbit-Server „${row.name}“ unter ${dataPath}${result.reused ? ' (reuse)' : ''}`);
       } catch (err) {
         return json(res, 500, { error: `Server/Recipe: ${err.message}` });
       }
@@ -2090,31 +2127,51 @@ async function handleApi(req, res, url) {
     const mode = body.mode === 'full' ? 'full' : 'setup';
     const deleteServers = body.deleteServers === true || body.deleteServers === '1';
     const settings = settingMap(db);
+    const pathsToDelete = [];
     try {
-      if (orbitControlMode(settings) === 'orbit') {
-        await stopFxProcess(settings, logLine, { stopAll: true });
-      } else {
-        await controlFx('stop', settings, logLine).catch(() => {});
+      for (const row of listOrbitServers(db)) {
+        if (row.data_path) pathsToDelete.push(row.data_path);
       }
+      if (settings.fxDataPath) pathsToDelete.push(settings.fxDataPath);
+    } catch { /* */ }
+
+    try {
+      await stopFxProcess(settings, logLine, { stopAll: true });
     } catch (err) {
       logLine('warn', `Setup-Reset: FX stop — ${err.message}`);
     }
+    // Port freimachen abwarten
+    const lastPort = Number(settings.fivemPort) || 30120;
+    for (let i = 0; i < 10; i += 1) {
+      const probe = await checkPortInUse(lastPort, '127.0.0.1');
+      if (!probe.inUse) break;
+      await new Promise((r) => setTimeout(r, 400));
+    }
 
-    // Alle Orbit-Server deaktivieren (bleiben in DB, außer full+delete)
     try {
       db.prepare('UPDATE orbit_servers SET is_active = 0').run();
-    } catch { /* table fehlt ggf. */ }
+    } catch { /* */ }
 
-    if (mode === 'full' && deleteServers) {
-      const rows = listOrbitServers(db);
-      for (const row of rows) {
-        const p = String(row.data_path || '');
-        if (p && p.startsWith('/') && fs.existsSync(p)) {
+    if (deleteServers) {
+      const seen = new Set();
+      for (const p of pathsToDelete) {
+        const abs = String(p || '').replace(/\/$/, '');
+        if (!abs || !abs.startsWith('/') || seen.has(abs)) continue;
+        seen.add(abs);
+        if (!fs.existsSync(abs)) continue;
+        try {
+          fs.rmSync(abs, { recursive: true, force: true });
+          logLine('warn', `Server-Ordner gelöscht: ${abs}`);
+        } catch (err) {
+          // root-owned: sudo rm
           try {
-            fs.rmSync(p, { recursive: true, force: true });
-            logLine('warn', `Server-Ordner gelöscht: ${p}`);
-          } catch (err) {
-            logLine('bad', `Löschen ${p}: ${err.message}`);
+            const { execFile } = await import('node:child_process');
+            const { promisify } = await import('node:util');
+            const exec = promisify(execFile);
+            await exec('sudo', ['-n', 'rm', '-rf', abs], { timeout: 60_000 });
+            logLine('warn', `Server-Ordner per sudo gelöscht: ${abs}`);
+          } catch (e2) {
+            logLine('bad', `Löschen ${abs}: ${err.message} / ${e2.message}`);
           }
         }
       }
@@ -2125,20 +2182,22 @@ async function handleApi(req, res, url) {
 
     setSetting(db, 'setupDone', '0');
     setSetting(db, 'activeOrbitServerId', '');
-    if (mode === 'full') {
-      // Panel bleibt, aber Server-Bindung / Profil zurück
+    setSetting(db, 'fxDataPath', '');
+    setSetting(db, 'fivemPort', '');
+    if (mode === 'full' || deleteServers) {
       for (const k of [
-        'fxDataPath', 'hostname', 'project', 'profileMode', 'profileRecipe',
-        'orbitServerName', 'orbitServerSlug', 'serverLabel', 'mysqlDsn',
+        'hostname', 'project', 'profileMode', 'profileRecipe',
+        'orbitServerName', 'orbitServerSlug', 'serverLabel',
+        ...(mode === 'full' ? ['mysqlDsn'] : []),
       ]) {
         try { db.prepare('DELETE FROM settings WHERE k = ?').run(k); } catch { /* */ }
       }
     }
 
     audit(db, me.username, 'setup.reset', `${mode}${deleteServers ? '+delete' : ''}`, ip);
-    logLine('info', mode === 'full'
-      ? `Orbit zurückgesetzt${deleteServers ? ' (Server-Ordner gelöscht)' : ''}.`
-      : 'Einrichtung neu — Server deaktiviert, Ordner bleiben.');
+    logLine('info', deleteServers
+      ? 'Zurückgesetzt — Server-Ordner gelöscht, Port frei, Wizard offen.'
+      : 'Einrichtung neu — Server deaktiviert (Ordner bleiben, können übernommen werden).');
     return json(res, 200, {
       ok: true,
       setup: false,

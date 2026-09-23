@@ -252,6 +252,7 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
     for (const k of keys) {
       await stopFxProcess(settings, logLine, { instanceId: k });
     }
+    await killOrphanFxServers(logLine);
     return { ok: true };
   }
   const key = resolveInstanceKey(settings, opts.instanceId);
@@ -259,6 +260,7 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
   if (!inst.child || inst.child.exitCode !== null) {
     inst.child = null;
     inst.phase = 'idle';
+    if (opts.killOrphans !== false) await killOrphanFxServers(logLine);
     return { ok: true, instanceId: key };
   }
   inst.phase = 'stopping';
@@ -274,7 +276,7 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
     const timer = setTimeout(() => {
       try { proc.kill('SIGKILL'); } catch { /* */ }
       resolve();
-    }, 45_000);
+    }, 12_000);
     proc.once('exit', () => {
       clearTimeout(timer);
       resolve();
@@ -288,7 +290,38 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
   await done;
   inst.child = null;
   inst.phase = 'idle';
+  if (opts.killOrphans !== false) await killOrphanFxServers(logLine);
   return { ok: true, instanceId: key };
+}
+
+/** FXServer-Prozesse die nicht mehr im Supervisor hängen (nach Panel-Restart). */
+export async function killOrphanFxServers(logLine = () => {}) {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const exec = promisify(execFile);
+  try {
+    const { stdout } = await exec('pgrep', ['-f', 'cfx-server/FXServer'], { timeout: 5000 });
+    const pids = String(stdout || '').trim().split(/\s+/).filter(Boolean);
+    for (const pid of pids) {
+      try {
+        process.kill(Number(pid), 'SIGTERM');
+        logLine('info', `FX-Orphan SIGTERM pid=${pid}`);
+      } catch { /* */ }
+    }
+    if (pids.length) {
+      await new Promise((r) => setTimeout(r, 1500));
+      for (const pid of pids) {
+        try {
+          process.kill(Number(pid), 0);
+          process.kill(Number(pid), 'SIGKILL');
+          logLine('warn', `FX-Orphan SIGKILL pid=${pid}`);
+        } catch { /* schon tot */ }
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  } catch {
+    /* pgrep exit 1 = keine Treffer */
+  }
 }
 
 export async function restartFxProcess(settings, logLine, opts = {}) {

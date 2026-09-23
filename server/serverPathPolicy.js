@@ -65,7 +65,7 @@ export function probeServerPath({ serversRoot = '', dataPath = '', defaultRoot =
       resolvedData = resolveCustomDataPath(dataPath);
       const cfg = path.join(resolvedData, 'server.cfg');
       if (fs.existsSync(cfg)) {
-        issues.push('Unter diesem Pfad liegt bereits eine server.cfg.');
+        warnings.push('server.cfg vorhanden — Ordner wird übernommen (kein Neu-Anlegen).');
       } else if (fs.existsSync(resolvedData)) {
         warnings.push('Ordner existiert — wird mit server.cfg und resources ergänzt.');
       } else {

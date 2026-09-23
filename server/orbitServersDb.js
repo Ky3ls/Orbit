@@ -73,6 +73,39 @@ export function insertOrbitServer(db, result) {
   return row;
 }
 
+/** Vorhandenen Server per data_path finden oder neu anlegen. */
+export function upsertOrbitServerByPath(db, result) {
+  const dataPath = String(result.fxDataPath || '').replace(/\/$/, '');
+  let row = db.prepare('SELECT * FROM orbit_servers WHERE data_path = ? OR data_path = ?')
+    .get(dataPath, `${dataPath}/`);
+  if (!row) {
+    // slug-Kollision vermeiden
+    let slug = result.orbitServerSlug;
+    let n = 2;
+    while (db.prepare('SELECT id FROM orbit_servers WHERE slug = ?').get(slug)) {
+      slug = `${result.orbitServerSlug}-${n}`;
+      n += 1;
+    }
+    result.orbitServerSlug = slug;
+    if (result.settings) result.settings.orbitServerSlug = slug;
+    row = insertOrbitServer(db, result);
+  } else {
+    db.prepare(`
+      UPDATE orbit_servers SET name = ?, fx_root = ?, port = ?, max_clients = ?, slug = COALESCE(slug, ?)
+      WHERE id = ?
+    `).run(
+      result.orbitServerName,
+      result.fxServerRoot || row.fx_root || '',
+      Number(result.settings?.fivemPort) || row.port,
+      Number(result.settings?.maxClients) || row.max_clients,
+      result.orbitServerSlug,
+      row.id,
+    );
+    row = db.prepare('SELECT * FROM orbit_servers WHERE id = ?').get(row.id);
+  }
+  return row;
+}
+
 export function getOrbitServerById(db, id) {
   return db.prepare('SELECT * FROM orbit_servers WHERE id = ?').get(Number(id));
 }
@@ -97,7 +130,7 @@ export function buildSettingsForServer(db, row) {
 
 export function createAndActivateOrbitServer(db, opts) {
   const result = provisionOrbitServer(opts);
-  const row = insertOrbitServer(db, result);
+  const row = upsertOrbitServerByPath(db, result);
   for (const [k, v] of Object.entries(result.settings)) setSetting(db, k, v);
   activateOrbitServer(db, row.id);
   return { result, row };

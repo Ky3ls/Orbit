@@ -53,6 +53,7 @@ function renderOrbitCfg({ name, project, port, maxClients, locale, tags, onesync
 /**
  * Legt einen eigenen Orbit-Server (Datenverzeichnis + server.cfg) an.
  * FX-Binary bleibt unter fxServerRoot (Artifact).
+ * Existiert server.cfg bereits → Ordner übernehmen (reuse), außer replaceExisting.
  */
 export function provisionOrbitServer(opts) {
   const displayName = String(opts.name || '').trim();
@@ -65,13 +66,22 @@ export function provisionOrbitServer(opts) {
 
   let dataPath;
   let slug;
+  let reused = false;
   const customData = resolveCustomDataPath(opts.dataPath);
   if (customData) {
-    if (fs.existsSync(path.join(customData, 'server.cfg'))) {
-      throw new Error('Unter diesem Pfad liegt bereits eine server.cfg.');
-    }
     dataPath = customData;
     slug = slugifyServerName(displayName);
+    const cfgExisting = path.join(dataPath, 'server.cfg');
+    if (fs.existsSync(cfgExisting)) {
+      if (opts.replaceExisting) {
+        // Ordner leeren für frisches Setup
+        for (const name of fs.readdirSync(dataPath)) {
+          fs.rmSync(path.join(dataPath, name), { recursive: true, force: true });
+        }
+      } else {
+        reused = true;
+      }
+    }
     fs.mkdirSync(dataPath, { recursive: true });
   } else {
     const root = resolveOrbitServersRoot(opts.serversRoot, ORBIT_SERVERS_ROOT);
@@ -83,19 +93,33 @@ export function provisionOrbitServer(opts) {
   const resourcesDir = path.join(dataPath, 'resources');
 
   fs.mkdirSync(resourcesDir, { recursive: true });
-  fs.writeFileSync(path.join(resourcesDir, '.gitkeep'), '', { mode: 0o644 });
+  if (!fs.existsSync(path.join(resourcesDir, '.gitkeep'))) {
+    fs.writeFileSync(path.join(resourcesDir, '.gitkeep'), '', { mode: 0o644 });
+  }
 
   const onesync = opts.onesync === 'off' || opts.onesync === 'legacy' ? opts.onesync : 'on';
-  const cfg = renderOrbitCfg({
-    name: displayName,
-    project: opts.project || displayName,
-    port,
-    maxClients,
-    locale: opts.locale || 'de-DE',
-    tags: opts.tags || 'roleplay, german',
-    onesync,
-  });
-  fs.writeFileSync(cfgFile, cfg, { encoding: 'utf8', mode: 0o644 });
+  if (!reused) {
+    const cfg = renderOrbitCfg({
+      name: displayName,
+      project: opts.project || displayName,
+      port,
+      maxClients,
+      locale: opts.locale || 'de-DE',
+      tags: opts.tags || 'roleplay, german',
+      onesync,
+    });
+    fs.writeFileSync(cfgFile, cfg, { encoding: 'utf8', mode: 0o644 });
+  } else {
+    // Port/Hostname in bestehender CFG anpassen
+    try {
+      let cur = fs.readFileSync(cfgFile, 'utf8');
+      cur = cur.replace(/endpoint_add_tcp\s+"[^"]+"/i, `endpoint_add_tcp "0.0.0.0:${port}"`);
+      cur = cur.replace(/endpoint_add_udp\s+"[^"]+"/i, `endpoint_add_udp "0.0.0.0:${port}"`);
+      cur = cur.replace(/sv_hostname\s+"[^"]*"/i, `sv_hostname "${String(displayName).replace(/"/g, '')}"`);
+      cur = cur.replace(/sv_maxclients\s+\d+/i, `sv_maxclients ${maxClients}`);
+      fs.writeFileSync(cfgFile, cur, 'utf8');
+    } catch { /* cfg bleibt */ }
+  }
 
   const fxServerRoot = String(opts.fxServerRoot || FX_SERVER_ROOT).replace(/\/$/, '');
 
@@ -105,6 +129,7 @@ export function provisionOrbitServer(opts) {
     fxDataPath: dataPath,
     fxServerRoot,
     cfgFile,
+    reused,
     settings: {
       orbitServerName: displayName,
       orbitServerSlug: slug,
