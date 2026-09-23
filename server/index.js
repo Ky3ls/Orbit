@@ -23,7 +23,7 @@ import {
   verifyTotp,
   SESSION_MS,
 } from './auth.js';
-import { cfxAuthorizeUrl, decryptPayload, ensureCfxKeys, fetchCfxUser } from './cfx.js';
+import { cfxAuthorizeUrl, exchangeCfxCode, fetchCfxUserInfo } from './cfx.js';
 import {
   clearBootstrapPin,
   clearPendingCfxClaim,
@@ -687,27 +687,28 @@ async function handleApi(req, res, url) {
       if (!pinOk) return redirect(res, '/install?cfx=pin');
       userId = null;
     }
-    let clientId = settingMap(db).cfxClientId;
-    if (!clientId) {
-      clientId = `orbit-${randomToken().slice(0, 24)}`;
-      setSetting(db, 'cfxClientId', clientId);
-    }
-    const { publicKey } = ensureCfxKeys();
-    const nonce = randomToken();
+    const state = randomToken();
     const redirectUri = `${requestPublicOrigin(req)}/api/auth/cfx/callback`;
     db.prepare('INSERT INTO oauth_states (nonce, mode, user_id, expires) VALUES (?, ?, ?, ?)')
-      .run(nonce, mode, userId, Date.now() + 10 * 60_000);
-    return redirect(res, cfxAuthorizeUrl({ clientId, nonce, publicKey, redirectUri }));
+      .run(state, mode, userId, Date.now() + 10 * 60_000);
+    return redirect(res, cfxAuthorizeUrl({ redirectUri, state }));
   }
 
   if (method === 'GET' && pathname === '/api/auth/cfx/callback') {
     try {
-      const { privateKey } = ensureCfxKeys();
-      const data = decryptPayload(privateKey, url.searchParams.get('payload'));
-      const state = db.prepare('SELECT * FROM oauth_states WHERE nonce = ?').get(data.nonce);
-      db.prepare('DELETE FROM oauth_states WHERE nonce = ?').run(data.nonce);
+      const code = url.searchParams.get('code');
+      const stateTok = url.searchParams.get('state');
+      if (!code || !stateTok) {
+        const err = url.searchParams.get('error_description') || url.searchParams.get('error') || 'missing_code';
+        return redirect(res, `/login?cfx=error&detail=${encodeURIComponent(String(err).slice(0, 80))}`);
+      }
+      const state = db.prepare('SELECT * FROM oauth_states WHERE nonce = ?').get(stateTok);
+      db.prepare('DELETE FROM oauth_states WHERE nonce = ?').run(stateTok);
       if (!state || state.expires < Date.now()) return redirect(res, '/login?cfx=error');
-      const profile = await fetchCfxUser(data.key);
+
+      const redirectUri = `${requestPublicOrigin(req)}/api/auth/cfx/callback`;
+      const tokenSet = await exchangeCfxCode({ code, redirectUri });
+      const profile = await fetchCfxUserInfo(tokenSet.access_token);
 
       if (state.mode === 'claim') {
         if (dbHasUsers(db)) return redirect(res, '/login');

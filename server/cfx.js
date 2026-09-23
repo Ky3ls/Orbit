@@ -1,64 +1,95 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
-import { DATA_DIR, ORIGIN } from './config.js';
+import { ORIGIN } from './config.js';
 
-const KEY_PATH = path.join(DATA_DIR, 'cfx-private.pem');
+/** Offizieller Cfx/FiveM Identity Provider — wie txAdmin (nicht Discourse User-API-Keys). */
+const IDMS = {
+  authorize: 'https://idms.fivem.net/connect/authorize',
+  token: 'https://idms.fivem.net/connect/token',
+  userinfo: 'https://idms.fivem.net/connect/userinfo',
+  // Öffentlicher Client, den auch txAdmin nutzt
+  clientId: 'txadmin_test',
+  clientSecret: 'txadmin_test',
+};
+
 export const CFX_REDIRECT = `${ORIGIN}/api/auth/cfx/callback`;
 
-export function ensureCfxKeys() {
-  if (!fs.existsSync(KEY_PATH)) {
-    const { privateKey } = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 4096,
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    });
-    fs.writeFileSync(KEY_PATH, privateKey, { mode: 0o600 });
-  }
-  const privateKey = fs.readFileSync(KEY_PATH, 'utf8');
-  const publicKey = crypto.createPublicKey(privateKey).export({ type: 'spki', format: 'pem' });
-  return { privateKey, publicKey };
-}
-
-export function cfxAuthorizeUrl({ clientId, nonce, publicKey, redirectUri }) {
-  const url = new URL('https://forum.cfx.re/user-api-key/new');
-  url.searchParams.set('scopes', 'session_info');
-  url.searchParams.set('client_id', clientId);
-  url.searchParams.set('nonce', nonce);
-  url.searchParams.set('auth_redirect', redirectUri || CFX_REDIRECT);
-  url.searchParams.set('application_name', 'Orbit');
-  url.searchParams.set('public_key', publicKey);
-  url.searchParams.set('padding', 'pkcs1');
+export function cfxAuthorizeUrl({ redirectUri, state }) {
+  const url = new URL(IDMS.authorize);
+  url.searchParams.set('client_id', IDMS.clientId);
+  url.searchParams.set('redirect_uri', redirectUri || CFX_REDIRECT);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', 'openid identify');
+  url.searchParams.set('state', state);
   return url.toString();
 }
 
-export function decryptPayload(privateKey, payload) {
-  const clean = String(payload || '').replace(/\s/g, '');
-  if (clean.length < 32 || clean.length > 8000) throw new Error('payload');
-  const buf = Buffer.from(clean, 'base64');
-  const decrypted = crypto.privateDecrypt(
-    { key: privateKey, padding: crypto.constants.RSA_PKCS1_PADDING },
-    buf,
-  );
-  const data = JSON.parse(decrypted.toString('utf8'));
-  if (!data || typeof data.key !== 'string' || typeof data.nonce !== 'string') throw new Error('payload');
+/**
+ * nameid z. B. https://forum.cfx.re/internal/user/271816 → fivem:271816
+ */
+export function fivemIdFromNameid(nameid) {
+  const m = /\/user\/(\d{1,12})/.exec(String(nameid || ''));
+  return m ? `fivem:${m[1]}` : null;
+}
+
+export async function exchangeCfxCode({ code, redirectUri }) {
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: String(code || ''),
+    redirect_uri: redirectUri || CFX_REDIRECT,
+    client_id: IDMS.clientId,
+    client_secret: IDMS.clientSecret,
+  });
+  const res = await fetch(IDMS.token, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+      'User-Agent': 'Orbit Panel',
+    },
+    body,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) {
+    const detail = data.error_description || data.error || `HTTP ${res.status}`;
+    throw new Error(`cfx-token: ${detail}`);
+  }
   return data;
 }
 
-export async function fetchCfxUser(apiKey) {
-  const res = await fetch('https://forum.cfx.re/session/current.json', {
+export async function fetchCfxUserInfo(accessToken) {
+  const res = await fetch(IDMS.userinfo, {
     headers: {
-      'User-Api-Key': apiKey,
-      'User-Agent': 'TX2 (tx2.ky3ls.space)',
+      Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
+      'User-Agent': 'Orbit Panel',
     },
+    signal: AbortSignal.timeout(15_000),
   });
-  if (!res.ok) throw new Error('cfx-profile');
-  const body = await res.json();
-  const user = body?.current_user;
-  if (!user?.id) throw new Error('cfx-profile');
+  if (!res.ok) throw new Error('cfx-userinfo');
+  const user = await res.json();
+  const fivem = fivemIdFromNameid(user.nameid);
+  if (!fivem) throw new Error('cfx-nameid');
+  const id = fivem.slice('fivem:'.length);
   return {
-    id: String(user.id).slice(0, 24),
-    username: String(user.username || user.name || 'cfx').slice(0, 48),
+    id,
+    fivem,
+    username: String(user.name || user.preferred_username || `cfx${id}`).slice(0, 48),
+    picture: typeof user.picture === 'string' && user.picture.startsWith('https://')
+      ? user.picture
+      : '',
+    profile: typeof user.profile === 'string' ? user.profile : '',
   };
+}
+
+/** @deprecated RSA/Discourse-Flow — nur noch Stub für alte Imports */
+export function ensureCfxKeys() {
+  return { privateKey: '', publicKey: '' };
+}
+
+export function decryptPayload() {
+  throw new Error('Discourse User-API-Keys werden nicht mehr genutzt. Bitte Orbit aktualisieren.');
+}
+
+export async function fetchCfxUser() {
+  throw new Error('fetchCfxUser entfällt — nutze fetchCfxUserInfo.');
 }
