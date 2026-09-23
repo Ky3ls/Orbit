@@ -11,7 +11,7 @@ FX läuft über Orbit — kein separates Monitor-Panel nötig.
 ## Installation
 
 ```bash
-sudo git clone https://github.com/Ky3ls/orbit.git /opt/tx2
+sudo git clone https://github.com/Ky3ls/Orbit.git /opt/tx2
 cd /opt/tx2
 sudo bash scripts/install-orbit.sh
 ```
@@ -19,8 +19,8 @@ sudo bash scripts/install-orbit.sh
 Einzeiler:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ky3ls/orbit/main/scripts/install-orbit.sh \
-  | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/orbit.git bash
+curl -fsSL https://raw.githubusercontent.com/Ky3ls/Orbit/main/scripts/install-orbit.sh \
+  | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/Orbit.git bash
 ```
 
 Das Skript installiert das Panel unter `/opt/tx2`, legt die Datenpfade unter `/opt/orbit` an und startet den Dienst `tx2` (Port **40220**).
@@ -28,7 +28,7 @@ Das Skript installiert das Panel unter `/opt/tx2`, legt die Datenpfade unter `/o
 Optional mit öffentlicher URL:
 
 ```bash
-sudo ORBIT_GIT_URL=https://github.com/Ky3ls/orbit.git \
+sudo ORBIT_GIT_URL=https://github.com/Ky3ls/Orbit.git \
      ORBIT_PUBLIC_URL=https://panel.example.com \
      bash scripts/install-orbit.sh
 ```
