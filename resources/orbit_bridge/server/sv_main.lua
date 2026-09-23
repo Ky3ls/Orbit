@@ -1,4 +1,4 @@
---[[ Orbit server — Auth + Playerlisten (txAdmin-Style ohne ACE) ]]
+--[[ Orbit server — Auth + Playerlisten ]]
 
 local RESOURCE = GetCurrentResourceName()
 local PANEL = GetConvar('orbit_panelUrl', GetConvar('orbit_panel_url', 'http://127.0.0.1:40220'))

@@ -1,87 +1,56 @@
 # Orbit
 
-Web-Panel für FiveM/FXServer — Start/Stop, Konsole, Ingame-Menü, Multi-Server.
-**Kein txAdmin nötig.** FX wird vom Panel gesteuert.
+Web-Panel für FiveM/FXServer: Start/Stop, Live-Konsole, Ressourcen, Multi-Server und schlankes Ingame-Menü.
+FX läuft über Orbit — kein separates Monitor-Panel nötig.
 
-## Voraussetzungen (Linux)
+## Voraussetzungen
 
-- Root bzw. sudo
+- Linux (root/sudo)
 - Git, Node.js 20+, npm, unzip, xz-utils
-- Offene Ports: **Panel** (Standard `40220`) + **FX** (Standard `30120` TCP+UDP)
 
-## 1) Auf GitHub hochladen (einmalig, dein Rechner oder dieser Host)
-
-```bash
-cd /opt/tx2   # oder dein Orbit-Ordner
-git init
-git add .
-git commit -m "Orbit Panel"
-# Repo auf github.com anlegen (leer, ohne README), dann:
-git branch -M main
-git remote add origin https://github.com/DEIN_USER/orbit.git
-git push -u origin main
-```
-
-Mit GitHub CLI:
+## Installation
 
 ```bash
-cd /opt/tx2
-git init && git add . && git commit -m "Orbit Panel"
-gh repo create orbit --private --source=. --remote=origin --push
-```
-
-Nicht committen: `data/`, `node_modules/`, `dist/` (stehen in `.gitignore`).
-
-## 2) Auf dem Server installieren (wie FX — aber ein Befehl)
-
-**Variante A — Einzeiler** (nach dem Push, `DEIN_USER` ersetzen):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/DEIN_USER/orbit/main/scripts/install-orbit.sh \
-  | sudo ORBIT_GIT_URL=https://github.com/DEIN_USER/orbit.git bash
-```
-
-Optional Domain:
-
-```bash
-sudo ORBIT_GIT_URL=https://github.com/DEIN_USER/orbit.git \
-     ORBIT_PUBLIC_URL=https://panel.example.com \
-     bash -c 'curl -fsSL https://raw.githubusercontent.com/DEIN_USER/orbit/main/scripts/install-orbit.sh | bash'
-```
-
-**Variante B — git clone** (klarer, empfohlen):
-
-```bash
-sudo git clone https://github.com/DEIN_USER/orbit.git /opt/tx2
+sudo git clone https://github.com/Ky3ls/orbit.git /opt/tx2
 cd /opt/tx2
 sudo bash scripts/install-orbit.sh
 ```
 
-Das Skript legt User `tx2`, Ordner unter `/opt/orbit`, baut das Panel und startet `systemd` (`tx2.service`).
+Einzeiler:
 
-Vergleich zu klassischem FX/txAdmin:
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ky3ls/orbit/main/scripts/install-orbit.sh \
+  | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/orbit.git bash
+```
 
-| Klassisch (Cfx)                         | Orbit                                      |
-|-----------------------------------------|--------------------------------------------|
-| `wget` FX-Build + `tar xf`              | Panel lädt FX-Builds im Setup / Einstellungen |
-| `git clone cfx-server-data`             | Datenordner unter `/opt/orbit/servers/…`   |
-| `server.cfg` + `run.sh` von Hand        | Setup-Wizard im Browser                    |
-| txAdmin startet mit FX                  | Panel steuert FX (`fxControlMode=orbit`)   |
+Das Skript installiert das Panel unter `/opt/tx2`, legt die Datenpfade unter `/opt/orbit` an und startet den Dienst `tx2` (Port **40220**).
 
-## 3) Erstes Setup (Browser)
+Optional mit öffentlicher URL:
 
-1. Öffne `http://DEINE-IP:40220` (oder deine Domain hinter Reverse-Proxy).
-2. **Setup-Wizard:** Master-Account → Panel-Zugang → Framework (Minimal/ESX/QB optional) → Port → **Datenbank** → License-Key → Start.
-3. Danach: Cockpit = Live-Konsole, Start/Stop, Ressourcen. Ingame: `/orbit` oder `/tx` (Kick/Announce/Heal/Liste).
+```bash
+sudo ORBIT_GIT_URL=https://github.com/Ky3ls/orbit.git \
+     ORBIT_PUBLIC_URL=https://panel.example.com \
+     bash scripts/install-orbit.sh
+```
 
-Server + MySQL später ändern: **Einstellungen** → Instanzen / Prod (License, MySQL in `server.cfg`).
+## Ersteinrichtung
 
-## 4) Firewall (wichtig)
+1. Im Browser öffnen: `http://DEINE-SERVER-IP:40220`
+2. Setup-Wizard durchlaufen:
+   - Master-Account anlegen
+   - Panel-Zugang prüfen
+   - Optional Framework-Profil (Minimal / ESX / QB)
+   - Servername, Port, Spielerlimit
+   - Datenbank (MySQL) verbinden oder anlegen
+   - Cfx-License-Key eintragen
+   - Server starten
+3. Danach im Cockpit: Konsole, Start/Stop, Ressourcen
 
-- Panel: TCP `40220` (oder nur localhost + Nginx/Caddy)
-- Spiel: TCP **und** UDP `30120` (bzw. dein FX-Port)
+Später ändern: **Einstellungen** → Instanzen (weitere Server), FX Builds, Prod (License / MySQL).
 
-## 5) Update später
+**Ingame:** `/orbit` oder `/tx` — Heal, Announce, Spielerliste, Kick.
+
+## Update
 
 ```bash
 cd /opt/tx2
@@ -96,5 +65,6 @@ sudo systemctl restart tx2
 ```bash
 systemctl status tx2
 journalctl -u tx2 -f
-# FX läuft als Kindprozess von Orbit — Start/Stop im Panel, nicht manuell run.sh
 ```
+
+FX Start/Stop nur über das Panel — nicht manuell per `run.sh`.

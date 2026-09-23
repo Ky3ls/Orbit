@@ -14,7 +14,7 @@ if (typeof window !== 'undefined') {
   const { protocol, hostname } = window.location;
   const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
   const isIpv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
-  // Domain → HTTPS; IP:Port (txAdmin-Stil) bleibt auf http.
+  // Domain → HTTPS; IP:Port bleibt auf http.
   if (protocol === 'http:' && !isLocal && !isIpv4) {
     window.location.replace(window.location.href.replace(/^http:/i, 'https:'));
   }

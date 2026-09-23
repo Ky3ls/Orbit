@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# Orbit Panel — Ein-Befehl-Installation (Linux, root empfohlen)
+# Orbit Panel — Installation (Linux, root empfohlen)
 #
-# Einzeiler (nach GitHub-Push):
-#   curl -fsSL https://raw.githubusercontent.com/DEIN_USER/orbit/main/scripts/install-orbit.sh | sudo bash
+#   sudo git clone https://github.com/Ky3ls/orbit.git /opt/tx2
+#   cd /opt/tx2 && sudo bash scripts/install-orbit.sh
 #
-# Oder lokal im Repo:
-#   sudo bash scripts/install-orbit.sh
+# Einzeiler:
+#   curl -fsSL https://raw.githubusercontent.com/Ky3ls/orbit/main/scripts/install-orbit.sh \
+#     | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/orbit.git bash
 #
-# Optional:
-#   ORBIT_GIT_URL=https://github.com/DEIN_USER/orbit.git
-#   ORBIT_INSTALL_DIR=/opt/tx2
-#   ORBIT_PUBLIC_URL=https://panel.example.com
-#   ORBIT_PORT=40220
+# Optional: ORBIT_INSTALL_DIR ORBIT_PUBLIC_URL ORBIT_PORT ORBIT_GIT_URL
 set -euo pipefail
 
 INSTALL_DIR="${ORBIT_INSTALL_DIR:-/opt/tx2}"
@@ -20,7 +17,7 @@ SERVERS="${ORBIT_SERVERS_ROOT:-/opt/orbit/servers}"
 USER_NAME="${ORBIT_USER:-tx2}"
 PANEL_PORT="${ORBIT_PORT:-40220}"
 PUBLIC_URL="${ORBIT_PUBLIC_URL:-}"
-GIT_URL="${ORBIT_GIT_URL:-}"
+GIT_URL="${ORBIT_GIT_URL:-https://github.com/Ky3ls/orbit.git}"
 
 need_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -53,13 +50,7 @@ resolve_source() {
     return
   fi
   if [[ -z "$GIT_URL" ]]; then
-    cat <<EOF
-Kein Repo gefunden und ORBIT_GIT_URL fehlt.
-
-Beispiele:
-  cd /pfad/zum/orbit && sudo bash scripts/install-orbit.sh
-  ORBIT_GIT_URL=https://github.com/DEIN_USER/orbit.git sudo -E bash scripts/install-orbit.sh
-EOF
+    echo "ORBIT_GIT_URL fehlt und kein lokales Repo."
     exit 1
   fi
   TMP="$(mktemp -d)"
@@ -132,16 +123,14 @@ cat <<EOF
 ========================================
  Orbit installiert
 ========================================
- Panel:   $HOST_HINT
- Port:    $PANEL_PORT (Firewall/Proxy freigeben)
- Pfad:    $INSTALL_DIR
+ Panel:    $HOST_HINT
+ Port:     $PANEL_PORT
+ Pfad:     $INSTALL_DIR
  FX/Daten: $ARTIFACTS  ·  $SERVERS
 
- Nächster Schritt (Browser):
-   1) $HOST_HINT öffnen → Setup-Wizard
-   2) Master-Account anlegen
-   3) FX-Build laden, Servername, Port, MySQL, License
-   4) Fertig — FX startet über Orbit (kein txAdmin)
+ Nächster Schritt:
+   Browser öffnen → Setup-Wizard
+   (Account, Server, Datenbank, License, Start)
 
  Logs: journalctl -u tx2 -f
 ========================================

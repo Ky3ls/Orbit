@@ -26,7 +26,7 @@ location / {
 
 Im Setup-Schritt **Panel-Zugang**:
 
-- **IP & Port** — `ORBIT_BIND_HOST=0.0.0.0`, öffentliche URL `http://<IP>:40220` (txAdmin-ähnlich)
+- **IP & Port** — `ORBIT_BIND_HOST=0.0.0.0`, öffentliche URL `http://<IP>:40220`
 - **Domain** — Reverse-Proxy (nginx/Apache/Caddy, automatische Erkennung), URL `https://<domain>`, Node bleibt auf `127.0.0.1`
 
 Erfordert `sudo` für User `tx2` (systemd drop-in + Webserver-Reload).
