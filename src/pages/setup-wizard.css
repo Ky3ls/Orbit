@@ -147,3 +147,32 @@
   border-color: rgba(244, 67, 54, 0.55);
   color: #f44336;
 }
+
+.db-pass-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.db-pass-row input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.db-pass-row .btn {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.db-pass-preview {
+  margin: -4px 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  color: var(--text);
+  font-size: 14px;
+  word-break: break-all;
+  user-select: all;
+}
