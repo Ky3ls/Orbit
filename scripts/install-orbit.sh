@@ -15,7 +15,9 @@ SERVERS="${ORBIT_SERVERS_ROOT:-$INSTALL_DIR/servers}"
 DATA_DIR="${ORBIT_DATA_DIR:-$INSTALL_DIR/data}"
 USER_NAME="${ORBIT_USER:-orbit}"
 PANEL_PORT="${ORBIT_PORT:-40220}"
-PUBLIC_URL="${ORBIT_PUBLIC_URL:-}"
+# Domain NIEMALS aus alten Drop-Ins übernehmen — nur explizit via ORBIT_PUBLIC_URL,
+# sonst immer IP:Port. Domain setzt erst der Setup-Wizard.
+PUBLIC_URL_EXPLICIT="${ORBIT_PUBLIC_URL:-}"
 GIT_URL="${ORBIT_GIT_URL:-https://github.com/Ky3ls/Orbit.git}"
 SERVICE_NAME=orbit
 
@@ -89,21 +91,29 @@ echo "==> npm ci + build"
 runuser -u "$USER_NAME" -- npm ci
 runuser -u "$USER_NAME" -- npm run build
 
+DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+DEFAULT_IP="${DEFAULT_IP:-127.0.0.1}"
+if [[ -n "$PUBLIC_URL_EXPLICIT" ]]; then
+  PUBLIC_URL="$PUBLIC_URL_EXPLICIT"
+else
+  PUBLIC_URL="http://${DEFAULT_IP}:${PANEL_PORT}"
+fi
+
 ENV_LINES="Environment=NODE_ENV=production
 Environment=ORBIT_ARTIFACTS_ROOT=$ARTIFACTS
 Environment=ORBIT_SERVERS_ROOT=$SERVERS
 Environment=ORBIT_PANEL_PORT=$PANEL_PORT
-Environment=ORBIT_BIND_HOST=0.0.0.0"
-if [[ -n "$PUBLIC_URL" ]]; then
-  ENV_LINES="$ENV_LINES
+Environment=ORBIT_BIND_HOST=0.0.0.0
 Environment=ORBIT_PUBLIC_URL=$PUBLIC_URL"
-fi
 
 # alten tx2-Dienst entfernen falls noch vorhanden
 systemctl stop tx2.service 2>/dev/null || true
 systemctl disable tx2.service 2>/dev/null || true
 rm -f /etc/systemd/system/tx2.service
 rm -rf /etc/systemd/system/tx2.service.d
+
+# Alte Orbit-Drop-Ins (Domain/Env) verwerfen — sonst bleibt z. B. tx.ky3ls.space hängen
+rm -rf /etc/systemd/system/${SERVICE_NAME}.service.d
 
 # sudo für Panel-User (Ordner/ACL/Host — kein Vollzugriff)
 cat > /etc/sudoers.d/orbit <<SUDOEOF
