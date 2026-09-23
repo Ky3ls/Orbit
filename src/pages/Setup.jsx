@@ -91,6 +91,9 @@ export default function Setup({ onDone, userName = '' }) {
   const [dbMode, setDbMode] = useState('create'); // create | reuse | skip
   const [dbName, setDbName] = useState('');
   const [dbUser, setDbUser] = useState('');
+  const [dbPassword, setDbPassword] = useState('');
+  const [showDbPassword, setShowDbPassword] = useState(false);
+  const [dbPassCopied, setDbPassCopied] = useState(false);
   const [mysqlConnection, setMysqlConnection] = useState('');
   const [mysqlRootPassword, setMysqlRootPassword] = useState('');
   const [licenseKey, setLicenseKey] = useState('');
@@ -177,6 +180,33 @@ export default function Setup({ onDone, userName = '' }) {
     }
   }
 
+  function generateDbPassword() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%+-';
+    const bytes = new Uint8Array(20);
+    crypto.getRandomValues(bytes);
+    let out = '';
+    for (const b of bytes) out += alphabet[b % alphabet.length];
+    setDbPassword(out);
+    setShowDbPassword(true);
+    setDbPassCopied(false);
+  }
+
+  async function copyDbPassword() {
+    if (!dbPassword) return;
+    try {
+      await navigator.clipboard.writeText(dbPassword);
+      setDbPassCopied(true);
+      window.setTimeout(() => setDbPassCopied(false), 2000);
+    } catch {
+      setErr('Kopieren fehlgeschlagen — Passwort manuell markieren.');
+    }
+  }
+
+  useEffect(() => {
+    if (dbMode === 'create' && !dbPassword) generateDbPassword();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbMode]);
+
   async function finish() {
     setBusy(true);
     setErr('');
@@ -198,6 +228,7 @@ export default function Setup({ onDone, userName = '' }) {
           createDatabase: dbMode === 'create',
           dbName: dbMode === 'create' ? (dbName.trim() || undefined) : undefined,
           dbUser: dbMode === 'create' ? (dbUser.trim() || undefined) : undefined,
+          dbPassword: dbMode === 'create' ? (dbPassword.trim() || undefined) : undefined,
           mysqlConnection: dbMode === 'reuse' ? mysqlConnection.trim() : undefined,
           mysqlRootPassword: dbMode === 'create' ? mysqlRootPassword : undefined,
           startServer: autoStart,
@@ -276,7 +307,7 @@ export default function Setup({ onDone, userName = '' }) {
     }
     if (step === 6) {
       if (!preflight?.mysql?.running && dbMode !== 'skip') return false;
-      if (dbMode === 'create') return true;
+      if (dbMode === 'create') return dbPassword.trim().length >= 6;
       if (dbMode === 'reuse') return /^mysql:\/\//i.test(mysqlConnection.trim());
       return true;
     }
@@ -589,6 +620,30 @@ export default function Setup({ onDone, userName = '' }) {
                     <label className="field"><span>DB-User (optional)</span>
                       <input className="mono" value={dbUser} onChange={(e) => setDbUser(e.target.value)} placeholder="orbit" />
                     </label>
+                    <label className="field"><span>DB-Passwort</span>
+                      <div className="db-pass-row">
+                        <input
+                          className="mono"
+                          type={showDbPassword ? 'text' : 'password'}
+                          value={dbPassword}
+                          onChange={(e) => { setDbPassword(e.target.value); setDbPassCopied(false); }}
+                          placeholder="mind. 6 Zeichen"
+                          autoComplete="new-password"
+                        />
+                        <button type="button" className="btn btn-sm" onClick={() => setShowDbPassword((v) => !v)}>
+                          {showDbPassword ? 'Verbergen' : 'Anzeigen'}
+                        </button>
+                        <button type="button" className="btn btn-sm" onClick={copyDbPassword} disabled={!dbPassword}>
+                          {dbPassCopied ? 'Kopiert' : 'Kopieren'}
+                        </button>
+                        <button type="button" className="btn btn-sm btn-primary" style={{ width: 'auto' }} onClick={generateDbPassword}>
+                          Generieren
+                        </button>
+                      </div>
+                    </label>
+                    {dbPassword && showDbPassword && (
+                      <p className="db-pass-preview mono">{dbPassword}</p>
+                    )}
                     <label className="field"><span>MySQL root-Passwort (optional)</span>
                       <input type="password" value={mysqlRootPassword} onChange={(e) => setMysqlRootPassword(e.target.value)} placeholder="Leer = sudo mysql auf dem Host" autoComplete="new-password" />
                     </label>

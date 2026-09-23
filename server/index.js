@@ -996,6 +996,9 @@ async function handleApi(req, res, url) {
         const prov = await provisionMysqlDatabase({
           dbName: str(body.dbName, 48) || defaultDbName(name),
           appUser: str(body.dbUser, 32) || 'orbit',
+          appPassword: typeof body.dbPassword === 'string' && body.dbPassword.length >= 6
+            ? body.dbPassword.slice(0, 128)
+            : undefined,
           rootPassword: body.mysqlRootPassword !== undefined ? str(body.mysqlRootPassword, 128) : undefined,
         });
         mysqlDsn = prov.dsn;
