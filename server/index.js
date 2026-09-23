@@ -2238,7 +2238,7 @@ async function handleApi(req, res, url) {
     setTimeout(async () => {
       try {
         const { execFile } = await import('node:child_process');
-        execFile('sudo', ['-n', 'bash', script, '--yes'], { timeout: 300_000 }, (err) => {
+        execFile('sudo', ['-n', 'bash', script], { timeout: 300_000 }, (err) => {
           if (err) logLine('bad', `Uninstall: ${err.message}`);
         });
       } catch (err) {
