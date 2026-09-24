@@ -114,12 +114,39 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   }
   const key = resolveInstanceKey(settings, opts.instanceId);
   const inst = getInst(key);
-  if (inst.phase === 'running' || inst.phase === 'starting') {
-    throw new Error(`FXServer läuft bereits (Instanz ${key}).`);
-  }
+  const port = Number(settings?.fivemPort) || 30120;
+
+  // Wenn noch etwas läuft / Port belegt → zuerst stoppen (kein EADDRINUSE)
   const { unitActive, FX_UNIT } = await import('./control.js');
-  if (await unitActive()) {
-    throw new Error(`${FX_UNIT} läuft noch — zuerst stoppen, damit Orbit den FXServer starten kann.`);
+  const systemdBusy = await unitActive();
+  const orbitBusy = inst.phase === 'running' || inst.phase === 'starting' || !!inst.child;
+  let portBusy = false;
+  try {
+    const { execFileSync } = await import('node:child_process');
+    const out = execFileSync('ss', ['-tlnH', `sport = :${port}`], { encoding: 'utf8', timeout: 2000 });
+    portBusy = !!String(out || '').trim();
+  } catch { /* ss fehlt → ignorieren */ }
+
+  if (orbitBusy || systemdBusy || portBusy) {
+    logLine('info', `[FX:${key}] Stop vor Start (Prozess/Port belegt)…`);
+    try {
+      await forceFreeGamePort(settings, logLine, port);
+    } catch (err) {
+      logLine('warn', `[FX:${key}] Stop vor Start: ${err.message}`);
+    }
+    for (let i = 0; i < 20; i += 1) {
+      try {
+        const { execFileSync } = await import('node:child_process');
+        const out = execFileSync('ss', ['-tlnH', `sport = :${port}`], { encoding: 'utf8', timeout: 2000 });
+        if (!String(out || '').trim()) break;
+      } catch {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (await unitActive()) {
+      throw new Error(`${FX_UNIT} läuft noch — manuell stoppen.`);
+    }
   }
 
   const launch = resolveFxLaunch(settings, { db: opts.db });

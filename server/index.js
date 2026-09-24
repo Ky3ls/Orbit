@@ -78,6 +78,7 @@ import { runRecipeYaml } from './recipeRunner.js';
 import { fetchRecommendedBuild, installArtifact } from './artifacts.js';
 import { handlePlatformApi, initPlatform } from './platformApi.js';
 import { handleIngamePublicApi } from './ingameApi.js';
+import { primaryId, normalizeIdentifiers, mergeIdLists, cleanupPlayerDuplicates } from './playerIdentity.js';
 import { hotDeployOrbit, ensureIngameToken, syncOrbitSystemResource } from './orbitBridgeSync.js';
 import { parseDropFromLogLine, recordDrop } from './playerDrops.js';
 import { notifyServerEvent, notifyPlayerDrop } from './discord.js';
@@ -316,16 +317,12 @@ function str(value, max) {
   return value.trim().slice(0, max);
 }
 
-function primaryId(identifiers) {
-  const list = identifiers || [];
-  return list.find((id) => id.startsWith('license:')) || list[0] || '';
-}
-
 let dummyHash = '';
 let fivemTick = 0;
 let firedMinute = '';
 let queueBusy = false;
 let lastResourceScan = 0;
+let playerCleanupDone = false;
 
 async function loop() {
   try {
@@ -1549,29 +1546,32 @@ async function handleApi(req, res, url) {
     const filter = str(url.searchParams.get('filter') || 'all', 16); // all|online|offline
     const settings = settingMap(db);
 
+    if (!playerCleanupDone) {
+      try { cleanupPlayerDuplicates(db); } catch { /* */ }
+      playerCleanupDone = true;
+    }
+
     let rows = db.prepare(
       'SELECT identifier, name, ping, ids, first_seen, last_seen, note, play_ms FROM players ORDER BY last_seen DESC LIMIT 800',
     ).all();
 
     const onlineById = new Map();
-    const onlineByNet = new Map();
     for (const p of runtime.players || []) {
-      onlineByNet.set(Number(p.id), p);
       for (const id of p.identifiers || []) onlineById.set(id, p);
-      const prim = primaryId(p.identifiers) || `fivem:${p.id}`;
-      onlineById.set(prim, p);
+      const prim = primaryId(p.identifiers);
+      if (prim) onlineById.set(prim, p);
     }
 
-    // Live-Spieler (FX Bridge) immer einmischen — nicht nur DB
     const seen = new Set(rows.map((r) => r.identifier));
     for (const p of runtime.players || []) {
-      const identifier = primaryId(p.identifiers) || `fivem:${p.id}`;
-      if (seen.has(identifier)) continue;
+      const ids = normalizeIdentifiers(p.identifiers);
+      const identifier = primaryId(ids);
+      if (!identifier || seen.has(identifier)) continue;
       rows.unshift({
         identifier,
         name: p.name,
         ping: p.ping,
-        ids: JSON.stringify(p.identifiers || []),
+        ids: JSON.stringify(ids),
         first_seen: Date.now(),
         last_seen: Date.now(),
         note: '',
@@ -1582,15 +1582,16 @@ async function handleApi(req, res, url) {
 
     let merged = rows.map((row) => {
       let ids = [];
-      try { ids = JSON.parse(row.ids || '[]'); } catch { ids = []; }
+      try { ids = normalizeIdentifiers(JSON.parse(row.ids || '[]')); } catch { ids = []; }
+      if (row.identifier) ids = mergeIdLists(ids, [row.identifier]);
       const live = onlineById.get(row.identifier)
         || ids.map((id) => onlineById.get(id)).find(Boolean)
-        || (String(row.identifier || '').startsWith('fivem:')
-          ? onlineByNet.get(Number(String(row.identifier).slice(6)))
-          : null)
         || null;
+      if (live?.identifiers?.length) ids = mergeIdLists(ids, live.identifiers);
       return {
         ...row,
+        ids: JSON.stringify(ids),
+        identifiers: ids,
         online: !!live,
         serverId: live?.id ?? null,
         ping: live?.ping ?? row.ping,
@@ -1598,13 +1599,36 @@ async function handleApi(req, res, url) {
       };
     });
 
+    const dedup = new Map();
+    for (const row of merged) {
+      const key = primaryId(row.identifiers) || row.identifier;
+      const prev = dedup.get(key);
+      if (!prev) {
+        dedup.set(key, { ...row, identifier: key });
+        continue;
+      }
+      const newer = (row.last_seen || 0) >= (prev.last_seen || 0) ? row : prev;
+      const older = newer === row ? prev : row;
+      const ids = mergeIdLists(newer.identifiers, older.identifiers);
+      dedup.set(key, {
+        ...newer,
+        identifier: key,
+        identifiers: ids,
+        ids: JSON.stringify(ids),
+        play_ms: Math.max(Number(newer.play_ms || 0), Number(older.play_ms || 0)),
+        first_seen: Math.min(Number(newer.first_seen || Date.now()), Number(older.first_seen || Date.now())),
+        online: !!(newer.online || older.online),
+        serverId: newer.serverId ?? older.serverId,
+      });
+    }
+    merged = [...dedup.values()];
+
     if (q) {
-      merged = merged.filter((row) => `${row.name} ${row.identifier} ${row.note || ''}`.toLowerCase().includes(q));
+      merged = merged.filter((row) => `${row.name} ${row.identifier} ${(row.identifiers || []).join(' ')} ${row.note || ''}`.toLowerCase().includes(q));
     }
     if (filter === 'online') merged = merged.filter((r) => r.online);
     if (filter === 'offline') merged = merged.filter((r) => !r.online);
 
-    // Online zuerst, dann zuletzt gesehen
     merged.sort((a, b) => {
       if (a.online !== b.online) return a.online ? -1 : 1;
       return (b.last_seen || 0) - (a.last_seen || 0);
@@ -1618,7 +1642,8 @@ async function handleApi(req, res, url) {
       stats: {
         ...playerStats(),
         online: (runtime.players || []).length,
-        offline: Math.max(0, playerStats().total - (runtime.players || []).length),
+        offline: merged.filter((r) => !r.online).length,
+        total: merged.length,
       },
       fxCommandReady: fxConsoleReady(settings),
       fxControlMode: orbitControlMode(settings),

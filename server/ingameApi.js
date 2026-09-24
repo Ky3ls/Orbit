@@ -11,14 +11,10 @@ import {
   consumeWebEmbedTicket,
 } from './ingamePerms.js';
 import { createSession, cookieHeader, COOKIE, SESSION_MS } from './auth.js';
+import { normalizeIdentifiers, primaryId, upsertLivePlayer } from './playerIdentity.js';
 
 function str(v, max) {
   return String(v ?? '').slice(0, max);
-}
-
-function primaryId(identifiers) {
-  const list = identifiers || [];
-  return list.find((id) => id.startsWith('license:')) || list[0] || '';
 }
 
 function parseIdentifiersHeader(raw) {
@@ -78,6 +74,7 @@ export async function handleIngamePublicApi(ctx) {
   /**
    * Live-Playerlist vom FX-Resource (wie txAdmin FxPlayerlist):
    * event=full | playerJoining | playerDropped — Quelle ist GetPlayers(), nicht players.json / DB.
+   * Kein Panel-Log (sonst Spam alle 3s).
    */
   if (method === 'POST' && pathname === '/api/ingame/players-sync') {
     const body = await readBody(req);
@@ -87,35 +84,14 @@ export async function handleIngamePublicApi(ctx) {
     }
     const now = Date.now();
     const event = String(body.event || 'full');
-    const up = db.prepare(`
-      INSERT INTO players (identifier, name, ping, ids, first_seen, last_seen, play_ms)
-      VALUES (?, ?, ?, ?, ?, ?, 0)
-      ON CONFLICT(identifier) DO UPDATE SET
-        name = excluded.name,
-        ping = excluded.ping,
-        ids = excluded.ids,
-        last_seen = excluded.last_seen,
-        play_ms = play_ms + 3000
-    `);
 
     const normalize = (p) => {
       const id = Number(p?.id);
       if (!Number.isFinite(id)) return null;
-      const identifiers = Array.isArray(p.identifiers)
-        ? p.identifiers.map((x) => String(x).slice(0, 80)).filter(Boolean).slice(0, 16)
-        : [];
-      // Fallback-Key wenn Identifier noch fehlen (Join-Frame) — trotzdem live anzeigen
-      const identifier = primaryId(identifiers) || `fivem:${id}`;
+      const identifiers = normalizeIdentifiers(p.identifiers);
       const name = String(p.name || 'Unbekannt').slice(0, 64);
       const ping = Number(p.ping) || 0;
-      return { id, name, ping, identifiers, identifier };
-    };
-
-    const persist = (row) => {
-      if (!row?.identifier) return;
-      try {
-        up.run(row.identifier, row.name, row.ping, JSON.stringify(row.identifiers || []), now, now);
-      } catch { /* */ }
+      return { id, name, ping, identifiers };
     };
 
     let list = Array.isArray(runtime.players) ? [...runtime.players] : [];
@@ -128,17 +104,16 @@ export async function handleIngamePublicApi(ctx) {
       if (row) {
         list = list.filter((p) => Number(p.id) !== row.id);
         list.push({ id: row.id, name: row.name, ping: row.ping, identifiers: row.identifiers });
-        persist(row);
+        if (row.identifiers.length) upsertLivePlayer(db, row, now);
       }
     } else {
-      // full snapshot
       const raw = Array.isArray(body.players) ? body.players : [];
       list = [];
       for (const p of raw) {
         const row = normalize(p);
         if (!row) continue;
         list.push({ id: row.id, name: row.name, ping: row.ping, identifiers: row.identifiers });
-        persist(row);
+        if (row.identifiers.length) upsertLivePlayer(db, row, now);
       }
     }
 
@@ -146,7 +121,6 @@ export async function handleIngamePublicApi(ctx) {
     runtime.playersSyncedAt = now;
     runtime.clients = list.length;
     if (list.length && !runtime.online) runtime.online = true;
-    try { logLine?.('ok', `players-sync ${event}: ${list.length}`); } catch { /* */ }
     json(res, 200, { ok: true, event, count: list.length });
     return true;
   }
