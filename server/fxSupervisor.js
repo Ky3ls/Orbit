@@ -155,9 +155,13 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   try {
     const { getDb, auditLogger } = await import('./db.js');
     const { syncOrbitSystemResource, ensureIngameToken } = await import('./orbitBridgeSync.js');
+    const { syncChatFromArtifact } = await import('./cfxDefaults.js');
     const database = opts.db || getDb();
     ensureIngameToken(database);
     syncOrbitSystemResource(launch.fxRoot, launch.dataPath, auditLogger(database, 'orbit.sync'));
+    if (launch.dataPath) {
+      syncChatFromArtifact(launch.dataPath, launch.fxRoot, (m) => logLine('info', `[FX:${key}] ${m}`));
+    }
     // Launch-Args mit Token nachreichen falls resolve ohne db lief
     if (!opts.db) {
       const { orbitFxLaunchExtras } = await import('./orbitBridgeSync.js');
