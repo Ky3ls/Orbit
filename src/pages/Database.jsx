@@ -6,6 +6,15 @@ import './database.css';
 
 const PAGE_SIZES = [25, 50, 100, 250];
 
+const STRUCTURE_COLS = [
+  { key: 'field', labelKey: 'db.col.field' },
+  { key: 'type', labelKey: 'db.col.type' },
+  { key: 'null', labelKey: 'db.col.null' },
+  { key: 'key', labelKey: 'db.col.key' },
+  { key: 'default', labelKey: 'db.col.default' },
+  { key: 'extra', labelKey: 'db.col.extra' },
+];
+
 function cellValue(v) {
   if (v === null || v === undefined) return { text: 'NULL', null: true };
   if (v instanceof Date) {
@@ -46,25 +55,26 @@ function exportCsv(filename, columns, rows) {
   URL.revokeObjectURL(a.href);
 }
 
-function DataTable({ columns, rows }) {
+function DataTable({ columns, rows, emptyColumns, emptyRows }) {
   if (!columns.length) {
-    return <p className="muted">Keine Spalten.</p>;
+    return <p className="muted">{emptyColumns}</p>;
   }
   return (
     <div className="db-scroll">
       <table className="ws-table">
         <thead>
-          <tr>{columns.map((c) => <th key={c}>{c}</th>)}</tr>
+          <tr>{columns.map((c) => <th key={c.key || c}>{c.label || c}</th>)}</tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={columns.length} className="muted">Keine Zeilen</td></tr>
+            <tr><td colSpan={columns.length} className="muted">{emptyRows}</td></tr>
           ) : rows.map((row, i) => (
             <tr key={i}>
               {columns.map((c) => {
-                const { text, null: isNull } = cellValue(row[c]);
+                const key = c.key || c;
+                const { text, null: isNull } = cellValue(row[key]);
                 return (
-                  <td key={c} className={isNull ? 'null' : ''}>{text}</td>
+                  <td key={key} className={isNull ? 'null' : ''}>{text}</td>
                 );
               })}
             </tr>
@@ -75,8 +85,7 @@ function DataTable({ columns, rows }) {
   );
 }
 
-function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult }) {
-  const { t } = useI18n();
+function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult, t }) {
   const sqlColumns = sqlResult?.kind === 'resultset'
     ? (sqlResult.columns?.length ? sqlResult.columns : Object.keys(sqlResult.rows?.[0] || {}))
     : [];
@@ -93,7 +102,7 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult }) {
             onChange={(e) => setSql(e.target.value)}
             spellCheck={false}
             rows={10}
-            placeholder="SELECT …"
+            placeholder={t('db.sqlPlaceholder')}
           />
         </label>
         <div className="db-sql-actions">
@@ -104,7 +113,12 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult }) {
       </form>
       {sqlResult?.kind === 'resultset' && (sqlResult.rows?.length > 0 || sqlColumns.length > 0) && (
         <div className="db-sql-result">
-          <DataTable columns={sqlColumns} rows={sqlResult.rows || []} />
+          <DataTable
+            columns={sqlColumns}
+            rows={sqlResult.rows || []}
+            emptyColumns={t('db.noColumns')}
+            emptyRows={t('db.noRows')}
+          />
         </div>
       )}
     </>
@@ -135,13 +149,11 @@ export default function Database({ user }) {
   const [searchQ, setSearchQ] = useState('');
   const [searchResult, setSearchResult] = useState({ rows: [], columns: [] });
 
-  const [sql, setSql] = useState('-- SQL-Befehl hier eingeben\nSELECT 1');
+  const [sql, setSql] = useState(() => t('db.sqlDefault'));
   const [sqlResult, setSqlResult] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const sqlHint = isOwner
-    ? 'Eine Anweisung ohne Semikolon — SELECT, INSERT, UPDATE, DELETE, …'
-    : 'Nur SELECT, eine Anweisung ohne Semikolon.';
+  const sqlHint = isOwner ? t('db.sqlHintOwner') : t('db.sqlHintSelect');
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 901px)');
@@ -165,7 +177,7 @@ export default function Database({ user }) {
         setMeta({ database: m.database || '', version: m.version || '' });
         const list = o.tables || [];
         setOverview(list);
-        setTables(list.map((t) => t.name));
+        setTables(list.map((tbl) => tbl.name));
       })
       .catch((e) => {
         if (!cancelled) setErr(e.message);
@@ -241,8 +253,8 @@ export default function Database({ user }) {
       const d = await api('/api/database/query', { method: 'POST', body: { sql, limit: 500 } });
       setSqlResult(d);
       if (d.kind === 'ok') {
-        const parts = [`${d.affectedRows} Zeile(n) betroffen.`];
-        if (d.insertId) parts.push(`Letzte ID: ${d.insertId}.`);
+        const parts = [t('db.affected', { n: d.affectedRows })];
+        if (d.insertId) parts.push(t('db.lastId', { id: d.insertId }));
         if (d.message) parts.push(d.message);
         setMsg(parts.join(' '));
       } else {
@@ -267,7 +279,7 @@ export default function Database({ user }) {
         body: { table, column: searchCol, q: searchQ, limit: 200 },
       });
       setSearchResult({ rows: d.rows || [], columns: d.columns || [] });
-      setMsg(`${(d.rows || []).length} Treffer (max. ${d.limit || 200}).`);
+      setMsg(t('db.hits', { n: (d.rows || []).length, max: d.limit || 200 }));
     } catch (error) {
       setErr(error.message);
     } finally {
@@ -279,51 +291,44 @@ export default function Database({ user }) {
     ? Math.max(1, Math.ceil(browse.total / pageSize))
     : 1;
 
+  const structureCols = STRUCTURE_COLS.map((c) => ({ key: c.key, label: t(c.labelKey) }));
   const structureRows = structure.map((col) => ({
-    Feld: col.field,
-    Typ: col.type,
-    Null: col.null,
-    Schlüssel: col.key || '—',
-    Standard: col.default === null ? 'NULL' : String(col.default ?? '—'),
-    Extra: col.extra || '—',
+    field: col.field,
+    type: col.type,
+    null: col.null,
+    key: col.key || '—',
+    default: col.default === null ? 'NULL' : String(col.default ?? '—'),
+    extra: col.extra || '—',
   }));
 
-  const overviewRows = overview
-    .filter((t) => filteredTables.includes(t.name))
-    .map((t) => ({
-      Tabelle: t.name,
-      Zeilen: t.rows,
-      Engine: t.engine || '—',
-      Größe: fmtBytes(t.size),
-      _name: t.name,
-    }));
+  const overviewFiltered = overview.filter((tbl) => filteredTables.includes(tbl.name));
 
   return (
     <Page className="db-page ws-module-flush">
       <PageHeader
-        eyebrow="Datenbank"
+        eyebrow={t('db.eyebrow')}
         title={meta.database || 'MySQL'}
-        description={meta.version ? `Server: MySQL ${meta.version}` : undefined}
-        actions={<Badge tone="info">{tables.length} Tabellen</Badge>}
+        description={meta.version ? t('db.serverVer', { version: meta.version }) : undefined}
+        actions={<Badge tone="info">{t('db.tablesCount', { n: tables.length })}</Badge>}
       />
 
       <div className="db-shell">
-        <aside className={`db-shell-aside${navOpen ? ' is-open' : ''}`} aria-label="Tabellen">
+        <aside className={`db-shell-aside${navOpen ? ' is-open' : ''}`} aria-label={t('db.tablesAria')}>
           <div className="db-aside-top">
-            <span className="db-aside-label">Tabellen</span>
+            <span className="db-aside-label">{t('db.tables')}</span>
             <span className="db-aside-count mono">{tables.length}</span>
           </div>
           <input
             className="search db-aside-search"
             type="search"
-            placeholder="Filtern…"
+            placeholder={t('db.filterPh')}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            aria-label="Tabellen filtern"
+            aria-label={t('db.filterAria')}
           />
           <nav className="db-table-list">
             {filteredTables.length === 0 ? (
-              <p className="muted db-aside-empty">Keine Treffer</p>
+              <p className="muted db-aside-empty">{t('db.noMatch')}</p>
             ) : (
               filteredTables.map((name) => (
                 <button
@@ -349,10 +354,10 @@ export default function Database({ user }) {
                 aria-expanded={navOpen}
                 onClick={() => setNavOpen((v) => !v)}
               >
-                {navOpen ? '« Listen' : `Tabellen (${tables.length})`}
+                {navOpen ? t('db.hideList') : t('db.showTables', { n: tables.length })}
               </button>
-              <nav className="db-crumb" aria-label="Kontext">
-                <button type="button" onClick={goDatabase}>{meta.database || 'Datenbank'}</button>
+              <nav className="db-crumb" aria-label={t('db.crumbAria')}>
+                <button type="button" onClick={goDatabase}>{meta.database || t('db.eyebrow')}</button>
                 {table && (
                   <>
                     <span className="sep">›</span>
@@ -389,7 +394,7 @@ export default function Database({ user }) {
                   className={`db-tab${tab === 'browse' ? ' active' : ''}`}
                   onClick={() => setTab('browse')}
                 >
-                  Durchsuchen
+                  {t('db.browse')}
                 </button>
                 <button
                   type="button"
@@ -397,7 +402,7 @@ export default function Database({ user }) {
                   className={`db-tab${tab === 'structure' ? ' active' : ''}`}
                   onClick={() => setTab('structure')}
                 >
-                  Struktur
+                  {t('db.structure')}
                 </button>
                 <button
                   type="button"
@@ -405,7 +410,7 @@ export default function Database({ user }) {
                   className={`db-tab${tab === 'search' ? ' active' : ''}`}
                   onClick={() => setTab('search')}
                 >
-                  Suchen
+                  {t('db.searchTab')}
                 </button>
               </>
             )}
@@ -418,29 +423,30 @@ export default function Database({ user }) {
             {tab === 'overview' && (
               <>
                 <p className="db-lead">
-                  Links alle Tabellen — wähle eine aus oder nutze <button type="button" className="db-link" onClick={() => setTab('sql')}>SQL</button>
-                  für eigene Abfragen.
+                  {t('db.pickHintBefore')}
+                  <button type="button" className="db-link" onClick={() => setTab('sql')}>{t('db.pickHintSql')}</button>
+                  {t('db.pickHintAfter')}
                 </p>
                 <div className="db-scroll">
                   <table className="ws-table db-overview-table">
                     <thead>
                       <tr>
-                        <th>Tabelle</th>
-                        <th>Zeilen (ca.)</th>
-                        <th>Engine</th>
+                        <th>{t('db.table')}</th>
+                        <th>{t('db.rowsApprox')}</th>
+                        <th>{t('db.engine')}</th>
                         <th>{t('db.size')}</th>
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {overviewRows.map((row) => (
-                        <tr key={row._name}>
-                          <td className="mono">{row.Tabelle}</td>
-                          <td>{row.Zeilen}</td>
-                          <td>{row.Engine}</td>
-                          <td>{row.Größe}</td>
+                      {overviewFiltered.map((row) => (
+                        <tr key={row.name}>
+                          <td className="mono">{row.name}</td>
+                          <td>{row.rows}</td>
+                          <td>{row.engine || '—'}</td>
+                          <td>{fmtBytes(row.size)}</td>
                           <td>
-                            <button type="button" className="btn btn-sm" onClick={() => selectTable(row._name)}>
+                            <button type="button" className="btn btn-sm" onClick={() => selectTable(row.name)}>
                               {t('db.open')}
                             </button>
                           </td>
@@ -460,13 +466,16 @@ export default function Database({ user }) {
                 busy={busy}
                 onRun={runSql}
                 sqlResult={sqlResult}
+                t={t}
               />
             )}
 
             {tab === 'structure' && table && (
               <DataTable
-                columns={[t('db.col.field'), t('db.col.type'), t('db.col.null'), t('db.col.key'), t('db.col.default'), t('db.col.extra')]}
+                columns={structureCols}
                 rows={structureRows}
+                emptyColumns={t('db.noColumns')}
+                emptyRows={t('db.noRows')}
               />
             )}
 
@@ -474,14 +483,16 @@ export default function Database({ user }) {
               <>
                 <div className="db-pager">
                   <span>
-                    {browse.total === 0 ? '0 Zeilen' : (
-                      <>
-                        {browse.offset + 1}–{Math.min(browse.offset + browse.limit, browse.total)} / {browse.total}
-                      </>
+                    {browse.total === 0 ? t('db.rowsZero') : (
+                      t('db.rowsRange', {
+                        from: browse.offset + 1,
+                        to: Math.min(browse.offset + browse.limit, browse.total),
+                        total: browse.total,
+                      })
                     )}
                   </span>
                   <label>
-                    Limit
+                    {t('db.limit')}
                     <select
                       value={pageSize}
                       onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
@@ -491,17 +502,22 @@ export default function Database({ user }) {
                   </label>
                   <button type="button" className="btn btn-sm" disabled={page <= 0 || busy} onClick={() => setPage((p) => p - 1)}>{t('common.back')}</button>
                   <span>{page + 1} / {pageCount}</span>
-                  <button type="button" className="btn btn-sm" disabled={page + 1 >= pageCount || busy} onClick={() => setPage((p) => p + 1)}>Weiter</button>
+                  <button type="button" className="btn btn-sm" disabled={page + 1 >= pageCount || busy} onClick={() => setPage((p) => p + 1)}>{t('db.next')}</button>
                   <button
                     type="button"
                     className="btn btn-sm"
                     disabled={!browse.rows.length}
                     onClick={() => exportCsv(`${table}.csv`, browse.columns, browse.rows)}
                   >
-                    CSV Export
+                    {t('db.csv')}
                   </button>
                 </div>
-                <DataTable columns={browse.columns} rows={browse.rows} />
+                <DataTable
+                  columns={browse.columns}
+                  rows={browse.rows}
+                  emptyColumns={t('db.noColumns')}
+                  emptyRows={t('db.noRows')}
+                />
               </>
             )}
 
@@ -509,7 +525,7 @@ export default function Database({ user }) {
               <>
                 <form className="db-search-form" onSubmit={runSearch}>
                   <label className="field">
-                    <span>Spalte</span>
+                    <span>{t('db.column')}</span>
                     <select value={searchCol} onChange={(e) => setSearchCol(e.target.value)}>
                       {structure.map((c) => (
                         <option key={c.field} value={c.field}>{c.field}</option>
@@ -518,11 +534,16 @@ export default function Database({ user }) {
                   </label>
                   <label className="field grow">
                     <span>{t('db.contains')}</span>
-                    <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="Suchtext…" />
+                    <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder={t('db.searchPh')} />
                   </label>
                   <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{t('db.search')}</button>
                 </form>
-                <DataTable columns={searchResult.columns} rows={searchResult.rows} />
+                <DataTable
+                  columns={searchResult.columns}
+                  rows={searchResult.rows}
+                  emptyColumns={t('db.noColumns')}
+                  emptyRows={t('db.noRows')}
+                />
               </>
             )}
           </div>
