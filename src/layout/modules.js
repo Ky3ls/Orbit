@@ -33,7 +33,6 @@ export const MODULES = [
       { to: '/audit', label: 'Audit', icon: 'audit' },
       { to: '/admins', label: 'Team', icon: 'team', owner: true },
       { to: '/settings', label: 'Einstellungen', icon: 'gear' },
-      { to: '/setup', label: 'Einrichtung', icon: 'setup', owner: true },
     ],
   },
 ];

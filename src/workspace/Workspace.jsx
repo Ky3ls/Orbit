@@ -51,41 +51,43 @@ function MoreSheet({ open, onClose, user, canConsole, consoleOpen, setConsoleOpe
     <div className="ws-more-sheet" role="dialog" aria-label="Module">
       <button type="button" className="ws-more-backdrop" aria-label="Schließen" onClick={onClose} />
       <div className="ws-more-panel">
-        {MODULES.map((group) => (
-          <div key={group.id}>
-            <h3>{group.label}</h3>
-            <div className="ws-more-list">
-              {group.items.map((item) => {
-                if (item.owner && user.role !== 'owner') return null;
-                if (item.consoleRoute && canConsole && !onCockpit) {
+        <div className="ws-more-grid">
+          {MODULES.map((group) => (
+            <section key={group.id} className="ws-more-col">
+              <h3>{group.label}</h3>
+              <div className="ws-more-list">
+                {group.items.map((item) => {
+                  if (item.owner && user.role !== 'owner') return null;
+                  if (item.consoleRoute && canConsole && !onCockpit) {
+                    return (
+                      <button
+                        key={item.to}
+                        type="button"
+                        className={`ws-more-link${consoleOpen ? ' active' : ''}`}
+                        onClick={() => { setConsoleOpen((v) => !v); onClose(); }}
+                      >
+                        <NavIcon name={item.icon} />
+                        {item.label}
+                      </button>
+                    );
+                  }
                   return (
-                    <button
-                      key={item.to}
-                      type="button"
-                      className={`ws-more-link${consoleOpen ? ' active' : ''}`}
-                      onClick={() => { setConsoleOpen((v) => !v); onClose(); }}
-                    >
+                    <NavLink key={item.to} to={item.to} end={item.end} className="ws-more-link" onClick={onClose}>
                       <NavIcon name={item.icon} />
                       {item.label}
-                    </button>
+                    </NavLink>
                   );
-                }
-                return (
-                  <NavLink key={item.to} to={item.to} end={item.end} className="ws-more-link" onClick={onClose}>
-                    <NavIcon name={item.icon} />
-                    {item.label}
+                })}
+                {group.id === 'ops' && (
+                  <NavLink to="/ingame" className="ws-more-link" onClick={onClose}>
+                    <NavIcon name="cfg" />
+                    Ingame
                   </NavLink>
-                );
-              })}
-              {group.id === 'ops' && (
-                <NavLink to="/ingame" className="ws-more-link" onClick={onClose}>
-                  <NavIcon name="cfg" />
-                  Ingame
-                </NavLink>
-              )}
-            </div>
-          </div>
-        ))}
+                )}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );

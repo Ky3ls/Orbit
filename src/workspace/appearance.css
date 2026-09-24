@@ -522,7 +522,7 @@ html[data-theme="light"] .ws-more-backdrop {
 .ws-more-panel {
   position: relative;
   z-index: 1;
-  width: min(420px, calc(100% - 16px));
+  width: min(720px, calc(100% - 16px));
   max-height: min(70vh, 560px);
   margin-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   padding: 14px 12px 16px;
@@ -532,8 +532,18 @@ html[data-theme="light"] .ws-more-backdrop {
   box-shadow: var(--shadow);
   overflow: auto;
 }
+.ws-more-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 14px;
+  align-items: start;
+}
+.ws-more-col {
+  min-width: 0;
+}
 .ws-more-panel h3 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
+  padding: 0 4px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -544,19 +554,24 @@ html[data-theme="light"] .ws-more-backdrop {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
-.ws-more-list:last-child { margin-bottom: 0; }
 .ws-more-link {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 12px;
+  padding: 10px 12px;
+  border: 0;
   border-radius: 12px;
+  background: transparent;
   color: var(--text);
   text-decoration: none;
-  font-size: 14px;
+  font: inherit;
+  font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
 }
 .ws-more-link:hover,
 .ws-more-link.active {
@@ -567,6 +582,16 @@ html[data-theme="light"] .ws-more-backdrop {
   height: 18px;
   color: var(--accent);
   flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .ws-more-panel {
+    width: min(420px, calc(100% - 16px));
+  }
+  .ws-more-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
 }
 
 /* Desktop-Sidebar: volle Liste — „Module“-Shortcut nur mobil */
