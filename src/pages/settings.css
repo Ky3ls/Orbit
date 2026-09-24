@@ -69,17 +69,26 @@
 .st-nav-item.active .st-nav-hint { color: var(--muted); }
 
 .st-stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  align-items: stretch;
   min-width: 0;
 }
 
 .st-mod {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--card);
   overflow: hidden;
+}
+.st-wide {
+  grid-column: 1 / -1;
 }
 .st-mod-head {
   display: flex;
@@ -113,12 +122,16 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1;
 }
 
 .st-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+.st-fields-1 {
+  grid-template-columns: 1fr;
 }
 .st-span-2 { grid-column: span 2; }
 
@@ -264,6 +277,9 @@
   gap: 8px;
   align-items: center;
 }
+.st-foot.st-wide {
+  grid-column: 1 / -1;
+}
 
 .st-inline {
   display: flex;
@@ -344,6 +360,9 @@
 }
 
 @media (max-width: 860px) {
+  .st-stack {
+    grid-template-columns: 1fr;
+  }
   .st-nav {
     flex-wrap: nowrap;
     overflow-x: auto;
