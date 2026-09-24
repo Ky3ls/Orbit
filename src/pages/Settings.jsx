@@ -20,9 +20,9 @@ const SECTIONS = [
   { id: 'danger', label: 'Gefahrenzone', hint: 'Wipe & Deinstall', owner: true },
 ];
 
-function ModuleCard({ title, lead, children, actions }) {
+function ModuleCard({ title, lead, children, actions, wide }) {
   return (
-    <article className="st-mod">
+    <article className={`st-mod${wide ? ' st-wide' : ''}`}>
       {(title || lead || actions) && (
         <header className="st-mod-head">
           <div>
@@ -238,6 +238,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
         {section === 'server' && (
           <form className="st-stack" onSubmit={save}>
             <ModuleCard
+              wide
               title="Identität & Slots"
               lead="Werte landen in der aktiven server.cfg."
               actions={<button className="btn btn-primary btn-sm" type="submit">Speichern</button>}
@@ -252,7 +253,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
             </ModuleCard>
 
             <ModuleCard title="Sync & Build">
-              <FieldRow>
+              <div className="st-fields st-fields-1">
                 <label className="field">
                   <span>OneSync</span>
                   <select value={form.onesync || 'on'} onChange={(e) => set({ onesync: e.target.value })}>
@@ -265,14 +266,14 @@ export default function Settings({ user, onUser, onSetupReset }) {
                     {GAME_BUILD_OPTIONS.map((o) => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
                   </select>
                 </label>
-              </FieldRow>
+              </div>
             </ModuleCard>
 
             <ModuleCard title="Verbindung" lead="FiveM läuft lokal — Host bleibt 127.0.0.1.">
-              <FieldRow>
+              <div className="st-fields st-fields-1">
                 <label className="field"><span>Host</span><input value={form.fivemHost} onChange={(e) => set({ fivemHost: e.target.value })} readOnly /></label>
                 <label className="field"><span>Port</span><input value={form.fivemPort} onChange={(e) => set({ fivemPort: e.target.value })} /></label>
-              </FieldRow>
+              </div>
               <label className="row st-check">
                 <input type="checkbox" checked={!!form.allowlistEnabled} onChange={(e) => set({ allowlistEnabled: e.target.checked })} />
                 Allowlist-Modus (Spieler-Whitelist)
@@ -280,12 +281,12 @@ export default function Settings({ user, onUser, onSetupReset }) {
               {isOwner && (
                 <label className="field">
                   <span>IP-Allowlist (Panel)</span>
-                  <textarea placeholder="Leer = alle. Eine IP pro Zeile." value={form.ipAllowlist} onChange={(e) => set({ ipAllowlist: e.target.value })} />
+                  <textarea placeholder="Leer = alle. Eine IP pro Zeile." value={form.ipAllowlist} onChange={(e) => set({ ipAllowlist: e.target.value })} rows={3} />
                 </label>
               )}
             </ModuleCard>
 
-            <div className="st-foot">
+            <div className="st-foot st-wide">
               <button className="btn btn-primary" type="submit">FiveM speichern</button>
               {isOwner && (
                 <button
@@ -304,7 +305,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
 
         {section === 'host' && isOwner && (
           <div className="st-stack">
-            <ModuleCard title="Host & Instanzen" lead="FX-Builds, weitere Server und Prod.">
+            <ModuleCard wide title="Host & Instanzen" lead="FX-Builds, weitere Server und Prod.">
               {form.orbitServerName ? (
                 <p className="st-meta">
                   Aktiv: <b>{form.orbitServerName}</b>
@@ -334,11 +335,11 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 </select>
               </label>
               {form.fxControlMode === 'orbit' && (
-                <FieldRow>
-                  <label className="field st-span-2"><span>FXServer-Root</span><input value={form.fxServerRoot || ''} onChange={(e) => set({ fxServerRoot: e.target.value })} placeholder="/opt/orbit/artifacts/…" /></label>
-                  <label className="field st-span-2"><span>Datenpfad</span><input value={form.fxDataPath || ''} onChange={(e) => set({ fxDataPath: e.target.value })} /></label>
-                  <label className="field st-span-2"><span>Zusatz-Argumente</span><input value={form.fxServerExtraArgs || ''} onChange={(e) => set({ fxServerExtraArgs: e.target.value })} placeholder="optional" /></label>
-                </FieldRow>
+                <div className="st-fields st-fields-1">
+                  <label className="field"><span>FXServer-Root</span><input value={form.fxServerRoot || ''} onChange={(e) => set({ fxServerRoot: e.target.value })} placeholder="/opt/orbit/artifacts/…" /></label>
+                  <label className="field"><span>Datenpfad</span><input value={form.fxDataPath || ''} onChange={(e) => set({ fxDataPath: e.target.value })} /></label>
+                  <label className="field"><span>Zusatz-Argumente</span><input value={form.fxServerExtraArgs || ''} onChange={(e) => set({ fxServerExtraArgs: e.target.value })} placeholder="optional" /></label>
+                </div>
               )}
               <p className="st-meta">
                 Konsole: {form.fxCommandReady ? <b className="ok">bereit</b> : <b className="bad">offline</b>}
@@ -348,17 +349,17 @@ export default function Settings({ user, onUser, onSetupReset }) {
             </ModuleCard>
 
             <ModuleCard title="RCON">
-              <FieldRow>
+              <div className="st-fields st-fields-1">
                 <label className="field"><span>Port</span><input value={form.rconPort || ''} onChange={(e) => set({ rconPort: e.target.value })} placeholder={form.fivemPort || '30120'} /></label>
                 <label className="field"><span>Passwort</span><input type="password" value={form.rconPassword || ''} onChange={(e) => set({ rconPassword: e.target.value })} placeholder={form.rconConfigured ? 'leer lassen' : 'eintragen'} autoComplete="new-password" /></label>
-              </FieldRow>
+              </div>
               <label className="row st-check">
                 <input type="checkbox" checked={form.autoRestartEnabled !== false} onChange={(e) => set({ autoRestartEnabled: e.target.checked })} />
                 Bei Crash immer neu starten
               </label>
             </ModuleCard>
 
-            <div className="st-foot">
+            <div className="st-foot st-wide">
               <button className="btn btn-primary" type="submit">FX speichern</button>
               <button className="btn" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || 'RCON OK')).catch((e) => setErr(e.message))}>RCON testen</button>
             </div>
@@ -382,10 +383,10 @@ export default function Settings({ user, onUser, onSetupReset }) {
                   Disconnects
                 </label>
               </div>
-              <FieldRow>
-                <label className="field st-span-2"><span>Webhook-URL</span><input value={form.discordWebhook || ''} onChange={(e) => set({ discordWebhook: e.target.value })} /></label>
+              <div className="st-fields st-fields-1">
+                <label className="field"><span>Webhook-URL</span><input value={form.discordWebhook || ''} onChange={(e) => set({ discordWebhook: e.target.value })} /></label>
                 <label className="field"><span>Guild-ID</span><input value={form.discordGuild || ''} onChange={(e) => set({ discordGuild: e.target.value })} /></label>
-              </FieldRow>
+              </div>
             </ModuleCard>
 
             <ModuleCard title="Bot (optional)">
@@ -399,7 +400,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
               </label>
             </ModuleCard>
 
-            <div className="st-foot">
+            <div className="st-foot st-wide">
               <button className="btn btn-primary" type="submit">Discord speichern</button>
               <button type="button" className="btn" onClick={() => api('/api/platform/discord-test', { method: 'POST', body: {} }).then(() => setMsg('Discord-Test gesendet.')).catch((e) => setErr(e.message))}>Webhook testen</button>
             </div>
@@ -410,11 +411,11 @@ export default function Settings({ user, onUser, onSetupReset }) {
           <div className="st-stack">
             <ModuleCard title="Passwort">
               <form onSubmit={password}>
-                <FieldRow>
+                <div className="st-fields st-fields-1">
                   <label className="field"><span>Aktuell</span><input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></label>
                   <label className="field"><span>Neu</span><input type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></label>
-                </FieldRow>
-                <button className="btn btn-primary" type="submit">Passwort ändern</button>
+                </div>
+                <button className="btn btn-primary" type="submit" style={{ marginTop: 12 }}>Passwort ändern</button>
               </form>
             </ModuleCard>
 
