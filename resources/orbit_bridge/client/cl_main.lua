@@ -1,4 +1,4 @@
---[[ Orbit client — Admin-Menü (txAdmin-Feature-Parität, Orbit-Design) ]]
+--[[ Orbit client — Admin-Menü ]]
 
 local menuOpen = false
 local isAdmin = false
@@ -399,8 +399,6 @@ end
 
 RegisterCommand('orbit', tryOpen, false)
 RegisterCommand('orbitmenu', tryOpen, false)
-RegisterCommand('tx', tryOpen, false)
-RegisterCommand('txadmin', tryOpen, false)
 RegisterKeyMapping('orbit', 'Orbit Admin-Menü', 'keyboard', '')
 
 CreateThread(function()
