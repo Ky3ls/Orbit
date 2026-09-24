@@ -103,6 +103,12 @@ export default function Setup({ onDone, userName = '' }) {
   const [redirectTo, setRedirectTo] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [dbReady, setDbReady] = useState(false);
+  const [dbProgress, setDbProgress] = useState(0);
+  const [dbProgressLabel, setDbProgressLabel] = useState('');
+  const [dbLogs, setDbLogs] = useState([]);
+  const [preparedDsn, setPreparedDsn] = useState('');
+  const [dbPreparing, setDbPreparing] = useState(false);
 
   const loadPreflight = useCallback(() => {
     api('/api/setup/preflight').then(setPreflight).catch((e) => setErr(e.message));
@@ -216,6 +222,87 @@ export default function Setup({ onDone, userName = '' }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbMode]);
 
+  useEffect(() => {
+    setDbReady(false);
+    setPreparedDsn('');
+    setDbProgress(0);
+    setDbLogs([]);
+  }, [dbMode, recipe, mysqlConnection]);
+
+  async function prepareDatabase() {
+    setErr('');
+    setDbPreparing(true);
+    setDbReady(false);
+    setDbProgress(0);
+    setDbProgressLabel('Starte…');
+    setDbLogs([]);
+    const recipeId = deploy === 'popular' ? recipe : (deploy === 'custom' ? 'blank' : recipe);
+    try {
+      const res = await fetch('/api/setup/database-prepare', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-TX2-Client': '1',
+        },
+        body: JSON.stringify({
+          mode: dbMode,
+          recipe: recipeId,
+          serverName: name.trim(),
+          dbName: dbMode === 'create' ? (dbName.trim() || undefined) : undefined,
+          dbUser: dbMode === 'create' ? (dbUser.trim() || undefined) : undefined,
+          dbPassword: dbMode === 'create' ? (dbPassword.trim() || undefined) : undefined,
+          mysqlRootPassword: dbMode === 'create' && mysqlRootPassword.trim()
+            ? mysqlRootPassword.trim()
+            : undefined,
+          mysqlConnection: dbMode === 'reuse' ? mysqlConnection.trim() : undefined,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Datenbank-Setup fehlgeschlagen.');
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      let donePayload = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let msg;
+          try { msg = JSON.parse(line); } catch { continue; }
+          if (msg.type === 'progress') {
+            setDbProgress(Number(msg.pct) || 0);
+            if (msg.label) setDbProgressLabel(msg.label);
+          } else if (msg.type === 'log') {
+            setDbLogs((prev) => [...prev.slice(-80), String(msg.text || '')]);
+          } else if (msg.type === 'error') {
+            throw new Error(msg.error || 'Fehler beim DB-Setup.');
+          } else if (msg.type === 'done') {
+            donePayload = msg;
+          }
+        }
+      }
+      if (!donePayload?.ok) throw new Error('Datenbank-Setup unvollständig.');
+      setDbProgress(100);
+      setDbProgressLabel(donePayload.skipped ? 'Übersprungen' : 'Datenbank bereit');
+      setPreparedDsn(String(donePayload.dsn || ''));
+      setDbReady(true);
+      return true;
+    } catch (e) {
+      setErr(e.message);
+      setDbReady(false);
+      return false;
+    } finally {
+      setDbPreparing(false);
+    }
+  }
+
   async function finish() {
     setBusy(true);
     setErr('');
@@ -234,14 +321,12 @@ export default function Setup({ onDone, userName = '' }) {
           locale,
           tags,
           licenseKey: licenseKey.trim(),
-          createDatabase: dbMode === 'create',
-          dbName: dbMode === 'create' ? (dbName.trim() || undefined) : undefined,
-          dbUser: dbMode === 'create' ? (dbUser.trim() || undefined) : undefined,
-          dbPassword: dbMode === 'create' ? (dbPassword.trim() || undefined) : undefined,
-          mysqlConnection: dbMode === 'reuse' ? mysqlConnection.trim() : undefined,
-          mysqlRootPassword: dbMode === 'create' && mysqlRootPassword.trim()
-            ? mysqlRootPassword.trim()
-            : undefined,
+          // DB wurde im DB-Schritt schon angelegt + SQL importiert
+          createDatabase: false,
+          skipSqlImport: dbMode !== 'skip' && dbReady,
+          mysqlConnection: dbMode === 'skip'
+            ? undefined
+            : (preparedDsn || (dbMode === 'reuse' ? mysqlConnection.trim() : undefined)),
           startServer: autoStart,
           serversRoot: !dataPath.trim() && serversRoot.trim() ? serversRoot.trim() : undefined,
           dataPath: dataPath.trim() || undefined,
@@ -276,7 +361,15 @@ export default function Setup({ onDone, userName = '' }) {
     }
   }
 
-  function goNext() {
+  async function goNext() {
+    if (step === 6) {
+      if (dbMode === 'skip') {
+        setDbReady(true);
+      } else if (!dbReady) {
+        const ok = await prepareDatabase();
+        if (!ok) return;
+      }
+    }
     if (step === 3 && deploy !== 'popular') {
       setStep(5);
       setMaxReached((m) => Math.max(m, 5));
@@ -365,11 +458,12 @@ export default function Setup({ onDone, userName = '' }) {
             maxReached={maxReached}
             onStepChange={jumpToStep}
             canNext={canNext}
-            busy={busy}
+            busy={busy || dbPreparing}
             showNav={step < 8}
-            hideBack={step === 0}
+            hideBack={step === 0 || dbPreparing}
             isLastAction={isLastAction}
             completeLabel="Server aufsetzen & starten"
+            nextLabel={step === 6 && !dbReady && dbMode !== 'skip' ? 'Datenbank aufsetzen' : 'Weiter'}
             onComplete={finish}
             onBack={goBack}
             onNext={goNext}
@@ -724,6 +818,36 @@ export default function Setup({ onDone, userName = '' }) {
                     />
                   </label>
                 )}
+
+                {(dbPreparing || dbReady) && dbMode !== 'skip' && (
+                  <div className={`db-setup-live${dbReady ? ' done' : ''}`} role="status" aria-live="polite">
+                    <div className="db-setup-live-head">
+                      <span className="db-setup-spinner" aria-hidden="true" />
+                      <div>
+                        <b>{dbReady ? 'Datenbank ist bereit' : 'Datenbank wird aufgesetzt…'}</b>
+                        <span>{dbProgressLabel || 'Bitte warten'}</span>
+                      </div>
+                      <em className="mono">{Math.round(dbProgress)}%</em>
+                    </div>
+                    <div className="db-setup-bar" aria-hidden="true">
+                      <i style={{ width: `${Math.max(4, dbProgress)}%` }} />
+                    </div>
+                    {dbLogs.length > 0 && (
+                      <div className="db-setup-log mono">
+                        {dbLogs.slice(-12).map((line, i) => (
+                          <div key={`${i}-${line.slice(0, 24)}`}>{line}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!dbPreparing && !dbReady && dbMode !== 'skip' && (
+                  <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>
+                    Mit „Datenbank aufsetzen“ werden DB/User angelegt und die SQL-Dateien vom gewählten Template importiert.
+                    Danach geht es weiter — der letzte Speichern-Schritt bleibt schnell.
+                  </p>
+                )}
               </>
             )}
 
@@ -745,7 +869,13 @@ export default function Setup({ onDone, userName = '' }) {
                   <div className="res-line"><span>Game-Port</span><b>{port}</b></div>
                   <div className="res-line">
                     <span>Datenbank</span>
-                    <b>{dbMode === 'create' ? (dbName.trim() || 'auto neu') : dbMode === 'reuse' ? 'vorhandene DSN' : 'später'}</b>
+                    <b>
+                      {dbMode === 'skip'
+                        ? 'später'
+                        : dbReady
+                          ? 'bereits aufgesetzt ✓'
+                          : (dbMode === 'create' ? (dbName.trim() || 'auto neu') : 'vorhandene DSN')}
+                    </b>
                   </div>
                   <div className="res-line">
                     <span>Panel</span>

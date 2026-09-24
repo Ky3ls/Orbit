@@ -116,8 +116,11 @@ export async function provisionMysqlDatabase(opts) {
   const sql = [
     `CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
     `CREATE USER IF NOT EXISTS '${appUser}'@'localhost' IDENTIFIED BY '${passSql}';`,
+    `CREATE USER IF NOT EXISTS '${appUser}'@'127.0.0.1' IDENTIFIED BY '${passSql}';`,
     `ALTER USER '${appUser}'@'localhost' IDENTIFIED BY '${passSql}';`,
+    `ALTER USER '${appUser}'@'127.0.0.1' IDENTIFIED BY '${passSql}';`,
     `GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${appUser}'@'localhost';`,
+    `GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${appUser}'@'127.0.0.1';`,
     'FLUSH PRIVILEGES;',
   ].join(' ');
 

@@ -115,7 +115,7 @@ export default function Stepper({
               disabled={!canNext || busy}
               onClick={handleNext}
             >
-              {busy && isLastAction ? 'Speichere…' : isLastAction ? completeLabel : nextLabel}
+              {busy && isLastAction ? 'Speichere…' : busy ? 'Wird aufgesetzt…' : isLastAction ? completeLabel : nextLabel}
             </button>
           ) : null}
         </div>
