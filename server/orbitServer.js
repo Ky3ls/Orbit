@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { FX_SERVER_ROOT, ORBIT_SERVERS_ROOT } from './config.js';
 import { resolveCustomDataPath, resolveOrbitServersRoot } from './serverPathPolicy.js';
+import { sanitizeCfgMetaComments } from './cfgSanitize.js';
 
 const DEFAULT_ENSURES = ['oxmysql'];
 
@@ -30,21 +31,23 @@ function renderOrbitCfg({ name, project, port, maxClients, locale, tags, onesync
   const ensures = DEFAULT_ENSURES.map((r) => `ensure ${r}`).join('\n');
   // onesync nur als Kommentar — wird per FX-Launch +set gesetzt (sonst: internal ConVar warning)
   return [
-    '# Orbit Game Server — generiert vom Panel',
+    '# Netzwerk',
     `endpoint_add_tcp "0.0.0.0:${port}"`,
     `endpoint_add_udp "0.0.0.0:${port}"`,
     '',
+    '# Server',
     `sv_hostname "${String(name).replace(/"/g, '')}"`,
     `sv_maxclients ${maxClients}`,
     `sets sv_projectName "${String(project || name).replace(/"/g, '')}"`,
     `sets tags "${String(tags || 'roleplay').replace(/"/g, '')}"`,
     `sets locale "${String(locale || 'de-DE').replace(/"/g, '')}"`,
-    `## [Orbit]: onesync ${onesync} (via FX-Launch)`,
+    `# OneSync: ${onesync}`,
     '',
-    '# Lizenz + MySQL setzt Orbit-Setup (nicht leer lassen):',
+    '# Lizenz und MySQL:',
     '# set sv_licenseKey "…"',
     '# set mysql_connection_string "…"',
     '',
+    '# Ressourcen',
     ensures,
     '',
   ].join('\n');
@@ -108,7 +111,7 @@ export function provisionOrbitServer(opts) {
       tags: opts.tags || 'roleplay, german',
       onesync,
     });
-    fs.writeFileSync(cfgFile, cfg, { encoding: 'utf8', mode: 0o644 });
+    fs.writeFileSync(cfgFile, sanitizeCfgMetaComments(cfg), { encoding: 'utf8', mode: 0o644 });
   } else {
     // Port/Hostname in bestehender CFG anpassen
     try {
@@ -117,7 +120,7 @@ export function provisionOrbitServer(opts) {
       cur = cur.replace(/endpoint_add_udp\s+"[^"]+"/i, `endpoint_add_udp "0.0.0.0:${port}"`);
       cur = cur.replace(/sv_hostname\s+"[^"]*"/i, `sv_hostname "${String(displayName).replace(/"/g, '')}"`);
       cur = cur.replace(/sv_maxclients\s+\d+/i, `sv_maxclients ${maxClients}`);
-      fs.writeFileSync(cfgFile, cur, 'utf8');
+      fs.writeFileSync(cfgFile, sanitizeCfgMetaComments(cur), 'utf8');
     } catch { /* cfg bleibt */ }
   }
 

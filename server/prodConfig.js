@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ORBIT_ARTIFACTS_ROOT, ORBIT_SERVERS_ROOT } from './config.js';
 import { upsertCfgSet, upsertCfgSetr } from './cfgUpsert.js';
+import { sanitizeCfgMetaComments } from './cfgSanitize.js';
 
 export function applyProdSecretsToCfg(cfgPath, { licenseKey = '', mysqlConnection = '' }) {
   if (!fs.existsSync(cfgPath)) throw new Error(`server.cfg fehlt: ${cfgPath}`);
@@ -17,7 +18,7 @@ export function applyProdSecretsToCfg(cfgPath, { licenseKey = '', mysqlConnectio
   // Leere Platzhalter entfernen
   cfg = cfg.replace(/^\s*(?:set\s+)?sv_licenseKey\s+""\s*$/gmi, '');
   cfg = cfg.replace(/^\s*set\s+mysql_connection_string\s+""\s*$/gmi, '');
-  fs.writeFileSync(cfgPath, cfg.replace(/\n{3,}/g, '\n\n'), 'utf8');
+  fs.writeFileSync(cfgPath, sanitizeCfgMetaComments(cfg), 'utf8');
   return cfgPath;
 }
 

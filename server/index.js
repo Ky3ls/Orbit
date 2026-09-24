@@ -167,19 +167,23 @@ const RECIPES = {
 function renderCfg({ name, project, port, maxClients, locale, tags, onesync, recipe }) {
   const ensures = (RECIPES[recipe] || RECIPES.blank).map((name) => `ensure ${name}`).join('\n');
   return [
+    '# Netzwerk',
     `endpoint_add_tcp "0.0.0.0:${port}"`,
     `endpoint_add_udp "0.0.0.0:${port}"`,
     '',
+    '# Server',
     `sv_hostname "${name.replace(/"/g, '')}"`,
     `sv_maxclients ${maxClients}`,
     `sets sv_projectName "${project.replace(/"/g, '')}"`,
     `sets tags "${tags.replace(/"/g, '')}"`,
     `sets locale "${locale.replace(/"/g, '')}"`,
-    `## [Orbit]: onesync ${onesync} (via FX-Launch)`,
+    `# OneSync: ${onesync}`,
     '',
+    '# Lizenz und MySQL:',
     '# set sv_licenseKey "…"',
     '# set mysql_connection_string "…"',
     '',
+    '# Ressourcen',
     ensures,
     '',
   ].join('\n');
@@ -1357,7 +1361,7 @@ async function handleApi(req, res, url) {
         const cfgFile = path.join(dataPath, 'server.cfg');
         if (!fs.existsSync(cfgFile) && mysqlDsn) {
           // minimale cfg, damit Connection nicht verloren geht
-          fs.writeFileSync(cfgFile, `# Orbit\nset mysql_connection_string "${mysqlDsn.replace(/"/g, '')}"\n`, 'utf8');
+          fs.writeFileSync(cfgFile, `# Lizenz und MySQL:\nset mysql_connection_string "${mysqlDsn.replace(/"/g, '')}"\n`, 'utf8');
         }
         applyProdSecretsToCfg(cfgFile, {
           licenseKey,
