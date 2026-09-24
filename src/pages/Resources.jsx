@@ -93,9 +93,9 @@ export default function Resources() {
       />
       {err && <div className="err" style={{ margin: 16 }}>{err}</div>}
 
-      <div className="res-page-list" style={{ padding: '0 16px 24px' }}>
+      <div className="res-page-list">
         {filtered.length === 0 ? (
-          <p className="muted" style={{ padding: 24 }}>Keine Ressourcen{q ? ` für „${q}"` : ''}.</p>
+          <p className="muted res-empty">Keine Ressourcen{q ? ` für „${q}"` : ''}.</p>
         ) : (
           filtered.map((group) => {
             const expanded = open.has(group.folder);
@@ -109,7 +109,7 @@ export default function Resources() {
                   aria-expanded={expanded}
                 >
                   <span className="res-group-title">
-                    <span className="mono">{group.folder}</span>
+                    <span className="mono res-group-folder">{group.folder}</span>
                     <span className="muted res-group-meta">
                       {started}/{group.resources.length} gestartet
                       {group.count !== group.resources.length ? ` · ${group.resources.length} angezeigt` : ''}
@@ -120,17 +120,17 @@ export default function Resources() {
                 {expanded && (
                   <div className="res-group-body ws-res-list">
                     {group.resources.map((res) => (
-                      <div key={res.name} className="ws-res-row">
-                        <span className="mono" style={{ fontWeight: 600 }}>{res.name}</span>
+                      <div key={res.name} className="ws-res-row res-row">
+                        <span className="mono res-row-name">{res.name}</span>
                         <Badge
                           tone={res.actual === 'started' ? 'ok' : res.actual === 'stopped' ? 'bad' : res.actual === 'offline' ? 'warn' : ''}
                         >
                           {res.actual === 'offline' ? 'offline' : res.actual}
                         </Badge>
-                        <div className="actions" style={{ margin: 0 }}>
-                          <button className="btn btn-sm" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'start')}>Start</button>
-                          <button className="btn btn-sm" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'restart')}>↻</button>
-                          <button className="btn btn-sm" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'stop')}>Stop</button>
+                        <div className="res-row-actions">
+                          <button className="res-act" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'start')}>Start</button>
+                          <button className="res-act res-act-icon" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'restart')} title="Restart" aria-label="Restart">↻</button>
+                          <button className="res-act" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'stop')}>Stop</button>
                         </div>
                       </div>
                     ))}
