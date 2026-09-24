@@ -65,7 +65,8 @@ export default function Ingame({ user }) {
           {' '}(Keybind unter FiveM → Tastaturbelegung → Orbit Admin-Menü)
         </p>
         <p className="muted" style={{ fontSize: 13 }}>
-          Zugang nur für Panel-Admins mit verknüpfter License/Cfx. Rechte kommen aus der Team-Rolle.
+          Owner/Admin aus dem Panel: beim Joinen wird die License automatisch verknüpft — kein extra Cfx-Setup nötig.
+          Rechte kommen aus der Team-Rolle.
         </p>
         {(user?.role === 'owner' || user?.role === 'admin') && (
           <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 8 }} disabled={busy} onClick={hotDeploy}>

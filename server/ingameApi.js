@@ -164,7 +164,7 @@ export async function handleIngamePublicApi(ctx) {
     if (!user) {
       json(res, 200, {
         logout: true,
-        reason: 'Kein Panel-Admin (Cfx.re im Panel verbinden oder Owner einmal /orbit öffnen).',
+        reason: 'Kein Panel-Admin — Team-Account im Panel prüfen (Owner/Admin).',
       });
       return true;
     }
@@ -209,7 +209,7 @@ export async function handleIngamePublicApi(ctx) {
       json(res, 200, {
         ok: false,
         reason: 'no_panel_user',
-        hint: 'Cfx.re im Panel verbinden — oder als einziger Owner /orbit öffnen (Auto-Link).',
+        hint: 'Als Owner/Admin joinen — License wird automatisch verknüpft.',
       });
       return true;
     }

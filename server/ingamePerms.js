@@ -1,6 +1,6 @@
 import { hasPerm, sha256, randomToken } from './auth.js';
 
-/** txAdmin-ähnliche Menü-Rechte aus Panel-Rolle / hasPerm */
+/** Menü-Rechte aus Panel-Rolle / hasPerm */
 export function menuPermsForUser(user) {
   if (!user || user.disabled) return null;
   const adminTools = user.role === 'owner' || user.role === 'admin';
@@ -67,28 +67,53 @@ export function findUserByIdentifiers(db, identifiers) {
     const row = db.prepare('SELECT * FROM users WHERE cfx_id = ? AND disabled = 0').get(cfxId);
     if (row) return row;
   }
+  const discord = list.find((id) => typeof id === 'string' && id.startsWith('discord:'));
+  if (discord) {
+    const did = discord.slice('discord:'.length);
+    const row = db.prepare('SELECT * FROM users WHERE discord_id = ? AND disabled = 0').get(did);
+    if (row) return row;
+  }
   return null;
 }
 
+function bindLicense(db, userId, license) {
+  db.prepare('UPDATE users SET ingame_license = ? WHERE id = ?').run(license, userId);
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+}
+
 /**
- * Einziger ungebundener Owner/Admin → License automatisch verknüpfen (Zero-Setup).
+ * License automatisch an Panel-Admin binden — ohne manuelles Verknüpfen.
+ * Standard: freier Owner/Admin ohne ingame_license wird beim ersten Join gelinkt.
  */
 export function tryAutoClaimAdmin(db, identifiers) {
   const list = Array.isArray(identifiers) ? identifiers : [];
   const license = list.find((id) => typeof id === 'string' && id.startsWith('license:'));
   if (!license) return null;
+
   const taken = db.prepare('SELECT id FROM users WHERE ingame_license = ?').get(license);
-  if (taken) return null;
+  if (taken) {
+    return db.prepare('SELECT * FROM users WHERE id = ? AND disabled = 0').get(taken.id) || null;
+  }
+
+  // Genau ein Owner/Admin ohne License → binden (auch wenn Cfx schon verknüpft)
   const unbound = db.prepare(`
     SELECT * FROM users
     WHERE disabled = 0 AND role IN ('owner', 'admin')
-      AND (cfx_id IS NULL OR cfx_id = '')
       AND (ingame_license IS NULL OR ingame_license = '')
-    ORDER BY id ASC
+    ORDER BY CASE role WHEN 'owner' THEN 0 ELSE 1 END, id ASC
   `).all();
-  if (unbound.length !== 1) return null;
-  db.prepare('UPDATE users SET ingame_license = ? WHERE id = ?').run(license, unbound[0].id);
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(unbound[0].id);
+
+  if (unbound.length === 1) {
+    return bindLicense(db, unbound[0].id, license);
+  }
+
+  // Mehrere ohne License: nur wenn genau ein Owner darunter
+  const owners = unbound.filter((u) => u.role === 'owner');
+  if (owners.length === 1) {
+    return bindLicense(db, owners[0].id, license);
+  }
+
+  return null;
 }
 
 export function resolveIngameAdmin(db, identifiers) {
