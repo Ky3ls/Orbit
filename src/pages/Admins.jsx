@@ -204,7 +204,6 @@ export default function Admins() {
         <Modal
           title={createOpen ? 'Neuer Benutzer' : `Bearbeiten: ${edit?.username}`}
           onClose={() => { setCreateOpen(false); setEdit(null); setErr(''); }}
-          showClose={false}
           wide
           aside={(
             <aside className="tm-identity-aside" aria-label="Identität">
@@ -278,9 +277,6 @@ export default function Admins() {
             </div>
 
             <div className="tm-form-actions row">
-              <button type="button" className="btn" onClick={() => { setCreateOpen(false); setEdit(null); }}>
-                Abbrechen
-              </button>
               <button type="submit" className="btn btn-primary" disabled={busy}>
                 {createOpen ? 'Anlegen' : 'Speichern'}
               </button>

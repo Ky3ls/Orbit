@@ -640,8 +640,10 @@ button,
     order: -1;
     padding-bottom: 16px;
   }
-  .modal .spread .btn {
+  .modal .spread .btn,
+  .modal-x {
     min-height: var(--touch-min);
+    min-width: var(--touch-min);
   }
 }
 
