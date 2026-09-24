@@ -208,66 +208,73 @@ export default function Admins() {
         >
           <form className="tm-form" onSubmit={createOpen ? create : saveEdit}>
             {err && <div className="err">{err}</div>}
-            {createOpen && (
-              <label className="field">
-                <span>Benutzername</span>
-                <input
-                  required
-                  value={form.username}
-                  onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  placeholder="z. B. max.mod"
-                />
-              </label>
-            )}
-            <label className="field">
-              <span>{createOpen ? 'Passwort' : 'Neues Passwort (optional)'}</span>
-              <input
-                type="text"
-                required={createOpen}
-                minLength={createOpen ? 6 : 0}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder={createOpen ? 'mind. 6 Zeichen' : 'Leer = unverändert'}
-              />
-            </label>
-            <label className="field">
-              <span>Rolle</span>
-              <select
-                value={form.role}
-                onChange={(e) => applyRoleTemplate(e.target.value)}
-              >
-                <option value="moderator">Moderator</option>
-                <option value="admin">Admin</option>
-                <option value="custom">Individuell</option>
-              </select>
-            </label>
+            <div className="tm-form-layout">
+              <aside className="tm-form-identity" aria-label="Identität">
+                <h4 className="tm-form-col-title">Identität</h4>
+                {createOpen && (
+                  <label className="field">
+                    <span>Benutzername</span>
+                    <input
+                      required
+                      value={form.username}
+                      onChange={(e) => setForm({ ...form, username: e.target.value })}
+                      placeholder="z. B. max.mod"
+                    />
+                  </label>
+                )}
+                <label className="field">
+                  <span>{createOpen ? 'Passwort' : 'Neues Passwort (optional)'}</span>
+                  <input
+                    type="text"
+                    required={createOpen}
+                    minLength={createOpen ? 6 : 0}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder={createOpen ? 'mind. 6 Zeichen' : 'Leer = unverändert'}
+                  />
+                </label>
+                <label className="field">
+                  <span>Rolle</span>
+                  <select
+                    value={form.role}
+                    onChange={(e) => applyRoleTemplate(e.target.value)}
+                  >
+                    <option value="moderator">Moderator</option>
+                    <option value="admin">Admin</option>
+                    <option value="custom">Individuell</option>
+                  </select>
+                </label>
+              </aside>
 
-            <div className="tm-perms">
-              <h4>Berechtigungen</h4>
-              <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
-                Vorlagen setzen die Haken; manuelle Änderung wechselt auf „Individuell“.
-              </p>
-              {permGroups.map((g) => (
-                <fieldset key={g.id} className="tm-perm-group">
-                  <legend>{g.label}</legend>
-                  <div className="tm-perm-grid">
-                    {g.permissions.map((perm) => (
-                      <label key={perm.id} className="tm-perm">
-                        <input
-                          type="checkbox"
-                          checked={form.permissions.includes(perm.id)}
-                          onChange={() => togglePerm(perm.id)}
-                        />
-                        <span>{perm.label}</span>
-                        <code>{perm.id}</code>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
-              ))}
+              <div className="tm-perms">
+                <h4 className="tm-form-col-title">Berechtigungen</h4>
+                <p className="tm-perms-hint muted">
+                  Vorlagen setzen die Haken; manuelle Änderung wechselt auf „Individuell“.
+                </p>
+                <div className="tm-perms-body">
+                  {permGroups.map((g) => (
+                    <fieldset key={g.id} className="tm-perm-group">
+                      <legend>{g.label}</legend>
+                      <div className="tm-perm-grid">
+                        {g.permissions.map((perm) => (
+                          <label key={perm.id} className="tm-perm">
+                            <input
+                              type="checkbox"
+                              checked={form.permissions.includes(perm.id)}
+                              onChange={() => togglePerm(perm.id)}
+                            />
+                            <span>{perm.label}</span>
+                            <code>{perm.id}</code>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
+            <div className="tm-form-actions row">
               <button type="button" className="btn" onClick={() => { setCreateOpen(false); setEdit(null); }}>
                 Abbrechen
               </button>
