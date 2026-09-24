@@ -124,31 +124,105 @@ export function Modal({ title, onClose, children, wide, aside }) {
   );
 }
 
-export function AreaChart({ data, color = '#ff7a1a', accessor = (d) => d.v }) {
+function chartClock(ts) {
+  if (!ts) return '';
+  return new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(ts);
+}
+
+function niceYTicks(scaleMax, fixed) {
+  if (fixed === 100) return [100, 75, 50, 25, 0];
+  if (fixed != null && fixed > 0) {
+    const mid = Math.round(fixed / 2);
+    return mid === 0 || mid === fixed ? [fixed, 0] : [fixed, mid, 0];
+  }
+  const m = Math.max(1, scaleMax);
+  const mid = Math.round(m / 2);
+  return mid === 0 || mid === m ? [m, 0] : [m, mid, 0];
+}
+
+/** Monitor-Chart mit Y-Skala, Grid und Zeitachse (Labels außerhalb SVG → kein Stretch). */
+export function AreaChart({
+  data,
+  color = '#ff7a1a',
+  accessor = (d) => d.v,
+  yMax,
+  formatY = (v) => `${Math.round(v)}`,
+  ariaLabel = 'Diagramm',
+}) {
   const id = useId().replace(/:/g, '');
-  const values = (data || []).map(accessor);
-  const w = 640;
-  const h = 160;
-  const max = Math.max(...values, 1);
-  const step = w / Math.max(values.length - 1, 1);
-  const pts = values.map((v, i) => [i * step, h - (v / max) * (h - 20) - 8]);
-  const d = pts.length
-    ? pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')
+  const series = data || [];
+  const values = series.map(accessor);
+  const rawMax = values.length ? Math.max(...values, 0) : 0;
+  const scaleMax = yMax != null ? Math.max(yMax, 1) : Math.max(Math.ceil(rawMax * 1.15) || 1, 1);
+  const yTicks = niceYTicks(scaleMax, yMax);
+  const top = yTicks[0] || 1;
+
+  const w = 100;
+  const h = 100;
+  const n = values.length;
+  const pts = values.map((v, i) => {
+    const x = n <= 1 ? 0 : (i / (n - 1)) * w;
+    const y = h - (Math.max(0, Math.min(v, top)) / top) * h;
+    return [x, y];
+  });
+  const line = pts.length
+    ? pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ')
     : `M0,${h}`;
+  const area = pts.length ? `${line} L${w},${h} L0,${h} Z` : `M0,${h} L${w},${h} Z`;
+
+  const xCount = Math.min(4, Math.max(n, 1));
+  const xLabels = [];
+  if (n === 0) {
+    xLabels.push({ key: 'e', label: '–' });
+  } else {
+    for (let i = 0; i < xCount; i += 1) {
+      const idx = xCount === 1 ? 0 : Math.round((i / (xCount - 1)) * (n - 1));
+      xLabels.push({ key: `${idx}-${i}`, label: chartClock(series[idx]?.t) || '–' });
+    }
+  }
+
   return (
-    <svg className="chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img">
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.32" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[0.25, 0.5, 0.75].map((g) => (
-        <line key={g} x1="0" x2={w} y1={h * g} y2={h * g} stroke="rgba(255,255,255,0.05)" />
-      ))}
-      <path d={`${d} L${w},${h} L0,${h} Z`} fill={`url(#${id})`} />
-      <path d={d} fill="none" stroke={color} strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
-    </svg>
+    <div className="chart-frame" role="img" aria-label={ariaLabel}>
+      <div className="chart-y" aria-hidden="true">
+        {yTicks.map((t) => (
+          <span key={t}>{formatY(t)}</span>
+        ))}
+      </div>
+      <div className="chart-plot">
+        <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="chart">
+          <defs>
+            <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {yTicks.slice(1, -1).map((t) => {
+            const y = h - (t / top) * h;
+            return (
+              <line
+                key={`g-${t}`}
+                x1="0"
+                x2={w}
+                y1={y}
+                y2={y}
+                stroke="rgba(255,255,255,0.06)"
+                strokeWidth="0.4"
+                vectorEffect="non-scaling-stroke"
+              />
+            );
+          })}
+          <line x1="0" x2={w} y1={h} y2={h} stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+          <path d={area} fill={`url(#${id})`} />
+          <path d={line} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+        </svg>
+        {n === 0 ? <span className="chart-empty muted">Keine Samples</span> : null}
+      </div>
+      <div className="chart-x" aria-hidden="true">
+        {xLabels.map((x) => (
+          <span key={x.key}>{x.label}</span>
+        ))}
+      </div>
+    </div>
   );
 }
 
