@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
-import ServerControls, { statusLabel, statusTone } from '../components/ServerControls.jsx';
+import ServerControls from '../components/ServerControls.jsx';
 import { Mark } from '../components/Ui.jsx';
 import { useAppearance } from '../hooks/useAppearance.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
@@ -237,8 +237,6 @@ export default function Workspace({ user, onLogout }) {
 
   const headerEnd = (
     <div className="ws-header-end" ref={menuRef}>
-      <span className={`ws-status ws-tone-${statusTone(status)}`}>{statusLabel(status)}</span>
-      <span className="ws-status">{live.clients}/{live.maxClients}</span>
       {canControl && !isSidebar && !isDock && (
         <div className="dock-power" ref={powerRef}>
           <button type="button" className="ws-btn-ghost" onClick={() => setPowerOpen((v) => !v)} title={live.hostname}>
@@ -285,14 +283,6 @@ export default function Workspace({ user, onLogout }) {
             >
               <NavIcon name={prefs.sidebarCollapsed ? 'expand' : 'collapse'} />
             </button>
-          </div>
-
-          <div
-            className="ws-rail-live"
-            title={`${statusLabel(status)} ${live.clients}/${live.maxClients}`}
-          >
-            <span className={`ws-status ws-tone-${statusTone(status)}`}>{statusLabel(status)}</span>
-            <span className="ws-status">{live.clients}/{live.maxClients}</span>
           </div>
 
           <nav className="ws-rail-nav">
