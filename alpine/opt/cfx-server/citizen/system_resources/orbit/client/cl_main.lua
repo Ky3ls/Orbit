@@ -1,6 +1,7 @@
 --[[ Orbit client — Admin-Menü ]]
 
 local menuOpen = false
+local menuCursor = false
 local isAdmin = false
 local lastTp = nil
 local god = false
@@ -15,6 +16,7 @@ end
 
 local function closeMenu()
   menuOpen = false
+  menuCursor = false
   SetNuiFocusKeepInput(false)
   SetNuiFocus(false, false)
   SendNUIMessage({ action = 'close' })
@@ -168,8 +170,9 @@ end)
 RegisterNetEvent('orbit:openMenu', function(payload)
   if menuOpen then return end
   menuOpen = true
+  menuCursor = false
   local game = payload and payload.game or {}
-  -- Fokus ohne Maus-Cursor; Spiel-Input behalten (Laufen/Fahren)
+  -- Main: kein Cursor, Kamera/Bewegung per Maus+WASD; Spieler-Tab schaltet Cursor separat
   SetNuiFocus(true, false)
   SetNuiFocusKeepInput(true)
   SendNUIMessage({
@@ -268,7 +271,8 @@ end)
 RegisterNUICallback('setCursor', function(data, cb)
   if not menuOpen then cb(0) return end
   local want = data and data.enabled and true or false
-  -- Spieler-Tab / Modal: Maus an; Main: nur Tastatur, Input behalten
+  menuCursor = want
+  -- Players/Modal: Cursor fürs Menü. Main: keine Maus-UI, Kamera frei drehen.
   SetNuiFocus(true, want)
   SetNuiFocusKeepInput(not want)
   cb(1)
@@ -410,12 +414,15 @@ end, false)
 RegisterKeyMapping('orbit', 'Orbit Admin-Menü', 'keyboard', '')
 RegisterKeyMapping('orbitnoclip', 'Orbit NoClip umschalten', 'keyboard', '')
 
--- Menü offen: Laufen/Fahren behalten, Blick/Schießen/Pause blocken (Pfeile → NUI)
+-- Menü offen: Main → Kamera/Bewegen; Players → Cursor, Blick blocken
 CreateThread(function()
   while true do
     if menuOpen then
-      DisableControlAction(0, 1, true)   -- Look LR
-      DisableControlAction(0, 2, true)   -- Look UD
+      if menuCursor then
+        -- Spieler-Tab: Maus bedient NUI, nicht die Kamera
+        DisableControlAction(0, 1, true)   -- Look LR
+        DisableControlAction(0, 2, true)   -- Look UD
+      end
       DisableControlAction(0, 24, true)  -- Attack
       DisableControlAction(0, 25, true)  -- Aim
       DisableControlAction(0, 37, true)  -- Weapon wheel
@@ -432,7 +439,7 @@ CreateThread(function()
       DisableControlAction(0, 257, true) -- Attack2
       DisableControlAction(0, 263, true)
       DisableControlAction(0, 264, true)
-      -- Pfeiltasten dem NUI überlassen; Leertaste = normales Springen (nicht blocken)
+      -- Pfeiltasten dem NUI; Leertaste = Springen
       DisableControlAction(0, 23, true)  -- Enter vehicle
       DisableControlAction(0, 75, true)  -- Exit vehicle
       DisableControlAction(0, 172, true)
