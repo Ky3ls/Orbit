@@ -8,7 +8,6 @@ export const MODULES = [
       { to: '/panel', end: true, label: 'Übersicht', short: 'Home', icon: 'home' },
       { to: '/players', label: 'Spieler', short: 'Spieler', icon: 'users' },
       { to: '/resources', label: 'Ressourcen', short: 'Scripts', icon: 'box' },
-      { to: '/console', label: 'Konsole', short: 'Konsole', icon: 'term', consoleRoute: true },
       { to: '/monitoring', label: 'Monitoring', icon: 'chart' },
       { to: '/cfg', label: 'CFG', icon: 'cfg' },
       { to: '/schedule', label: 'Zeitpläne', icon: 'clock' },
@@ -29,9 +28,9 @@ export const MODULES = [
 
 export const MOBILE_DOCK = [
   { to: '/players', label: 'Spieler', icon: 'users' },
-  { to: '/console', label: 'Konsole', icon: 'term', toggleConsole: true },
+  { to: '/resources', label: 'Scripts', icon: 'box' },
   { to: '/panel', end: true, label: 'Home', icon: 'home', center: true },
-  { to: '/resources', label: 'Scripts', icon: 'box', powerAdjacent: true },
+  { to: '/monitoring', label: 'Monitor', icon: 'chart', powerAdjacent: true },
   { to: '/more', label: 'Mehr', icon: 'more' },
 ];
 

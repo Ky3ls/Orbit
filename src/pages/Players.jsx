@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
 import { fmtFull, fmtPlaytime } from '../format.js';
 import { AreaChart, Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
@@ -53,7 +53,6 @@ function playerFingerprint(p) {
 }
 
 export default function Players({ user }) {
-  const { openConsole } = useOutletContext() || {};
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = FILTERS.some((f) => f.id === searchParams.get('filter'))
     ? searchParams.get('filter')
@@ -374,10 +373,7 @@ export default function Players({ user }) {
         title="Spieler"
         description={`${onlineCount} online · ${Math.max(0, totalKnown - onlineCount)} offline · Drops 72h: ${dropTotal}`}
         actions={(
-          <>
-            <Badge tone={data.online ? 'ok' : 'bad'}>{onlineCount} live</Badge>
-            <button type="button" className="btn btn-sm" onClick={() => openConsole?.()}>Konsole</button>
-          </>
+          <Badge tone={data.online ? 'ok' : 'bad'}>{onlineCount} live</Badge>
         )}
       />
 

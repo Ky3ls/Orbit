@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
-import LiveConsole from '../components/LiveConsole.jsx';
 import ServerControls, { statusLabel, statusTone } from '../components/ServerControls.jsx';
 import { Mark } from '../components/Ui.jsx';
 import { useAppearance } from '../hooks/useAppearance.js';
@@ -19,11 +18,11 @@ const DOCK_PATHS = new Set([
   '/panel',
   '/players',
   '/resources',
-  '/console',
+  '/monitoring',
   ...DOCK_LEFT.map((i) => i.to),
 ]);
 
-const RAIL_PRIMARY = new Set(['/panel', '/players', '/resources', '/monitoring', '/console']);
+const RAIL_PRIMARY = new Set(['/panel', '/players', '/resources', '/monitoring']);
 
 function RailLink({ to, end, icon, label, active, onClick, asButton, pressed, pri }) {
   const cls = `ws-rail-item${active ? ' active' : ''}`;
@@ -104,7 +103,6 @@ export default function Workspace({ user, onLogout }) {
   const [openGroup, setOpenGroup] = useState(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [consoleOpen, setConsoleOpen] = useState(false);
   const [dockShow, setDockShow] = useState(0);
   const [prefs, setAppearance] = useAppearance();
   const dockHover = useRef(false);
@@ -113,7 +111,6 @@ export default function Workspace({ user, onLogout }) {
   const loc = useLocation();
   const isOwner = user.role === 'owner';
   const canControl = user.role === 'owner' || user.role === 'admin';
-  const canConsole = user.role === 'owner' || user.role === 'admin';
   const onCockpit = loc.pathname === '/panel';
   const activeGroup = pathInGroup(loc.pathname);
   const isSidebar = prefs.navLayout === 'sidebar';
@@ -215,9 +212,6 @@ export default function Workspace({ user, onLogout }) {
     return () => document.removeEventListener('mousedown', onPointer);
   }, [menuOpen, powerOpen, openGroup]);
 
-  const showSideConsole = canConsole && consoleOpen && !onCockpit;
-  const consoleActive = consoleOpen || (canConsole && loc.pathname === '/console');
-
   const powerMenu = powerOpen && (
     <div className="power-menu ws-power-menu" role="menu">
       <ServerControls
@@ -244,15 +238,6 @@ export default function Workspace({ user, onLogout }) {
           {powerMenu}
         </div>
       )}
-      {canConsole && !onCockpit && !isDock && (
-        <button
-          type="button"
-          className={`ws-btn-ghost${showSideConsole ? ' active' : ''}`}
-          onClick={() => setConsoleOpen((v) => !v)}
-        >
-          Konsole
-        </button>
-      )}
       <button type="button" className="ws-user" onClick={() => setMenuOpen((v) => !v)}>
         {user.username}
       </button>
@@ -269,7 +254,6 @@ export default function Workspace({ user, onLogout }) {
   return (
     <div
       className="ws"
-      data-console={showSideConsole ? '1' : '0'}
       data-cockpit={onCockpit ? '1' : '0'}
       data-nav={prefs.navLayout}
       data-sidebar={prefs.sidebarCollapsed ? 'collapsed' : 'expanded'}
@@ -308,20 +292,6 @@ export default function Workspace({ user, onLogout }) {
                 <span className="ws-rail-group-label">{group.label}</span>
                 {group.items.map((item) => {
                   if (item.owner && !isOwner) return null;
-                  if (item.consoleRoute && canConsole && !onCockpit) {
-                    return (
-                      <RailLink
-                        key={item.to}
-                        asButton
-                        icon={item.icon}
-                        label={item.label}
-                        pri={RAIL_PRIMARY.has(item.to)}
-                        active={consoleActive}
-                        pressed={consoleOpen}
-                        onClick={() => setConsoleOpen((v) => !v)}
-                      />
-                    );
-                  }
                   return (
                     <RailLink
                       key={item.to}
@@ -449,7 +419,6 @@ export default function Workspace({ user, onLogout }) {
             <Outlet context={{
               onLogout,
               user,
-              openConsole: () => setConsoleOpen(true),
               refreshStatus,
               fxMeta,
               serverStatus: status,
@@ -457,11 +426,6 @@ export default function Workspace({ user, onLogout }) {
               live,
             }} />
           </main>
-          {showSideConsole && (
-            <aside className="ws-console-pane" aria-label="Live-Konsole">
-              <LiveConsole variant="side" open onClose={() => setConsoleOpen(false)} />
-            </aside>
-          )}
         </div>
 
         {isDock && (
@@ -483,17 +447,6 @@ export default function Workspace({ user, onLogout }) {
                   <span className="ws-dock-label">{item.label}</span>
                 </NavLink>
               ))}
-              {canConsole && !onCockpit && (
-                <button
-                  type="button"
-                  className={`ws-dock-item${consoleActive ? ' active' : ''}`}
-                  aria-pressed={consoleOpen}
-                  onClick={() => setConsoleOpen((v) => !v)}
-                >
-                  <span className="ws-dock-ico"><NavIcon name="term" /></span>
-                  <span className="ws-dock-label">Konsole</span>
-                </button>
-              )}
             </div>
 
             <NavLink to="/panel" end className={`ws-dock-item ws-dock-home${onCockpit ? ' active' : ''}`}>
