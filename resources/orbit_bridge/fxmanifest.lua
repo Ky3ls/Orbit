@@ -3,8 +3,8 @@ game 'gta5'
 
 name 'orbit'
 author 'Orbit'
-description 'Orbit Panel — schlankes Admin-Menü (Kick/Announce/Heal/Liste)'
-version '3.1.0'
+description 'Orbit Monitor — Playerlist, Ban/WL-Check, Admin (system_resources)'
+version '4.0.0'
 ui_label 'Orbit'
 
 ui_page 'html/index.html'
@@ -17,6 +17,8 @@ files {
 
 server_scripts {
     'server/sv_main.lua',
+    'server/sv_connect.lua',
+    'server/sv_events.lua',
     'server/sv_actions.lua',
 }
 

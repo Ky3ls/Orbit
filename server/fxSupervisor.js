@@ -404,7 +404,19 @@ export async function forceFreeGamePort(settings, logLine = () => {}, port = 301
 }
 
 export async function restartFxProcess(settings, logLine, opts = {}) {
+  // Wie txAdmin: zuerst alle Spieler kicken, dann stoppen, dann starten
+  try {
+    const { dispatchFxCommand } = await import('./fxCommand.js');
+    const { orbitEventCommand } = await import('./orbitEvents.js');
+    await dispatchFxCommand(settings, orbitEventCommand('serverShuttingDown', {
+      message: 'Server wird neu gestartet…',
+    }));
+    await new Promise((r) => setTimeout(r, 800));
+  } catch (err) {
+    logLine('warn', `Kick vor Restart: ${err.message}`);
+  }
   await stopFxProcess(settings, logLine, opts);
+  await new Promise((r) => setTimeout(r, 500));
   return startFxProcess(settings, logLine, opts);
 }
 

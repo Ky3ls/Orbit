@@ -3,7 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { HOST, PORT, FX_SERVER_ROOT } from './config.js';
+import { PORT, FX_SERVER_ROOT } from './config.js';
 import { setSetting, settingMap } from './db.js';
 import { ensureOnce } from './cfgUpsert.js';
 
@@ -15,7 +15,6 @@ function sudoRun(args) {
   execFileSync('sudo', ['-n', ...args], { timeout: 120_000, stdio: 'pipe' });
 }
 
-/** Löschen — bei EACCES per sudo (root-owned Reste). */
 function rmRf(target) {
   if (!target || !fs.existsSync(target)) return;
   try {
@@ -40,7 +39,6 @@ function copyDir(src, dest) {
   }
 }
 
-/** Kopie inkl. Fallback sudo cp -a + chown orbit. */
 function installDir(src, dest) {
   rmRf(dest);
   try {
@@ -57,12 +55,10 @@ function installDir(src, dest) {
   } catch { /* optional */ }
 }
 
-/** Interner HTTP-Endpunkt, den FX immer erreichen kann. */
 export function orbitPanelLocalUrl() {
   return `http://127.0.0.1:${PORT}`;
 }
 
-/** Stellt sicher, dass ein Pipe-Token existiert (wie txAdmin luaComToken). */
 export function ensureIngameToken(db) {
   const cur = settingMap(db).ingameToken;
   if (cur && String(cur).length >= 24) return String(cur);
@@ -72,37 +68,43 @@ export function ensureIngameToken(db) {
 }
 
 /**
- * Stellt sicher, dass server.cfg `ensure orbit` hat (idempotent).
+ * Entfernt alte Datadir-Kopie + ensure orbit aus server.cfg
+ * (Orbit liegt nur noch in citizen/system_resources wie txAdmin monitor).
  */
-export function ensureOrbitInServerCfg(dataPath, onLog = () => {}) {
-  if (!dataPath) return false;
-  const cfg = path.join(String(dataPath).replace(/\/$/, ''), 'server.cfg');
-  if (!fs.existsSync(cfg)) return false;
-  let raw = fs.readFileSync(cfg, 'utf8');
-  const next = ensureOnce(raw, 'orbit');
-  if (next === raw) return false;
-  // Kommentar-Header nur wenn neu
-  raw = next.replace(
-    /^(\s*ensure\s+orbit\s*)$/m,
-    '\n## Orbit Admin-Menü (system_resources — auto)\nensure orbit',
-  );
-  try {
-    fs.writeFileSync(cfg, raw);
-  } catch (err) {
-    if (err.code === 'EACCES' || err.code === 'EPERM') {
-      const tmp = `/tmp/orbit-cfg-${Date.now()}.cfg`;
-      fs.writeFileSync(tmp, raw);
-      sudoRun(['cp', tmp, cfg]);
-      sudoRun(['chown', `${PANEL_USER}:${PANEL_USER}`, cfg]);
-    } else throw err;
+export function removeOrbitFromDataPath(dataPath, onLog = () => {}) {
+  if (!dataPath) return;
+  const root = String(dataPath).replace(/\/$/, '');
+  const legacy = [
+    path.join(root, 'resources', '[orbit]', 'orbit'),
+    path.join(root, 'resources', 'orbit'),
+    path.join(root, 'resources', '[local]', 'orbit'),
+  ];
+  for (const p of legacy) {
+    if (fs.existsSync(p)) {
+      rmRf(p);
+      onLog(`orbit Datadir-Kopie entfernt: ${p}`);
+    }
   }
-  onLog(`ensure orbit → ${cfg}`);
-  return true;
+  const cfg = path.join(root, 'server.cfg');
+  if (!fs.existsSync(cfg)) return;
+  try {
+    let text = fs.readFileSync(cfg, 'utf8');
+    const next = text
+      .replace(/^\s*ensure\s+orbit\s*$/gim, '')
+      .replace(/^\s*start\s+orbit\s*$/gim, '')
+      .replace(/\n{3,}/g, '\n\n');
+    if (next !== text) {
+      fs.writeFileSync(cfg, next);
+      onLog('ensure orbit aus server.cfg entfernt (system_resources).');
+    }
+  } catch (err) {
+    onLog(`server.cfg cleanup: ${err.message}`);
+  }
 }
 
 /**
- * Kopiert Bridge als System-Resource `orbit` (citizen/system_resources/orbit)
- * und optional ins Datadir.
+ * Installiert Orbit NUR in FX system_resources (wie txAdmin monitor).
+ * Keine Kopie ins Server-Datadir.
  */
 export function syncOrbitSystemResource(fxServerRoot, dataPath, onLog = () => {}) {
   if (!fs.existsSync(BRIDGE_SRC)) {
@@ -114,22 +116,16 @@ export function syncOrbitSystemResource(fxServerRoot, dataPath, onLog = () => {}
   installDir(BRIDGE_SRC, sysDest);
   onLog(`orbit → system_resources (${sysDest})`);
 
-  let dataDest = '';
-  if (dataPath) {
-    dataDest = path.join(String(dataPath).replace(/\/$/, ''), 'resources', '[orbit]', 'orbit');
-    installDir(BRIDGE_SRC, dataDest);
-    onLog(`orbit → datadir (${dataDest})`);
-    ensureOrbitInServerCfg(dataPath, onLog);
-  }
-  return { ok: true, systemPath: sysDest, dataPath: dataDest };
+  if (dataPath) removeOrbitFromDataPath(dataPath, onLog);
+
+  return { ok: true, systemPath: sysDest, dataPath: '' };
 }
 
-/** @deprecated Alias */
 export function syncOrbitBridgeToDataPath(dataPath, onLog = () => {}) {
   return syncOrbitSystemResource(FX_SERVER_ROOT, dataPath, onLog);
 }
 
-/** FX-Launch-Args: Convars + ensure (ohne manuelle server.cfg). */
+/** FX-Launch: Convars + ensure (ohne server.cfg). */
 export function orbitFxLaunchExtras(db) {
   const token = ensureIngameToken(db);
   const panel = orbitPanelLocalUrl();
@@ -140,10 +136,6 @@ export function orbitFxLaunchExtras(db) {
   ];
 }
 
-/**
- * Laufenden FX hot-deployen: Convars setzen + ensure (kein Neustart).
- * @param {(cmd: string) => void} sendCmd
- */
 export function hotDeployOrbit(db, sendCmd, fxRoot, dataPath, onLog = () => {}) {
   syncOrbitSystemResource(fxRoot || FX_SERVER_ROOT, dataPath, onLog);
   const token = ensureIngameToken(db);
@@ -151,6 +143,14 @@ export function hotDeployOrbit(db, sendCmd, fxRoot, dataPath, onLog = () => {}) 
   sendCmd(`set orbit_panelUrl "${panel}"`);
   sendCmd(`set orbit_luaComToken "${token}"`);
   sendCmd('ensure orbit');
-  onLog('orbit hot-deployed (ensure orbit)');
+  onLog('orbit hot-deployed (system_resources + ensure)');
   return { panel, tokenSet: true };
 }
+
+/** @deprecated — ensure orbit kommt nur noch aus Launch-Args */
+export function ensureOrbitInServerCfg(_dataPath, _onLog = () => {}) {
+  return false;
+}
+
+// keep ensureOnce import unused-safe if tree-shaken elsewhere
+void ensureOnce;

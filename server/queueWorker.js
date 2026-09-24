@@ -1,5 +1,6 @@
 import { controlFx } from './control.js';
 import { dispatchFxCommand } from './fxCommand.js';
+import { orbitEventCommand } from './orbitEvents.js';
 
 /**
  * @param {import('node:sqlite').DatabaseSync} db
@@ -40,6 +41,12 @@ async function executeQueueItem(settings, kind, payload, logLine) {
     return dispatchFxCommand(settings, command);
   }
 
+  if (kind === 'orbitEvent') {
+    const event = String(payload.event || '').trim();
+    if (!event) throw new Error('orbitEvent ohne Name.');
+    return dispatchFxCommand(settings, orbitEventCommand(event, payload.data || payload));
+  }
+
   if (kind.startsWith('resource.')) {
     const action = kind.slice('resource.'.length);
     const name = payload.name;
@@ -51,26 +58,42 @@ async function executeQueueItem(settings, kind, payload, logLine) {
   }
 
   if (kind === 'kick') {
-    const reason = (payload.reason || 'Kick').replace(/"/g, "'");
-    if (payload.id !== undefined) return dispatchFxCommand(settings, `kick ${payload.id} ${reason}`);
-    throw new Error('Kick ohne Spieler-ID.');
+    return dispatchFxCommand(settings, orbitEventCommand('playerKicked', {
+      target: payload.id,
+      reason: payload.reason || 'Kick',
+    }));
   }
 
-  if (kind === 'warn' || kind === 'message') {
-    const reason = (payload.reason || payload.message || '').replace(/"/g, "'");
-    if (payload.id !== undefined) {
-      if (kind === 'message') return dispatchFxCommand(settings, `say ${reason}`);
-      return dispatchFxCommand(settings, `kick ${payload.id} ${reason}`);
-    }
-    throw new Error('Spieler-ID fehlt.');
+  if (kind === 'warn') {
+    return dispatchFxCommand(settings, orbitEventCommand('playerWarned', {
+      targetNetId: payload.id,
+      author: payload.author || 'Orbit',
+      reason: payload.reason || '',
+      actionId: payload.actionId,
+    }));
+  }
+
+  if (kind === 'message') {
+    return dispatchFxCommand(settings, orbitEventCommand('directMessage', {
+      target: payload.id,
+      author: payload.author || 'Admin',
+      message: payload.reason || payload.message || '',
+    }));
   }
 
   if (kind === 'ban') {
-    const reason = (payload.reason || 'Ban').replace(/"/g, "'");
-    if (payload.identifier) {
-      return dispatchFxCommand(settings, `add_ace identifier.${payload.identifier} command deny allow # orbit-ban ${reason}`);
-    }
-    throw new Error('Ban: Identifier für Ingame-Sperre fehlt (Panel-Ban ist in der DB).');
+    return dispatchFxCommand(settings, orbitEventCommand('playerBanned', {
+      targetNetId: payload.id,
+      targetIds: payload.identifiers || (payload.identifier ? [payload.identifier] : []),
+      reason: payload.reason || 'Ban',
+      kickMessage: payload.reason || 'Gebannt',
+    }));
+  }
+
+  if (kind === 'shutdown') {
+    return dispatchFxCommand(settings, orbitEventCommand('serverShuttingDown', {
+      message: payload.message || 'Server wird neu gestartet…',
+    }));
   }
 
   if (kind.startsWith('server.')) {
