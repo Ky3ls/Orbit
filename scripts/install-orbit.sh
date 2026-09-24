@@ -136,6 +136,8 @@ orbit ALL=(root) NOPASSWD: /bin/rm, /usr/bin/rm
 orbit ALL=(root) NOPASSWD: /usr/bin/pkill, /bin/pkill
 orbit ALL=(root) NOPASSWD: /usr/bin/fuser, /bin/fuser
 orbit ALL=(root) NOPASSWD: /bin/bash /opt/orbit/scripts/uninstall-orbit.sh, /usr/bin/bash /opt/orbit/scripts/uninstall-orbit.sh
+orbit ALL=(root) NOPASSWD: /usr/bin/systemd-run --uid=root --gid=root --working-directory=/ --collect /bin/bash /opt/orbit/scripts/uninstall-orbit.sh
+orbit ALL=(root) NOPASSWD: /usr/bin/systemd-run --uid=root --gid=root --working-directory=/ --collect /usr/bin/bash /opt/orbit/scripts/uninstall-orbit.sh
 SUDOEOF
 chmod 440 /etc/sudoers.d/orbit
 visudo -cf /etc/sudoers.d/orbit >/dev/null
