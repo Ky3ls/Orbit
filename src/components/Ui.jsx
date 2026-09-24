@@ -96,7 +96,7 @@ export function Toolbar({ children, className = '' }) {
 
 /**
  * @param {{ title: string, onClose: () => void, children: import('react').ReactNode, wide?: boolean, aside?: import('react').ReactNode, showClose?: boolean }} props
- * showClose: Header-Button „Schließen“ (default true). Bei Formularen mit Footer-„Abbrechen“ auf false setzen.
+ * showClose: Header-X zum Schließen (default true).
  */
 export function Modal({ title, onClose, children, wide, aside, showClose = true }) {
   useEffect(() => {
@@ -116,10 +116,18 @@ export function Modal({ title, onClose, children, wide, aside, showClose = true 
           aria-modal="true"
           aria-labelledby="modal-title"
         >
-          <div className="spread">
+          <div className="spread modal-head">
             <h3 id="modal-title">{title}</h3>
             {showClose ? (
-              <button className="btn btn-ghost btn-sm" onClick={onClose} type="button">Schließen</button>
+              <button
+                className="modal-x"
+                onClick={onClose}
+                type="button"
+                aria-label="Schließen"
+                title="Schließen"
+              >
+                ×
+              </button>
             ) : <span />}
           </div>
           {children}
@@ -246,7 +254,6 @@ export const Gauge = memo(function Gauge({ label, value, suffix = '%', tone = '#
           strokeLinecap="round"
           strokeDasharray={`${dash} ${c}`}
           transform="rotate(-90 70 70)"
-          style={{ transition: 'stroke-dasharray 0.6s ease' }}
         />
       </svg>
       <strong>{Math.round(pct)}{suffix === '%' ? '%' : ''}</strong>

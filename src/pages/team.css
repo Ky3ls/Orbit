@@ -46,12 +46,11 @@
     var(--bg-2);
   color: inherit;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
 .tm-card:hover:not(:disabled) {
   border-color: rgba(var(--accent-rgb), 0.55);
-  transform: translateY(-1px);
 }
 
 .tm-card:disabled {
@@ -168,8 +167,11 @@
   background:
     linear-gradient(160deg, rgba(var(--accent-rgb), 0.1), transparent 48%),
     rgba(12, 12, 16, 0.96);
-  box-shadow: var(--shadow);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), 0.45) transparent;
 }
 
 .tm-identity-aside .field {

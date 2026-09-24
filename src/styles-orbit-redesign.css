@@ -369,3 +369,68 @@ input:focus, select:focus, textarea:focus {
 /* drop-shadow am Chart-SVG war teuer bei häufigen Poll-Updates */
 .chart { filter: none; }
 .mon-chart-card.o-card { overflow: visible; }
+
+/* Lange Listen / Scroll-Container: weniger Shadow + content-visibility */
+.pl-grid,
+.tm-list,
+.res-page-list,
+.ws-res-list,
+.pl-ban-aside-list,
+.tm-perms-body,
+.feed,
+.fx-log,
+.template-list {
+  contain: layout style;
+}
+.pl-card,
+.tm-card,
+.ws-res-row,
+.nx-player-row,
+.res-line,
+.job {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+}
+.pl-card,
+.tm-card {
+  box-shadow: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.pl-card:hover,
+.tm-card:hover:not(:disabled) {
+  transform: none;
+}
+.tm-identity-aside,
+.pl-ban-aside {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+.tm-perms-body,
+.pl-ban-aside-list,
+.osel-menu {
+  -webkit-overflow-scrolling: touch;
+}
+.gauge svg path[stroke],
+.gauge svg circle[stroke]:not(:first-child) {
+  transition: none;
+}
+
+/* Einheitliche Scrollbar für Panel-Listen */
+.tm-perms-body::-webkit-scrollbar,
+.pl-ban-aside-list::-webkit-scrollbar,
+.tm-identity-aside::-webkit-scrollbar {
+  width: 8px;
+}
+.tm-perms-body::-webkit-scrollbar-thumb,
+.pl-ban-aside-list::-webkit-scrollbar-thumb,
+.tm-identity-aside::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-rgb), 0.45);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.tm-perms-body::-webkit-scrollbar-track,
+.pl-ban-aside-list::-webkit-scrollbar-track,
+.tm-identity-aside::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}

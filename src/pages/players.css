@@ -114,11 +114,10 @@
   background: var(--card);
   color: inherit;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 .pl-card:hover {
   border-color: rgba(var(--accent-rgb), 0.55);
-  transform: translateY(-1px);
 }
 .pl-card.online {
   background:
@@ -479,7 +478,7 @@
   border-radius: 18px;
   border: 1px solid var(--line);
   background: rgba(12, 12, 16, 0.96);
-  box-shadow: var(--shadow);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
   overflow: hidden;
 }
 .pl-ban-aside-block {
