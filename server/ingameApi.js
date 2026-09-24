@@ -69,6 +69,47 @@ export async function handleIngamePublicApi(ctx) {
     return true;
   }
 
+  /** Spielerliste vom FX-Resource (Identifier + Name) → Panel-DB */
+  if (method === 'POST' && pathname === '/api/ingame/players-sync') {
+    const body = await readBody(req);
+    if (!tokenOk(settings, body.token || req.headers['x-orbit-token'] || req.headers['x-orbit-ingame'])) {
+      json(res, 401, { error: 'Unauthorized' });
+      return true;
+    }
+    const raw = Array.isArray(body.players) ? body.players : [];
+    const now = Date.now();
+    const list = [];
+    const up = db.prepare(`
+      INSERT INTO players (identifier, name, ping, ids, first_seen, last_seen, play_ms)
+      VALUES (?, ?, ?, ?, ?, ?, 0)
+      ON CONFLICT(identifier) DO UPDATE SET
+        name = excluded.name,
+        ping = excluded.ping,
+        ids = excluded.ids,
+        last_seen = excluded.last_seen,
+        play_ms = play_ms + 4000
+    `);
+    for (const p of raw) {
+      const identifiers = Array.isArray(p.identifiers)
+        ? p.identifiers.map((x) => String(x).slice(0, 80)).filter(Boolean).slice(0, 16)
+        : [];
+      const identifier = primaryId(identifiers);
+      if (!identifier) continue;
+      const name = String(p.name || 'Unbekannt').slice(0, 64);
+      const ping = Number(p.ping) || 0;
+      const id = Number(p.id);
+      list.push({ id, name, ping, identifiers });
+      try {
+        up.run(identifier, name, ping, JSON.stringify(identifiers), now, now);
+      } catch { /* */ }
+    }
+    runtime.players = list;
+    runtime.clients = list.length;
+    if (list.length && !runtime.online) runtime.online = true;
+    json(res, 200, { ok: true, count: list.length });
+    return true;
+  }
+
   /** txAdmin-Style: Auth über Player-Identifiers */
   if (method === 'GET' && pathname === '/api/ingame/auth/self') {
     if (!tokenOk(settings, req.headers['x-orbit-token'] || req.headers['x-orbit-ingame'] || url.searchParams.get('token'))) {
