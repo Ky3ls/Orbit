@@ -1,4 +1,4 @@
---[[ Orbit server actions — Kick / Announce / Heal ]]
+--[[ Orbit server actions — Menü-Aktionen wie txAdmin ]]
 
 local function panelAction(src, action, extra, cb)
   if not OrbitIsAdmin(src) then if cb then cb(false) end return end
@@ -21,6 +21,25 @@ RegisterNetEvent('orbit:adminHeal', function()
   TriggerClientEvent('orbit:heal', src)
 end)
 
+RegisterNetEvent('orbit:adminHealAll', function()
+  local src = source
+  if not OrbitCan(src, 'healAll') then return end
+  TriggerClientEvent('orbit:heal', -1)
+  TriggerEvent('txAdmin:events:playerHealed', { target = -1, author = (ADMINS[tostring(src)] or {}).name })
+end)
+
+RegisterNetEvent('orbit:healPlayer', function(targetId)
+  local src = source
+  if not OrbitCan(src, 'healSelf') then return end
+  targetId = tonumber(targetId)
+  if not targetId or GetPlayerName(targetId) == nil then return end
+  TriggerClientEvent('orbit:heal', targetId)
+  TriggerEvent('txAdmin:events:playerHealed', {
+    target = targetId,
+    author = (ADMINS[tostring(src)] or {}).name,
+  })
+end)
+
 RegisterNetEvent('orbit:adminAnnounce', function(msg)
   local src = source
   if not OrbitCan(src, 'announce') then return end
@@ -29,6 +48,45 @@ RegisterNetEvent('orbit:adminAnnounce', function(msg)
   panelAction(src, 'announce', { message = msg }, function()
     TriggerClientEvent('orbit:announce', -1, msg)
   end)
+end)
+
+RegisterNetEvent('orbit:adminClearArea', function(radius)
+  local src = source
+  if not OrbitCan(src, 'clearArea') then return end
+  TriggerClientEvent('orbit:clearArea', src, tonumber(radius) or 50.0)
+end)
+
+RegisterNetEvent('orbit:tpToPlayer', function(targetId)
+  local src = source
+  if not OrbitCan(src, 'goto') then return end
+  targetId = tonumber(targetId)
+  if not targetId or GetPlayerName(targetId) == nil then return end
+  local ped = GetPlayerPed(targetId)
+  local c = GetEntityCoords(ped)
+  TriggerClientEvent('orbit:tpCoords', src, c.x, c.y, c.z + 0.5)
+end)
+
+RegisterNetEvent('orbit:bringPlayer', function(targetId)
+  local src = source
+  if not OrbitCan(src, 'bring') then return end
+  targetId = tonumber(targetId)
+  if not targetId or GetPlayerName(targetId) == nil then return end
+  local ped = GetPlayerPed(src)
+  local c = GetEntityCoords(ped)
+  TriggerClientEvent('orbit:tpCoords', targetId, c.x, c.y, c.z + 0.5)
+end)
+
+RegisterNetEvent('orbit:freezePlayer', function(targetId)
+  local src = source
+  if not OrbitCan(src, 'freeze') then return end
+  targetId = tonumber(targetId)
+  if not targetId or GetPlayerName(targetId) == nil then return end
+  -- toggle via client state is simplistic: always freeze then unfreeze via second call
+  -- store toggle
+  FREEZE = FREEZE or {}
+  local key = tostring(targetId)
+  FREEZE[key] = not FREEZE[key]
+  TriggerClientEvent('orbit:freeze', targetId, FREEZE[key])
 end)
 
 RegisterNetEvent('orbit:kickPlayer', function(targetId, reason)
@@ -40,4 +98,63 @@ RegisterNetEvent('orbit:kickPlayer', function(targetId, reason)
   panelAction(src, 'kick', { playerId = targetId, reason = reason }, function(ok)
     if not ok then DropPlayer(targetId, reason) end
   end)
+end)
+
+RegisterNetEvent('orbit:warnPlayer', function(targetId, reason)
+  local src = source
+  if not OrbitCan(src, 'warn') then return end
+  targetId = tonumber(targetId)
+  if not targetId then return end
+  reason = tostring(reason or 'Warnung')
+  local author = (ADMINS[tostring(src)] or {}).name or 'Admin'
+  panelAction(src, 'warn', { playerId = targetId, reason = reason }, function()
+    TriggerClientEvent('orbit:showWarning', targetId, { author = author, reason = reason })
+  end)
+end)
+
+RegisterNetEvent('orbit:messagePlayer', function(targetId, message)
+  local src = source
+  if not OrbitCan(src, 'message') then return end
+  targetId = tonumber(targetId)
+  if not targetId then return end
+  message = tostring(message or '')
+  if message == '' then return end
+  local author = (ADMINS[tostring(src)] or {}).name or 'Admin'
+  panelAction(src, 'message', { playerId = targetId, message = message }, function()
+    TriggerClientEvent('orbit:dm', targetId, author, message)
+  end)
+end)
+
+RegisterNetEvent('orbit:banPlayer', function(targetId, reason, durationId)
+  local src = source
+  if not OrbitCan(src, 'ban') then return end
+  targetId = tonumber(targetId)
+  if not targetId then return end
+  reason = tostring(reason or 'Orbit Ban')
+  local hours = 48
+  if durationId == '2h' then hours = 2
+  elseif durationId == '8h' then hours = 8
+  elseif durationId == '1d' then hours = 24
+  elseif durationId == '7d' then hours = 168
+  elseif durationId == 'perm' then hours = 0
+  end
+  panelAction(src, 'ban', {
+    playerId = targetId,
+    reason = reason,
+    hours = hours,
+  }, function(ok)
+    if ok then DropPlayer(targetId, reason) end
+  end)
+end)
+
+RegisterNetEvent('orbit:trollPlayer', function(targetId, kind)
+  local src = source
+  if not OrbitCan(src, 'players') then return end
+  targetId = tonumber(targetId)
+  if not targetId or GetPlayerName(targetId) == nil then return end
+  if kind == 'drunk' then
+    TriggerClientEvent('orbit:drunk', targetId)
+  elseif kind == 'fire' then
+    TriggerClientEvent('orbit:setOnFire', targetId)
+  end
 end)

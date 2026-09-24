@@ -6,30 +6,102 @@
 </head>
 <body>
   <div id="app" class="hidden">
-    <header>
-      <div>
-        <h1>Orbit</h1>
-        <p id="who" class="sub"></p>
+    <aside class="rail">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <strong>Orbit</strong>
+          <small id="who">Admin</small>
+        </div>
       </div>
-      <button type="button" class="ghost" id="btnClose">Esc</button>
-    </header>
-    <nav class="tabs">
-      <button type="button" data-tab="main" class="active">Main</button>
-      <button type="button" data-tab="players">Spieler</button>
-    </nav>
-    <section id="tab-main" class="tab">
-      <div class="grid">
-        <button type="button" data-act="heal">Heal</button>
-      </div>
-      <label class="field">Ankündigung
-        <input id="announceMsg" placeholder="Nachricht…" />
-      </label>
-      <button type="button" class="primary" data-act="announce">Ankündigen</button>
-    </section>
-    <section id="tab-players" class="tab hidden">
-      <button type="button" class="ghost sm" data-act="refreshPlayers">Aktualisieren</button>
-      <ul id="plist"></ul>
-    </section>
+      <nav class="tabs" role="tablist">
+        <button type="button" data-tab="main" class="active">Main</button>
+        <button type="button" data-tab="players">Spieler</button>
+        <button type="button" data-tab="vehicle">Fahrzeug</button>
+      </nav>
+      <button type="button" class="ghost close" id="btnClose">Schließen · Esc</button>
+    </aside>
+
+    <main class="body">
+      <section id="tab-main" class="tab">
+        <h2>Spielermodus</h2>
+        <div class="grid">
+          <button type="button" data-act="toggleNoclip" data-perm="noclip">NoClip</button>
+          <button type="button" data-act="toggleGod" data-perm="god">Godmode</button>
+          <button type="button" data-act="toggleSuperjump" data-perm="superjump">Superjump</button>
+          <button type="button" data-act="toggleIds" data-perm="ids">Spieler-IDs</button>
+        </div>
+
+        <h2>Teleport</h2>
+        <div class="grid">
+          <button type="button" data-act="tpWaypoint" data-perm="teleport">Zum Wegpunkt</button>
+          <button type="button" data-act="tpBack" data-perm="teleport">Zurück</button>
+        </div>
+        <label class="field">Koordinaten (x, y, z)
+          <input id="tpCoords" placeholder="0.0, 0.0, 72.0" />
+        </label>
+        <button type="button" class="primary" data-act="tpCoords" data-perm="teleport">Teleportieren</button>
+        <button type="button" class="ghost sm" data-act="copyCoords" data-perm="teleport">Coords kopieren</button>
+
+        <h2>Heal & Area</h2>
+        <div class="grid">
+          <button type="button" data-act="healSelf" data-perm="healSelf">Heal Self</button>
+          <button type="button" data-act="healAll" data-perm="healAll">Heal Alle</button>
+          <button type="button" data-act="clearArea" data-perm="clearArea">Area clear · 50m</button>
+        </div>
+
+        <h2>Ankündigung</h2>
+        <label class="field">Nachricht
+          <input id="announceMsg" placeholder="An alle Spieler…" />
+        </label>
+        <button type="button" class="primary" data-act="announce" data-perm="announce">Ankündigen</button>
+      </section>
+
+      <section id="tab-players" class="tab hidden">
+        <div class="row-head">
+          <h2>Online</h2>
+          <button type="button" class="ghost sm" data-act="refreshPlayers" data-perm="players">Aktualisieren</button>
+        </div>
+        <input id="playerFilter" class="search" placeholder="Spieler suchen…" />
+        <ul id="plist"></ul>
+        <div id="playerModal" class="player-modal hidden">
+          <header>
+            <div>
+              <strong id="pmName">—</strong>
+              <small id="pmId"></small>
+            </div>
+            <button type="button" class="ghost sm" id="pmClose">✕</button>
+          </header>
+          <div class="grid pm-actions">
+            <button type="button" data-pact="goto" data-perm="goto">Goto</button>
+            <button type="button" data-pact="bring" data-perm="bring">Bring</button>
+            <button type="button" data-pact="freeze" data-perm="freeze">Freeze</button>
+            <button type="button" data-pact="spectate" data-perm="spectate">Spectate</button>
+            <button type="button" data-pact="heal" data-perm="healSelf">Heal</button>
+            <button type="button" data-pact="kick" data-perm="kick" class="danger">Kick</button>
+            <button type="button" data-pact="warn" data-perm="warn">Warn</button>
+            <button type="button" data-pact="message" data-perm="message">DM</button>
+            <button type="button" data-pact="ban" data-perm="ban" class="danger">Ban 2d</button>
+            <button type="button" data-pact="drunk" data-perm="players">Drunk</button>
+            <button type="button" data-pact="fire" data-perm="players">Fire</button>
+          </div>
+          <label class="field">Grund / Nachricht
+            <input id="pmReason" placeholder="Optional…" />
+          </label>
+        </div>
+      </section>
+
+      <section id="tab-vehicle" class="tab hidden">
+        <h2>Aktuelles Fahrzeug</h2>
+        <div class="grid">
+          <button type="button" data-act="vehRepair" data-perm="vehicle">Reparieren</button>
+          <button type="button" data-act="vehBoost" data-perm="vehicle">Boost</button>
+          <button type="button" data-act="vehFlip" data-perm="vehicle">Aufrichten</button>
+          <button type="button" data-act="vehDelete" data-perm="vehicle" class="danger">Löschen</button>
+        </div>
+        <p class="hint">Du musst im Fahrzeug sitzen.</p>
+      </section>
+    </main>
   </div>
   <script src="menu.js"></script>
 </body>
