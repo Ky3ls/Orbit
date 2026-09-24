@@ -37,6 +37,7 @@ export const RECIPE_PACKS = {
 # --- Orbit Profil: ESX Legacy ---
 setr esx:locale "de"
 setr inventory:framework "esx"
+setr sv_stateBagStrictMode true
 `,
   },
   qb: {
@@ -52,6 +53,7 @@ setr inventory:framework "esx"
     cfgBlock: `
 # --- Orbit Profil: QBCore ---
 setr qb_locale "de"
+setr sv_stateBagStrictMode true
 `,
   },
 };

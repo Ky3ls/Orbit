@@ -6,6 +6,7 @@ import mysql from 'mysql2/promise';
 import { RECIPE_PACKS, renderProfileCfgBlock } from './recipeProfiles.js';
 import { syncOrbitBridgeToDataPath } from './orbitBridgeSync.js';
 import { ensureOnce } from './cfgUpsert.js';
+import { patchMysql8CompatInResources } from './mysqlCompat.js';
 
 const exec = promisify(execFile);
 
@@ -264,6 +265,14 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
       onLog(`Clone fehlgeschlagen: ${err.message}`);
       results.clones.push({ ...job, ok: false, error: err.message });
     }
+  }
+
+  // MySQL 8: ADD COLUMN IF NOT EXISTS (MariaDB) in ESX-Addons patchen
+  try {
+    const p = patchMysql8CompatInResources(resources, onLog);
+    if (p.patched) onLog(`MySQL8-Kompatibilität: ${p.patched} Datei(en) angepasst.`);
+  } catch (err) {
+    onLog(`MySQL8-Patch: ${err.message}`);
   }
 
   if (opts.importSql !== false && opts.mysqlConnection) {

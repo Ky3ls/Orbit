@@ -3,6 +3,8 @@ import path from 'node:path';
 import { DATA_DIR } from './config.js';
 import { RECIPE_PACKS } from './recipeProfiles.js';
 import { importResourceSqlFiles } from './recipeInstall.js';
+import { ensureEsxAddonColumns, patchMysql8CompatInResources } from './mysqlCompat.js';
+import mysql from 'mysql2/promise';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -97,6 +99,12 @@ export async function prepareRecipeSqlImport(recipeId, dsn, onLog = () => {}, on
     done += 1;
   }
 
+  onProgress(52, 'MySQL8-Kompatibilität…');
+  if (fs.existsSync(resources)) {
+    const p = patchMysql8CompatInResources(resources, onLog);
+    if (p.patched) onLog(`${p.patched} Datei(en) für MySQL 8 angepasst.`);
+  }
+
   onProgress(55, 'SQL-Dateien importieren…');
   onLog('Importiere Tabellen in die Datenbank…');
 
@@ -116,6 +124,18 @@ export async function prepareRecipeSqlImport(recipeId, dsn, onLog = () => {}, on
     });
     imported += r.imported || 0;
     failed += r.failed || 0;
+  }
+
+  onProgress(90, 'Addon-Spalten prüfen…');
+  try {
+    const conn = await mysql.createConnection({ uri: dsn, multipleStatements: true });
+    try {
+      await ensureEsxAddonColumns(conn, onLog);
+    } finally {
+      await conn.end();
+    }
+  } catch (err) {
+    onLog(`Spalten-Check: ${String(err.message || err).slice(0, 140)}`);
   }
 
   onProgress(95, 'Aufräumen…');
