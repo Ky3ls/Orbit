@@ -2479,24 +2479,25 @@ async function handleApi(req, res, url) {
       return json(res, 403, { error: 'Keine Schreibrechte für Einstellungen.' });
     }
     const body = await readBody(req);
-    const hostname = str(body.hostname, 80);
-    const project = str(body.project, 80);
-    const fivemHost = str(body.fivemHost, 64);
-    const fivemPort = Number(body.fivemPort);
-    if (hostname.length < 2) return json(res, 400, { error: 'Hostname fehlt.' });
-    if (fivemHost !== '127.0.0.1') return json(res, 400, { error: 'FiveM-Host muss 127.0.0.1 bleiben.' });
-    if (!Number.isInteger(fivemPort) || fivemPort < 1 || fivemPort > 65535) return json(res, 400, { error: 'Port ungültig.' });
-    let allow = '';
-    if (me.role === 'owner') {
-      allow = str(body.ipAllowlist, 500);
-      if (allow && !allow.split(/[\s,]+/).every((item) => /^[\d.:a-fA-F]{3,45}$/.test(item))) {
-        return json(res, 400, { error: 'Allowlist enthält keine gültige IP.' });
-      }
+    // Partial update: nur gesetzte Felder validieren/schreiben (Tabs senden nur ihren Scope).
+    if (body.hostname !== undefined) {
+      const hostname = str(body.hostname, 80);
+      if (hostname.length < 2) return json(res, 400, { error: 'Hostname fehlt.' });
+      setSetting(db, 'hostname', hostname);
     }
-    setSetting(db, 'hostname', hostname);
-    setSetting(db, 'project', project);
-    setSetting(db, 'fivemHost', fivemHost);
-    setSetting(db, 'fivemPort', fivemPort);
+    if (body.project !== undefined) setSetting(db, 'project', str(body.project, 80));
+    if (body.fivemHost !== undefined) {
+      const fivemHost = str(body.fivemHost, 64);
+      if (fivemHost !== '127.0.0.1') return json(res, 400, { error: 'FiveM-Host muss 127.0.0.1 bleiben.' });
+      setSetting(db, 'fivemHost', fivemHost);
+    }
+    if (body.fivemPort !== undefined) {
+      const fivemPort = Number(body.fivemPort);
+      if (!Number.isInteger(fivemPort) || fivemPort < 1 || fivemPort > 65535) {
+        return json(res, 400, { error: 'Port ungültig.' });
+      }
+      setSetting(db, 'fivemPort', fivemPort);
+    }
 
     // General
     if (body.serverName !== undefined) {
@@ -2566,32 +2567,51 @@ async function handleApi(req, res, url) {
       setSetting(db, 'hideRestartWarnNotif', body.hideRestartWarnNotif ? '1' : '0');
     }
 
-    const onesync = body.onesync === 'off' ? 'off' : body.onesync === 'legacy' ? 'legacy' : 'on';
-    setSetting(db, 'onesync', onesync);
-    const maxSlots = Number(body.maxClients);
-    if (Number.isInteger(maxSlots) && maxSlots >= 1 && maxSlots <= 2048) {
-      setSetting(db, 'maxClients', String(maxSlots));
-      runtime.maxClients = maxSlots;
+    if (body.onesync !== undefined) {
+      const onesync = body.onesync === 'off' ? 'off' : body.onesync === 'legacy' ? 'legacy' : 'on';
+      setSetting(db, 'onesync', onesync);
     }
-    setSetting(db, 'tags', str(body.tags || '', 200));
-    setSetting(db, 'locale', str(body.locale || body.language || 'de-DE', 16));
-    const gameBuild = str(body.gameBuild || '', 8);
-    if (gameBuild && !/^\d{4,5}$/.test(gameBuild)) {
-      return json(res, 400, { error: 'Game Build ungültig.' });
-    }
-    setSetting(db, 'gameBuild', gameBuild);
-    if (me.role === 'owner') {
-      if (body.controlEnabled === false) setSetting(db, 'controlEnabled', '0');
-      else setSetting(db, 'controlEnabled', '1');
-      setSetting(db, 'ipAllowlist', allow);
-      setSetting(db, 'discordEnabled', body.discordEnabled ? '1' : '0');
-      setSetting(db, 'discordNotifyDrops', body.discordNotifyDrops ? '1' : '0');
-      const webhook = str(body.discordWebhook || '', 300);
-      if (webhook && !/^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\//.test(webhook)) {
-        return json(res, 400, { error: 'Discord-Webhook ungültig.' });
+    if (body.maxClients !== undefined) {
+      const maxSlots = Number(body.maxClients);
+      if (Number.isInteger(maxSlots) && maxSlots >= 1 && maxSlots <= 2048) {
+        setSetting(db, 'maxClients', String(maxSlots));
+        runtime.maxClients = maxSlots;
       }
-      setSetting(db, 'discordWebhook', webhook);
-      setSetting(db, 'discordGuild', str(body.discordGuild || '', 64));
+    }
+    if (body.tags !== undefined) setSetting(db, 'tags', str(body.tags || '', 200));
+    if (body.locale !== undefined || body.language !== undefined) {
+      setSetting(db, 'locale', str(body.locale || body.language || 'de-DE', 16));
+    }
+    if (body.gameBuild !== undefined) {
+      const gameBuild = str(body.gameBuild || '', 8);
+      if (gameBuild && !/^\d{4,5}$/.test(gameBuild)) {
+        return json(res, 400, { error: 'Game Build ungültig.' });
+      }
+      setSetting(db, 'gameBuild', gameBuild);
+    }
+    if (me.role === 'owner') {
+      if (body.controlEnabled !== undefined) {
+        setSetting(db, 'controlEnabled', body.controlEnabled === false ? '0' : '1');
+      }
+      if (body.ipAllowlist !== undefined) {
+        const allow = str(body.ipAllowlist, 500);
+        if (allow && !allow.split(/[\s,]+/).every((item) => /^[\d.:a-fA-F]{3,45}$/.test(item))) {
+          return json(res, 400, { error: 'Allowlist enthält keine gültige IP.' });
+        }
+        setSetting(db, 'ipAllowlist', allow);
+      }
+      if (body.discordEnabled !== undefined) setSetting(db, 'discordEnabled', body.discordEnabled ? '1' : '0');
+      if (body.discordNotifyDrops !== undefined) {
+        setSetting(db, 'discordNotifyDrops', body.discordNotifyDrops ? '1' : '0');
+      }
+      if (body.discordWebhook !== undefined) {
+        const webhook = str(body.discordWebhook || '', 300);
+        if (webhook && !/^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\//.test(webhook)) {
+          return json(res, 400, { error: 'Discord-Webhook ungültig.' });
+        }
+        setSetting(db, 'discordWebhook', webhook);
+      }
+      if (body.discordGuild !== undefined) setSetting(db, 'discordGuild', str(body.discordGuild || '', 64));
       if (body.discordWarningsChannel !== undefined) {
         setSetting(db, 'discordWarningsChannel', str(body.discordWarningsChannel, 64));
       }
@@ -2607,23 +2627,41 @@ async function handleApi(req, res, url) {
         try { JSON.parse(raw || '{}'); } catch { return json(res, 400, { error: 'Status-Config JSON ungültig.' }); }
         setSetting(db, 'discordStatusConfigJson', raw);
       }
-      setSetting(db, 'discordBotEnabled', body.discordBotEnabled ? '1' : '0');
-      const botTok = str(body.discordBotToken || '', 200);
-      if (botTok) setSetting(db, 'discordBotToken', botTok);
-      const rconPort = Number(body.rconPort);
-      if (body.rconPort !== undefined && body.rconPort !== '' && (!Number.isInteger(rconPort) || rconPort < 1 || rconPort > 65535)) {
-        return json(res, 400, { error: 'RCON-Port ungültig.' });
+      if (body.discordBotEnabled !== undefined) {
+        setSetting(db, 'discordBotEnabled', body.discordBotEnabled ? '1' : '0');
       }
-      if (Number.isInteger(rconPort)) setSetting(db, 'rconPort', String(rconPort));
-      const rconPw = str(body.rconPassword || '', 128);
-      if (rconPw) setSetting(db, 'rconPassword', rconPw);
-      const mode = body.fxControlMode === 'orbit' ? 'orbit' : 'systemd';
-      setSetting(db, 'fxControlMode', mode);
-      const fxRoot = str(body.fxServerRoot || '', 256);
-      const fxData = str(body.fxDataPath || '', 256);
-      const fxExtra = str(body.fxServerExtraArgs || '', 400);
-      if (fxRoot) setSetting(db, 'fxServerRoot', fxRoot);
-      if (fxData) setSetting(db, 'fxDataPath', fxData);
+      if (body.discordBotToken !== undefined) {
+        const botTok = str(body.discordBotToken || '', 200);
+        if (botTok) setSetting(db, 'discordBotToken', botTok);
+      }
+      // RCON-Port optional: leer / 0 = deaktiviert (Fallback auf FiveM-Port zur Laufzeit).
+      if (body.rconPort !== undefined) {
+        const raw = String(body.rconPort ?? '').trim();
+        if (raw === '' || raw === '0') {
+          setSetting(db, 'rconPort', '');
+        } else {
+          const rconPort = Number(raw);
+          if (!Number.isInteger(rconPort) || rconPort < 1 || rconPort > 65535) {
+            return json(res, 400, { error: 'RCON-Port ungültig.' });
+          }
+          setSetting(db, 'rconPort', String(rconPort));
+        }
+      }
+      if (body.rconPassword !== undefined) {
+        const rconPw = str(body.rconPassword || '', 128);
+        if (rconPw) setSetting(db, 'rconPassword', rconPw);
+      }
+      if (body.fxControlMode !== undefined) {
+        setSetting(db, 'fxControlMode', body.fxControlMode === 'orbit' ? 'orbit' : 'systemd');
+      }
+      if (body.fxServerRoot !== undefined) {
+        const fxRoot = str(body.fxServerRoot || '', 256);
+        if (fxRoot) setSetting(db, 'fxServerRoot', fxRoot);
+      }
+      if (body.fxDataPath !== undefined) {
+        const fxData = str(body.fxDataPath || '', 256);
+        if (fxData) setSetting(db, 'fxDataPath', fxData);
+      }
       if (body.fxCfgPath !== undefined) setSetting(db, 'fxCfgPath', str(body.fxCfgPath, 256) || 'server.cfg');
       if (body.quietMode !== undefined) setSetting(db, 'quietMode', body.quietMode ? '1' : '0');
       if (body.fxAutostart !== undefined) setSetting(db, 'fxAutostart', body.fxAutostart ? '1' : '0');
@@ -2636,8 +2674,17 @@ async function handleApi(req, res, url) {
       }
       if (body.autoRestartEnabled === false) setSetting(db, 'autoRestartEnabled', '0');
       else if (body.autoRestartEnabled === true) setSetting(db, 'autoRestartEnabled', '1');
-      syncActiveCfgPath(settingMap(db));
-      setSetting(db, 'fxServerExtraArgs', fxExtra);
+      if (body.fxServerExtraArgs !== undefined) {
+        setSetting(db, 'fxServerExtraArgs', str(body.fxServerExtraArgs || '', 400));
+      }
+      if (
+        body.fxControlMode !== undefined
+        || body.fxServerRoot !== undefined
+        || body.fxDataPath !== undefined
+        || body.fxCfgPath !== undefined
+      ) {
+        syncActiveCfgPath(settingMap(db));
+      }
     }
     try {
       const map = settingMap(db);

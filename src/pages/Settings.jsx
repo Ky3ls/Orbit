@@ -40,6 +40,42 @@ const ALLOWLIST_MODE_KEYS = {
 
 const ALLOWLIST_MODE_VALUES = ['disabled', 'admin_only', 'discord_member', 'discord_roles', 'approved_license', 'external'];
 
+/** Felder je Settings-Tab — verhindert Cross-Tab-Validierung (z. B. RCON beim Language-Save). */
+const SECTION_FIELDS = {
+  general: [
+    'serverName', 'language', 'locale', 'hostname', 'project',
+    'maxClients', 'tags', 'gameBuild', 'fivemHost', 'fivemPort',
+  ],
+  fxserver: [
+    'hostname', 'fivemHost', 'fivemPort',
+    'fxControlMode', 'fxDataPath', 'fxCfgPath', 'fxServerExtraArgs', 'fxServerRoot',
+    'onesync', 'resourceStartingTolerance', 'quietMode', 'fxAutostart', 'autoRestartEnabled',
+    'rconPort', 'rconPassword',
+  ],
+  bans: ['banChecking', 'banRejectionMessage', 'requiredHwidMatches'],
+  allowlist: ['allowlistMode', 'allowlistEnabled', 'allowlistInstructions', 'allowlistDiscordRoles'],
+  discord: [
+    'discordEnabled', 'discordNotifyDrops', 'discordWebhook', 'discordGuild',
+    'discordWarningsChannel', 'discordStatusEmbedJson', 'discordStatusConfigJson',
+    'discordBotEnabled', 'discordBotToken',
+  ],
+  game: [
+    'gameMenuEnabled', 'gameMenuAlignRight', 'gameMenuPageKey',
+    'hideAdminInPunishments', 'hideAdminInMessages', 'hideAnnouncementNotif',
+    'hideDmNotif', 'hideWarnNotif', 'hideRestartWarnNotif',
+  ],
+};
+
+function pickSectionPayload(form, section) {
+  const keys = SECTION_FIELDS[section];
+  if (!keys) return { ...form };
+  const out = {};
+  for (const k of keys) {
+    if (form[k] !== undefined) out[k] = form[k];
+  }
+  return out;
+}
+
 function ModuleCard({ title, lead, children, actions, wide }) {
   return (
     <article className={`st-mod${wide ? ' st-wide' : ''}`}>
@@ -206,13 +242,16 @@ export default function Settings({ user, onUser, onSetupReset }) {
     setErr('');
     setMsg('');
     try {
-      const payload = {
-        ...form,
-        language: form.language || form.locale,
-        locale: toBcp47(form.language || form.locale || 'de'),
-      };
+      const base = pickSectionPayload(form, section);
+      const payload = section === 'general'
+        ? {
+          ...base,
+          language: form.language || form.locale,
+          locale: toBcp47(form.language || form.locale || 'de'),
+        }
+        : base;
       await api('/api/settings', { method: 'PUT', body: payload });
-      setLanguage(payload.language);
+      if (payload.language) setLanguage(payload.language);
       setMsg(t('common.saved'));
       load();
     } catch (error) {
