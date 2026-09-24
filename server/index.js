@@ -164,6 +164,7 @@ function syncActiveCfgPermissions() {
     return syncOrbitPermissionsFile(path.join(dataPath, cfgName), {
       db,
       master: loadMasterIdentity(db),
+      profile: settings.profileRecipe || undefined,
     });
   } catch {
     return { changed: false };
@@ -278,7 +279,10 @@ function persistFivemCfgFromSettings(settings) {
     tags: settings.tags || '',
     locale: settings.locale || 'de-DE',
   });
-  writeCfg(applyOrbitPermissionsToCfg(next, { master: loadMasterIdentity(db) }));
+  writeCfg(applyOrbitPermissionsToCfg(next, {
+    master: loadMasterIdentity(db),
+    profile: settingMap(db).profileRecipe || undefined,
+  }));
 }
 
 function redirect(res, location, extraHeaders = []) {
@@ -1381,6 +1385,7 @@ async function handleApi(req, res, url) {
           panelUrl: ORIGIN,
           ingameToken,
           importSql: !sqlAlreadyReady,
+          db,
         };
         if (sqlAlreadyReady) logLine('info', 'SQL bereits im DB-Schritt importiert — übersprungen.');
         // Bei Übernahme: Recipe nur wenn leer oder explizit neu
@@ -1407,6 +1412,18 @@ async function handleApi(req, res, url) {
           }
         } else {
           logLine('info', `Bestehenden Server übernommen (${dataPath}) — Recipe übersprungen.`);
+        }
+        // Permissions immer ans CFG-Ende (ESX-ACEs nur bei recipe=esx)
+        try {
+          const cfgFile = path.join(dataPath, 'server.cfg');
+          const synced = syncOrbitPermissionsFile(cfgFile, {
+            db,
+            profile: recipe,
+            master: loadMasterIdentity(db),
+          });
+          if (synced.changed) logLine('info', 'Permissions-Block in server.cfg geschrieben.');
+        } catch (err) {
+          logLine('warn', `Permissions-Block: ${err.message}`);
         }
         syncResourcesFromDisk(db);
         imported = (RECIPES[recipe] || RECIPES.blank).length;
@@ -2262,7 +2279,10 @@ async function handleApi(req, res, url) {
     }
     const merged = mergeCfgSecrets(original, content);
     try {
-      const withPerms = applyOrbitPermissionsToCfg(merged, { master: loadMasterIdentity(db) });
+      const withPerms = applyOrbitPermissionsToCfg(merged, {
+        master: loadMasterIdentity(db),
+        profile: settingMap(db).profileRecipe || undefined,
+      });
       writeCfgFile(targetRel, withPerms);
     } catch (err) {
       const draft = path.join(DATA_DIR, 'server.cfg.draft');

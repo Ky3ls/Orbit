@@ -1,11 +1,21 @@
 /**
  * Orbit Permissions-Block für server.cfg — immer am Dateiende.
- * Master-Principals (fivem:/discord:) nur wenn Owner verknüpft hat.
+ *
+ * Format:
+ *   # Permissions
+ *   add_principal group.admin group.user
+ *   add_ace group.admin command allow # allow all commands
+ *   …
+ *
+ * resource.es_extended-* nur wenn Setup-Profil ESX.
+ * Master fivem:/discord: nur wenn Owner verknüpft.
  */
 import fs from 'node:fs';
 
-export const ORBIT_PERM_BEGIN = '# --- Orbit Permissions ---';
-export const ORBIT_PERM_END = '# --- Ende Orbit Permissions ---';
+export const ORBIT_PERM_BEGIN = '# Permissions';
+/** Legacy-Marker (werden beim Sync entfernt) */
+const LEGACY_PERM_BEGIN = '# --- Orbit Permissions ---';
+const LEGACY_PERM_END = '# --- Ende Orbit Permissions ---';
 
 const MANAGED_LINE_RES = [
   /^\s*add_principal\s+group\.admin\s+group\.user\b/i,
@@ -16,6 +26,9 @@ const MANAGED_LINE_RES = [
   /^\s*add_ace\s+resource\.qb-core\s+command\b/i,
   /^\s*add_principal\s+identifier\.(fivem|discord):\S+\s+group\.admin\b/i,
   /^\s*#\s*Admin-Befehle\b/i,
+  /^\s*#\s*Permissions\s*$/i,
+  /^\s*#\s*---\s*Orbit Permissions\s*---\s*$/i,
+  /^\s*#\s*---\s*Ende Orbit Permissions\s*---\s*$/i,
 ];
 
 /**
@@ -30,7 +43,6 @@ export function buildOrbitPermissionsBlock(master = {}, opts = {}) {
     'add_ace group.admin command.quit deny # but don\'t allow quit',
   ];
 
-  const profile = opts.profile || 'esx';
   const includeEsx = opts.includeEsx === true;
   const includeQb = opts.includeQb === true;
 
@@ -60,7 +72,6 @@ export function buildOrbitPermissionsBlock(master = {}, opts = {}) {
     lines.push(`add_principal identifier.discord:${discordId} group.admin${cfxName ? ` #${cfxName}` : ''}`);
   }
 
-  lines.push(ORBIT_PERM_END);
   return `${lines.join('\n')}\n`;
 }
 
@@ -82,13 +93,33 @@ export function loadMasterIdentity(db) {
   }
 }
 
+/** Setup-/Settings-Profil: esx | qb | blank */
+export function resolvePermissionProfile(opts = {}) {
+  const explicit = String(opts.profile || opts.recipe || '').toLowerCase().trim();
+  if (explicit === 'esx' || explicit === 'qb' || explicit === 'blank') return explicit;
+  if (opts.db) {
+    try {
+      const row = opts.db.prepare(`SELECT v FROM settings WHERE k = 'profileRecipe'`).get();
+      const v = String(row?.v || '').toLowerCase().trim();
+      if (v === 'esx' || v === 'qb' || v === 'blank') return v;
+    } catch { /* */ }
+  }
+  const t = String(opts.cfgText || '');
+  if (/qb-core/i.test(t)) return 'qb';
+  if (/es_extended|ensure\s+\[core\]/i.test(t)) return 'esx';
+  return 'blank';
+}
+
 function stripOrbitPermissionBlocks(text) {
   let out = String(text || '');
-  const blockRe = new RegExp(
-    `${ORBIT_PERM_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${ORBIT_PERM_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n?`,
+  // Legacy Block mit Ende-Marker
+  const legacyRe = new RegExp(
+    `${LEGACY_PERM_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${LEGACY_PERM_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n?`,
     'gi',
   );
-  out = out.replace(blockRe, '');
+  out = out.replace(legacyRe, '');
+  // Ab "# Permissions" bis Dateiende (unser Block ist immer zuletzt)
+  out = out.replace(/(?:\r?\n)*#\s*Permissions\s*(?:\r?\n[\s\S]*)?$/i, '');
   const lines = out.split(/\r?\n/);
   const kept = lines.filter((line) => {
     const t = line.trim();
@@ -98,27 +129,14 @@ function stripOrbitPermissionBlocks(text) {
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
 }
 
-function detectProfile(cfg, explicit) {
-  if (explicit) return explicit;
-  const t = String(cfg || '');
-  if (/qb-core/i.test(t)) return 'qb';
-  if (/es_extended|ensure\s+\[core\]/i.test(t)) return 'esx';
-  return 'esx';
-}
-
 /**
- * Entfernt streuende ACE/Principal-Zeilen und hängt den Orbit-Block am Ende an.
+ * Entfernt streuende ACE/Principal-Zeilen und hängt `# Permissions` am Ende an.
  */
 export function applyOrbitPermissionsToCfg(cfgText, opts = {}) {
-  const profile = detectProfile(cfgText, opts.profile);
+  const profile = resolvePermissionProfile({ ...opts, cfgText });
   const body = stripOrbitPermissionBlocks(cfgText);
-  const src = String(cfgText || '');
-  const includeEsx = opts.includeEsx === true
-    || profile === 'esx'
-    || /es_extended|ensure\s+\[core\]/i.test(src);
-  const includeQb = opts.includeQb === true
-    || profile === 'qb'
-    || /qb-core/i.test(src);
+  const includeEsx = opts.includeEsx === true || profile === 'esx';
+  const includeQb = opts.includeQb === true || profile === 'qb';
   const block = buildOrbitPermissionsBlock(opts.master || {}, {
     profile,
     includeEsx,
@@ -135,7 +153,7 @@ export function syncOrbitPermissionsFile(cfgPath, opts = {}) {
   if (!cfgPath || !fs.existsSync(cfgPath)) return { changed: false, text: '' };
   const prev = fs.readFileSync(cfgPath, 'utf8');
   const master = opts.master || (opts.db ? loadMasterIdentity(opts.db) : {});
-  const next = applyOrbitPermissionsToCfg(prev, { ...opts, master });
+  const next = applyOrbitPermissionsToCfg(prev, { ...opts, master, cfgText: prev });
   if (next === prev) return { changed: false, text: prev };
   fs.writeFileSync(cfgPath, next, { encoding: 'utf8', mode: 0o644 });
   return { changed: true, text: next };

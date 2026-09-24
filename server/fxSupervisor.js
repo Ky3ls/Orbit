@@ -188,8 +188,12 @@ export async function startFxProcess(settings, logLine, opts = {}) {
       syncChatFromArtifact(launch.dataPath, launch.fxRoot, (m) => logLine('info', `[FX:${key}] ${m}`));
       const cfgName = String(settings.fxCfgPath || 'server.cfg').replace(/^\/+/, '') || 'server.cfg';
       const cfgFile = path.join(launch.dataPath, cfgName);
-      const synced = syncOrbitPermissionsFile(cfgFile, { db: database, master: loadMasterIdentity(database) });
-      if (synced.changed) logLine('info', `[FX:${key}] Orbit Permissions in ${cfgName} aktualisiert (Dateiende).`);
+      const synced = syncOrbitPermissionsFile(cfgFile, {
+        db: database,
+        master: loadMasterIdentity(database),
+        profile: String(settings.profileRecipe || '').trim() || undefined,
+      });
+      if (synced.changed) logLine('info', `[FX:${key}] Permissions in ${cfgName} aktualisiert (Dateiende).`);
     }
     // Launch-Args mit Token nachreichen falls resolve ohne db lief
     if (!opts.db) {
