@@ -42,13 +42,17 @@ export function patchMysql8CompatInResources(resourcesRoot, onLog = () => {}) {
     // Typischer esx_property One-Liner (MySQL 8 hat kein ADD COLUMN IF NOT EXISTS)
     const next = raw.replace(
       /MySQL\.query\(\s*"ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `last_property` LONGTEXT NULL"\s*,\s*function\(result\)\s*([\s\S]*?)\s*end\)/m,
-      `do
+      (_m, body) => {
+        const inner = String(body || '').replace(/^\n/, '').replace(/\n$/, '');
+        return `do
 \tlocal col = MySQL.scalar.await([[SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'last_property']])
 \tif not col or tonumber(col) == 0 then
 \t\tMySQL.query("ALTER TABLE \`users\` ADD COLUMN \`last_property\` LONGTEXT NULL", function(result)
-$1\tend)
+${inner}
+\t\tend)
 \tend
-end`,
+end`;
+      },
     );
 
     let out = next;
