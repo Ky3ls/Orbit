@@ -41,7 +41,9 @@ body {
   border-color: rgba(46, 230, 197, 0.3) !important;
   background: rgba(46, 230, 197, 0.06) !important;
 }
-.mark svg path, .mark svg circle { stroke: var(--accent); fill: var(--accent); }
+.mark svg .mk-ring { stroke: var(--accent); fill: none; }
+.mark svg .mk-core,
+.mark svg .mk-sat { fill: var(--accent); stroke: none; }
 
 .orbit-stage {
   width: min(1280px, calc(100% - 28px)) !important;
