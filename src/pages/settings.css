@@ -135,6 +135,36 @@
 }
 .st-span-2 { grid-column: span 2; }
 
+.st-tpl-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.st-tpl-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.st-tpl-list strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 14px;
+}
+.st-tpl-list .muted {
+  font-size: 12px;
+}
+.st-fields .osel {
+  grid-column: 1 / -1;
+}
+
 .st-row {
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);

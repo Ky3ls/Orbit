@@ -88,6 +88,9 @@ import {
   matchingOnlinePlayers,
   mergePlayerIdentifiers,
   listBanTemplates,
+  createBanTemplate,
+  updateBanTemplate,
+  deleteBanTemplate,
   ensureModerationSchema,
   isWhitelisted,
 } from './moderation.js';
@@ -1824,6 +1827,61 @@ async function handleApi(req, res, url) {
     db.prepare('UPDATE bans SET revoked = 1 WHERE id = ?').run(Number(revoke[1]));
     audit(db, me.username, 'unban', revoke[1], ip);
     return json(res, 200, { ok: true });
+  }
+
+  if (method === 'GET' && pathname === '/api/ban-templates') {
+    if (!hasPerm(me, 'bans') && !hasPerm(me, 'players')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    ensureModerationSchema(db);
+    return json(res, 200, {
+      templates: listBanTemplates(db),
+      presets: banDurationPresets(),
+    });
+  }
+
+  if (method === 'POST' && pathname === '/api/ban-templates') {
+    if (!hasPerm(me, 'bans') || me.role === 'moderator') return json(res, 403, { error: 'Nur Admins/Owner.' });
+    ensureModerationSchema(db);
+    const body = await readBody(req);
+    try {
+      const row = createBanTemplate(db, {
+        reason: body.reason,
+        durationId: body.durationId || body.duration_id,
+        sort: body.sort,
+      });
+      audit(db, me.username, 'ban.template.add', String(row.id), ip);
+      return json(res, 200, { ok: true, template: row });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  const tplPatch = pathname.match(/^\/api\/ban-templates\/(\d+)$/);
+  if (tplPatch && method === 'PUT') {
+    if (!hasPerm(me, 'bans') || me.role === 'moderator') return json(res, 403, { error: 'Nur Admins/Owner.' });
+    ensureModerationSchema(db);
+    const body = await readBody(req);
+    try {
+      const row = updateBanTemplate(db, tplPatch[1], {
+        reason: body.reason,
+        durationId: body.durationId || body.duration_id,
+        sort: body.sort,
+      });
+      audit(db, me.username, 'ban.template.edit', String(row.id), ip);
+      return json(res, 200, { ok: true, template: row });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+  if (tplPatch && method === 'DELETE') {
+    if (!hasPerm(me, 'bans') || me.role === 'moderator') return json(res, 403, { error: 'Nur Admins/Owner.' });
+    ensureModerationSchema(db);
+    try {
+      deleteBanTemplate(db, tplPatch[1]);
+      audit(db, me.username, 'ban.template.del', tplPatch[1], ip);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      return json(res, 404, { error: err.message });
+    }
   }
 
   if (method === 'GET' && pathname === '/api/whitelist') {
