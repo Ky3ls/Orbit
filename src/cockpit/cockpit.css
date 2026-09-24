@@ -36,6 +36,11 @@
   background: var(--bg);
 }
 
+/* Sidebar ohne Top-Bar: Cockpit füllt die Column */
+.ws[data-nav='sidebar'][data-cockpit='1'] .ck {
+  height: 100%;
+}
+
 .ck-hud {
   display: flex;
   flex-direction: column;

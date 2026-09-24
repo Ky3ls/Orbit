@@ -294,6 +294,14 @@ export default function Workspace({ user, onLogout }) {
             </button>
           </div>
 
+          <div
+            className="ws-rail-live"
+            title={`${statusLabel(status)} ${live.clients}/${live.maxClients}`}
+          >
+            <span className={`ws-status ws-tone-${statusTone(status)}`}>{statusLabel(status)}</span>
+            <span className="ws-status">{live.clients}/{live.maxClients}</span>
+          </div>
+
           <nav className="ws-rail-nav">
             {MODULES.map((group) => (
               <div key={group.id} className="ws-rail-group">
