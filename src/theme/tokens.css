@@ -46,10 +46,21 @@
   color: var(--accent);
 }
 
-.mark svg path,
-.mark svg circle {
+.mark svg {
+  color: inherit;
+  overflow: visible;
+}
+.mark svg .mk-ring {
+  fill: none !important;
   stroke: currentColor !important;
+}
+.mark svg .mk-ring-dim {
+  opacity: 0.42;
+}
+.mark svg .mk-core,
+.mark svg .mk-sat {
   fill: currentColor !important;
+  stroke: none !important;
 }
 
 .btn-primary {

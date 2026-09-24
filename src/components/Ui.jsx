@@ -1,12 +1,31 @@
 import { Children, isValidElement, memo, useEffect, useId, useState } from 'react';
 import { ModuleShell } from '../workspace/Module.jsx';
 
+/** Orbit-Mark: Kern + gekreuzte Orbits + Satellit — skaliert scharf, Farbe via currentColor / --accent */
 export function Mark() {
   return (
     <div className="mark" aria-hidden="true">
       <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-        <path d="M6 25 L16 6 L26 25" stroke="currentColor" strokeWidth="2.4" />
-        <circle cx="16" cy="20" r="2.3" fill="currentColor" />
+        <ellipse
+          className="mk-ring"
+          cx="16"
+          cy="16"
+          rx="13"
+          ry="5.6"
+          transform="rotate(-32 16 16)"
+          strokeWidth="2.35"
+        />
+        <ellipse
+          className="mk-ring mk-ring-dim"
+          cx="16"
+          cy="16"
+          rx="5.6"
+          ry="13"
+          transform="rotate(-32 16 16)"
+          strokeWidth="1.7"
+        />
+        <circle className="mk-core" cx="16" cy="16" r="4.85" />
+        <circle className="mk-sat" cx="27" cy="9.1" r="2.75" />
       </svg>
     </div>
   );
