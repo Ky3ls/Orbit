@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fmtBytes } from '../format.js';
 import FxStatusStrip from '../components/FxStatusStrip.jsx';
 import { AreaChart, Gauge, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const pctAxis = (v) => `${Math.round(v)}%`;
 const intAxis = (v) => `${Math.round(v)}`;
@@ -24,6 +25,7 @@ function stateKey(s) {
 }
 
 export default function Monitoring() {
+  const { t } = useI18n();
   const [state, setState] = useState(null);
   const keyRef = useRef('');
   const pending = useRef(null);
@@ -69,7 +71,7 @@ export default function Monitoring() {
     <Page>
       <PageHeader
         eyebrow="Host"
-        title="Monitoring"
+        title={t('page.monitoring')}
         description="Host-Last und Spielerzahl · Spielstatus vom FiveM-Endpunkt."
       />
       <div className="mon-page">

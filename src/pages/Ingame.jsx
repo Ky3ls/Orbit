@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const FEATURES = [
   {
@@ -29,6 +30,7 @@ const FEATURES = [
 ];
 
 export default function Ingame({ user }) {
+  const { t } = useI18n();
   const [status, setStatus] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,7 +56,7 @@ export default function Ingame({ user }) {
     <Page>
       <PageHeader
         eyebrow="Ingame"
-        title="Orbit Menü"
+        title={t('page.ingame')}
         description="Eigenes Admin-Menü als System-Resource — Orbit-Design, Orbit-Befehle."
       />
       {err && <div className="err">{err}</div>}
