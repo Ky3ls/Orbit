@@ -27,7 +27,8 @@ export default function Monitoring() {
   const [state, setState] = useState(null);
   const keyRef = useRef('');
   const pending = useRef(null);
-  const raf = useRef(0);
+  const flushTimer = useRef(0);
+  const lastApply = useRef(0);
 
   useEffect(() => {
     const es = new EventSource('/api/stream');
@@ -37,20 +38,23 @@ export default function Monitoring() {
       const key = stateKey(parsed);
       if (key === keyRef.current) return;
       keyRef.current = key;
+      lastApply.current = Date.now();
       setState(parsed);
     };
-    es.addEventListener('state', (e) => {
-      pending.current = e.data;
-      if (raf.current) return;
-      raf.current = requestAnimationFrame(() => {
-        raf.current = 0;
+    const schedule = (raw) => {
+      pending.current = raw;
+      const wait = Math.max(0, 2000 - (Date.now() - lastApply.current));
+      if (flushTimer.current) return;
+      flushTimer.current = window.setTimeout(() => {
+        flushTimer.current = 0;
         if (pending.current != null) apply(pending.current);
         pending.current = null;
-      });
-    });
+      }, wait);
+    };
+    es.addEventListener('state', (e) => schedule(e.data));
     return () => {
       es.close();
-      if (raf.current) cancelAnimationFrame(raf.current);
+      if (flushTimer.current) window.clearTimeout(flushTimer.current);
     };
   }, []);
 

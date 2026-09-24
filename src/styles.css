@@ -1409,8 +1409,7 @@ input:focus, select:focus, textarea:focus {
   padding: 16px;
   border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(12, 12, 16, 0.58);
-  backdrop-filter: blur(12px);
+  background: rgba(12, 12, 16, 0.92);
   box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
 }
 .o-card-flush { padding: 0; overflow: hidden; }
@@ -2090,4 +2089,61 @@ td .badge { margin-left: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .o-page { animation: none; }
+}
+
+/* —— Perf: Scroll/Listen/Charts —— */
+.chart { filter: none; }
+.pl-grid,
+.tm-list,
+.res-page-list,
+.ws-res-list,
+.pl-ban-aside-list,
+.tm-perms-body,
+.feed,
+.fx-log,
+.modal,
+.ws-main {
+  contain: layout style;
+  overscroll-behavior: contain;
+}
+.pl-card,
+.tm-card,
+.ws-res-row,
+.job {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+}
+.pl-card,
+.tm-card {
+  box-shadow: none;
+}
+.tm-perms-body,
+.pl-ban-aside-list,
+.tm-identity-aside,
+.modal {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), 0.45) rgba(255, 255, 255, 0.04);
+}
+.tm-perms-body::-webkit-scrollbar,
+.pl-ban-aside-list::-webkit-scrollbar,
+.tm-identity-aside::-webkit-scrollbar,
+.modal::-webkit-scrollbar {
+  width: 8px;
+}
+.tm-perms-body::-webkit-scrollbar-thumb,
+.pl-ban-aside-list::-webkit-scrollbar-thumb,
+.tm-identity-aside::-webkit-scrollbar-thumb,
+.modal::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-rgb), 0.45);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.tm-perms-body::-webkit-scrollbar-track,
+.pl-ban-aside-list::-webkit-scrollbar-track,
+.tm-identity-aside::-webkit-scrollbar-track,
+.modal::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
 }
