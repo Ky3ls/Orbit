@@ -1,11 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import './orbitSelect.css';
 
 /**
  * Orbit-Dropdown (kein natives <select> — eigener Look).
  * options: [{ value, label, hint? }]
  */
-export default function OrbitSelect({
+function OrbitSelect({
   label,
   value,
   options = [],
@@ -17,7 +17,11 @@ export default function OrbitSelect({
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const listId = useId();
-  const selected = options.find((o) => String(o.value) === String(value));
+  const valueKey = String(value);
+  const selected = useMemo(
+    () => options.find((o) => String(o.value) === valueKey),
+    [options, valueKey],
+  );
 
   useEffect(() => {
     if (!open) return undefined;
@@ -35,6 +39,15 @@ export default function OrbitSelect({
     };
   }, [open]);
 
+  const toggle = useCallback(() => {
+    if (!disabled) setOpen((v) => !v);
+  }, [disabled]);
+
+  const pick = useCallback((opt) => {
+    onChange?.(opt.value, opt);
+    setOpen(false);
+  }, [onChange]);
+
   return (
     <div className={`osel ${className}`.trim()} ref={rootRef}>
       {label ? <span className="osel-label">{label}</span> : null}
@@ -45,28 +58,25 @@ export default function OrbitSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
       >
         <span className={selected ? '' : 'osel-ph'}>
           {selected?.label || placeholder}
         </span>
         <i className="osel-caret" aria-hidden="true" />
       </button>
-      {open && (
+      {open ? (
         <ul id={listId} className="osel-menu" role="listbox">
           {options.length === 0 ? (
             <li className="osel-empty">Keine Einträge</li>
           ) : options.map((o) => {
-            const active = String(o.value) === String(value);
+            const active = String(o.value) === valueKey;
             return (
               <li key={String(o.value)} role="option" aria-selected={active}>
                 <button
                   type="button"
                   className={`osel-opt${active ? ' active' : ''}`}
-                  onClick={() => {
-                    onChange?.(o.value, o);
-                    setOpen(false);
-                  }}
+                  onClick={() => pick(o)}
                 >
                   <span>{o.label}</span>
                   {o.hint ? <small>{o.hint}</small> : null}
@@ -75,7 +85,9 @@ export default function OrbitSelect({
             );
           })}
         </ul>
-      )}
+      ) : null}
     </div>
   );
 }
+
+export default memo(OrbitSelect);
