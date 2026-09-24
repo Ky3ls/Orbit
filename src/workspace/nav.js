@@ -20,7 +20,7 @@ export const GROUPS = [
     id: 'server',
     label: 'Server',
     items: [
-      { to: '/cfg', label: 'server.cfg' },
+      { to: '/cfg', label: 'CFG' },
       { to: '/schedule', label: 'Zeitpläne' },
       { to: '/server-log', label: 'Server-Log' },
       { to: '/ingame', label: 'Ingame' },
