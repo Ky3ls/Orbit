@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, sameJson } from '../api.js';
 import { Page, PageHeader } from '../components/Ui.jsx';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 function matchFilter(text, q) {
   return !q || text.toLowerCase().includes(q.toLowerCase());
@@ -21,6 +22,7 @@ function statusTone(actual) {
 }
 
 export default function Resources() {
+  const { t } = useI18n();
   const [groups, setGroups] = useState([]);
   const [q, setQ] = useState('');
   const [qLive, setQLive] = useState('');
@@ -112,7 +114,7 @@ export default function Resources() {
     <Page className="res-page ws-module-flush">
       <PageHeader
         eyebrow="Betrieb"
-        title="Ressourcen"
+        title={t('page.resources')}
         description={
           online
             ? `${totalRes} Scripts · ${filtered.length} Ordner · Live`

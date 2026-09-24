@@ -6,6 +6,7 @@ import { AreaChart, Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../
 import OrbitSelect from '../components/OrbitSelect.jsx';
 import { BAN_DURATION_PRESETS, banDurationLabel } from './banPresets.js';
 import './players.css';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const ID_LABELS = {
   license: 'License', license2: 'License 2', discord: 'Discord', steam: 'Steam',
@@ -53,6 +54,7 @@ function playerFingerprint(p) {
 }
 
 export default function Players({ user }) {
+  const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = FILTERS.some((f) => f.id === searchParams.get('filter'))
     ? searchParams.get('filter')
@@ -370,7 +372,7 @@ export default function Players({ user }) {
     <Page>
       <PageHeader
         eyebrow="Spieler-Hub"
-        title="Spieler"
+        title={t('page.players')}
         description={`${onlineCount} online · ${Math.max(0, totalKnown - onlineCount)} offline · Drops 72h: ${dropTotal}`}
         actions={(
           <Badge tone={data.online ? 'ok' : 'bad'}>{onlineCount} live</Badge>

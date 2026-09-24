@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { Badge, Empty, Page, PageHeader } from '../components/Ui.jsx';
 import './schedule.css';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const PRESETS = [
   { label: 'Morgen-Neustart', hhmm: '06:00' },
@@ -25,6 +26,7 @@ function nextRunHint(hhmm) {
 }
 
 export default function Schedule() {
+  const { t } = useI18n();
   const [jobs, setJobs] = useState([]);
   const [label, setLabel] = useState('Server-Neustart');
   const [hhmm, setHhmm] = useState('06:00');
@@ -91,7 +93,7 @@ export default function Schedule() {
     <Page className="sch-page">
       <PageHeader
         eyebrow="Betrieb"
-        title="Automationen"
+        title={t('page.schedule')}
         description="Geplante Server-Neustarts zur gewählten Uhrzeit — wenn die Server-Steuerung aktiv ist."
       />
 

@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { fmtFull, roleLabel } from '../format.js';
 import { Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
 import './team.css';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const EMPTY_FORM = {
   username: '',
@@ -14,6 +15,7 @@ const EMPTY_FORM = {
 };
 
 export default function Admins() {
+  const { t } = useI18n();
   const [users, setUsers] = useState([]);
   const [catalog, setCatalog] = useState({ groups: [], templates: {} });
   const [err, setErr] = useState('');
@@ -126,7 +128,7 @@ export default function Admins() {
     <Page>
       <PageHeader
         eyebrow="System"
-        title="Team"
+        title={t('page.admins')}
         description="Accounts, Rollen und granulare Rechte — angebunden an das Panel-Permission-System."
         actions={(
           <button type="button" className="btn btn-primary" onClick={openCreate}>
