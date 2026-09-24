@@ -1,30 +1,44 @@
---[[ Orbit connect — Ban/Whitelist-Check wie txAdmin monitor playerConnecting ]]
+--[[ Orbit connect — Ban/Whitelist-Check beim Join ]]
 
 local function checkJoinEnabled()
-  -- Immer prüfen wenn Panel-Token da ist (Ban/WL kommt vom Panel)
   return ORBIT_TOKEN ~= '' and ORBIT_TOKEN ~= 'removed'
 end
 
+local function collectTokens(player)
+  local tokens = {}
+  if type(GetPlayerTokens) == 'function' then
+    local ok, list = pcall(GetPlayerTokens, player)
+    if ok and type(list) == 'table' then return list end
+  end
+  if type(GetNumPlayerTokens) == 'function' and player then
+    local ok, n = pcall(GetNumPlayerTokens, player)
+    if ok and type(n) == 'number' and n > 0 and type(GetPlayerToken) == 'function' then
+      for i = 0, n - 1 do
+        local tokOk, tok = pcall(GetPlayerToken, player, i)
+        if tokOk and tok then tokens[#tokens + 1] = tok end
+      end
+    end
+  end
+  return tokens
+end
+
 local function handleConnecting(name, setKickReason, d)
+  -- source MUSS vor defer/Wait gesichert werden (sonst nil → Native-Crash)
+  local player = source
+
   if OrbitIsShuttingDown and OrbitIsShuttingDown() then
     CancelEvent()
     setKickReason('[Orbit] Server wird neu gestartet, bitte kurz warten.')
     return
   end
   if not checkJoinEnabled() then return end
+  if not player then return end
 
   d.defer()
   Wait(0)
 
-  local src = source
-  local ids = GetPlayerIdentifiers(src) or {}
-  local tokens = {}
-  if GetNumPlayerTokens then
-    local n = GetNumPlayerTokens(src) or 0
-    for i = 0, n - 1 do
-      tokens[#tokens + 1] = GetPlayerToken(src, i)
-    end
-  end
+  local ids = GetPlayerIdentifiers(player) or {}
+  local tokens = collectTokens(player)
 
   if #ids < 1 then
     d.done('\n[Orbit] Keine Identifier — prüfe sv_lan / Rockstar-Login.')

@@ -68,13 +68,16 @@ function OrbitPlayerList()
   local list = {}
   for _, id in ipairs(GetPlayers()) do
     local src = tonumber(id)
-    local ids = GetPlayerIdentifiers(id) or {}
-    list[#list + 1] = {
-      id = src,
-      name = GetPlayerName(id) or ('#' .. id),
-      ping = GetPlayerPing(id) or 0,
-      identifiers = ids,
-    }
+    if src then
+      local okName, pname = pcall(GetPlayerName, id)
+      local okPing, ping = pcall(GetPlayerPing, id)
+      list[#list + 1] = {
+        id = src,
+        name = (okName and pname) or ('#' .. id),
+        ping = (okPing and ping) or 0,
+        identifiers = GetPlayerIdentifiers(id) or {},
+      }
+    end
   end
   return list
 end
@@ -108,16 +111,19 @@ local function syncJoin(src)
   -- Identifier sind oft erst nach 1 Tick verfügbar
   for _ = 1, 8 do
     local ids = GetPlayerIdentifiers(src) or {}
-    if #ids > 0 or GetPlayerName(src) == nil then break end
+    local okName, pname = pcall(GetPlayerName, src)
+    if #ids > 0 or not okName or pname == nil then break end
     Wait(50)
   end
-  if GetPlayerName(src) == nil then return end
+  local okName, pname = pcall(GetPlayerName, src)
+  if not okName or pname == nil then return end
+  local okPing, ping = pcall(GetPlayerPing, src)
   pushPlayers({
     event = 'playerJoining',
     player = {
       id = src,
-      name = GetPlayerName(src) or ('#' .. src),
-      ping = GetPlayerPing(src) or 0,
+      name = pname or ('#' .. src),
+      ping = (okPing and ping) or 0,
       identifiers = GetPlayerIdentifiers(src) or {},
     },
   })
