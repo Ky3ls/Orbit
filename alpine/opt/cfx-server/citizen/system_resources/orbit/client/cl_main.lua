@@ -265,6 +265,15 @@ RegisterNUICallback('close', function(_, cb)
   cb(1)
 end)
 
+RegisterNUICallback('setCursor', function(data, cb)
+  if not menuOpen then cb(0) return end
+  local want = data and data.enabled and true or false
+  -- Spieler-Tab / Modal: Maus an; Main: nur Tastatur, Input behalten
+  SetNuiFocus(true, want)
+  SetNuiFocusKeepInput(not want)
+  cb(1)
+end)
+
 RegisterNUICallback('healSelf', function(_, cb) TriggerServerEvent('orbit:adminHeal') cb(1) end)
 RegisterNUICallback('healAll', function(_, cb) TriggerServerEvent('orbit:adminHealAll') cb(1) end)
 RegisterNUICallback('announce', function(data, cb)
