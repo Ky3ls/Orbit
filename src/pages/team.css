@@ -134,17 +134,15 @@
   min-height: 0;
 }
 
-/* Breiteres Modal für 2-Spalten (Identität | Berechtigungen) */
-.modal.palette:has(.tm-form-layout) {
+/* Cluster wie Spieler-Modal: Identität (Aside links) + Berechtigungen (Hauptpanel) */
+.modal-cluster.with-aside:has(.tm-identity-aside) {
+  flex-direction: row-reverse;
   width: min(980px, 100%);
 }
 
-.tm-form-layout {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 1.75fr);
-  gap: 14px;
-  align-items: stretch;
-  min-height: 0;
+.modal-cluster.with-aside:has(.tm-identity-aside) .modal.palette {
+  flex: 1 1 auto;
+  width: min(700px, 100%);
 }
 
 .tm-form-col-title {
@@ -156,20 +154,25 @@
   color: var(--muted);
 }
 
-.tm-form-identity {
+.tm-identity-aside {
+  flex: 0 0 min(260px, 34vw);
+  width: min(260px, 34vw);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  max-height: inherit;
   padding: 14px;
-  border-radius: 14px;
+  border-radius: 18px;
   border: 1px solid var(--line);
   background:
     linear-gradient(160deg, rgba(var(--accent-rgb), 0.1), transparent 48%),
-    var(--bg-2);
-  min-width: 0;
+    rgba(12, 12, 16, 0.96);
+  box-shadow: var(--shadow);
+  overflow: auto;
 }
 
-.tm-form-identity .field {
+.tm-identity-aside .field {
   margin: 0;
 }
 
@@ -179,10 +182,6 @@
   gap: 8px;
   min-width: 0;
   min-height: 0;
-  padding: 14px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: var(--bg-2);
 }
 
 .tm-perms-hint {
@@ -271,8 +270,16 @@
     grid-template-columns: 1fr;
   }
 
-  .tm-form-layout {
-    grid-template-columns: 1fr;
+  .modal-cluster.with-aside:has(.tm-identity-aside) {
+    flex-direction: column;
+    width: min(720px, 100%);
+    overflow: auto;
+  }
+
+  .tm-identity-aside {
+    flex: none;
+    width: 100%;
+    max-height: none;
   }
 
   .tm-perms-body {
