@@ -3,7 +3,6 @@
 local menuOpen = false
 local isAdmin = false
 local lastTp = nil
-local noclip = false
 local god = false
 local superjump = false
 local showIds = false
@@ -16,14 +15,25 @@ end
 
 local function closeMenu()
   menuOpen = false
+  SetNuiFocusKeepInput(false)
   SetNuiFocus(false, false)
   SendNUIMessage({ action = 'close' })
+end
+
+-- Für „Zurück“-Teleport: Noclip speichert Startcoords wie txAdmin lastTpCoords
+function OrbitNoclipOnEnable(coords)
+  if coords then lastTp = coords end
 end
 
 local function notifyToggles()
   SendNUIMessage({
     action = 'toggles',
-    toggles = { noclip = noclip, god = god, superjump = superjump, ids = showIds },
+    toggles = {
+      noclip = OrbitIsNoclip and OrbitIsNoclip() or false,
+      god = god,
+      superjump = superjump,
+      ids = showIds,
+    },
   })
 end
 
@@ -49,7 +59,10 @@ end
 -- —— Modes ——
 local function setGod(state)
   god = state and true or false
-  SetEntityInvincible(PlayerPedId(), god)
+  if god and OrbitIsNoclip and OrbitIsNoclip() then
+    OrbitSetNoclip(false)
+  end
+  SetEntityInvincible(PlayerPedId(), god or (OrbitIsNoclip and OrbitIsNoclip()))
   notifyToggles()
   chat(god and 'Godmode an' or 'Godmode aus')
 end
@@ -61,54 +74,19 @@ local function setSuperjump(state)
 end
 
 local function setNoclip(state)
-  noclip = state and true or false
-  local ped = PlayerPedId()
-  SetEntityCollision(ped, not noclip, not noclip)
-  FreezeEntityPosition(ped, false)
-  SetEntityVisible(ped, not noclip, false)
-  SetEntityInvincible(ped, noclip or god)
-  notifyToggles()
-  chat(noclip and 'NoClip an' or 'NoClip aus')
-end
-
-CreateThread(function()
-  while true do
-    if noclip then
-      local ped = PlayerPedId()
-      local pos = GetEntityCoords(ped)
-      local cam = GetGameplayCamRot(2)
-      local speed = IsControlPressed(0, 21) and 4.0 or 1.2 -- Shift
-      local dx, dy, dz = 0.0, 0.0, 0.0
-      if IsControlPressed(0, 32) then -- W
-        local h = math.rad(cam.z)
-        dx = dx + (-math.sin(h) * speed)
-        dy = dy + (math.cos(h) * speed)
-      end
-      if IsControlPressed(0, 33) then -- S
-        local h = math.rad(cam.z)
-        dx = dx - (-math.sin(h) * speed)
-        dy = dy - (math.cos(h) * speed)
-      end
-      if IsControlPressed(0, 34) then -- A
-        local h = math.rad(cam.z + 90.0)
-        dx = dx + (-math.sin(h) * speed)
-        dy = dy + (math.cos(h) * speed)
-      end
-      if IsControlPressed(0, 35) then -- D
-        local h = math.rad(cam.z - 90.0)
-        dx = dx + (-math.sin(h) * speed)
-        dy = dy + (math.cos(h) * speed)
-      end
-      if IsControlPressed(0, 22) then dz = dz + speed end -- Space
-      if IsControlPressed(0, 36) then dz = dz - speed end -- Ctrl
-      SetEntityVelocity(ped, 0.0, 0.0, 0.0)
-      SetEntityCoordsNoOffset(ped, pos.x + dx, pos.y + dy, pos.z + dz, true, true, true)
-      Wait(0)
-    else
-      Wait(250)
-    end
+  -- txAdmin-Freecam 1:1 (cl_noclip.lua)
+  if god and state then
+    god = false -- wie txAdmin: vor Noclip Godmode aus
   end
-end)
+  local on = OrbitSetNoclip(state and true or false)
+  if on and not god then
+    -- Freecam setzt Invincible selbst
+  elseif not on then
+    SetEntityInvincible(PlayerPedId(), god)
+  end
+  notifyToggles()
+  chat(on and 'NoClip an' or 'NoClip aus')
+end
 
 CreateThread(function()
   while true do
@@ -190,12 +168,18 @@ end)
 RegisterNetEvent('orbit:openMenu', function(payload)
   if menuOpen then return end
   menuOpen = true
-  SetNuiFocus(true, true)
+  local game = payload and payload.game or {}
+  -- Fokus ohne Maus-Cursor; Spiel-Input behalten (Laufen/Fahren)
+  SetNuiFocus(true, false)
+  SetNuiFocusKeepInput(true)
   SendNUIMessage({
     action = 'open',
     name = payload and payload.name or '',
     perms = payload and payload.perms or {},
     players = payload and payload.players or {},
+    game = game,
+    alignRight = game.alignRight == true,
+    pageKey = game.pageKey or 'Tab',
   })
   notifyToggles()
 end)
@@ -204,21 +188,32 @@ RegisterNetEvent('orbit:playerList', function(list)
   SendNUIMessage({ action = 'players', list = list or {} })
 end)
 
-RegisterNetEvent('orbit:announce', function(msg)
-  chat(msg or '')
-  BeginTextCommandThefeedPost('STRING')
-  AddTextComponentSubstringPlayerName(('~o~Orbit~s~\n%s'):format(tostring(msg or '')))
-  EndTextCommandThefeedPostTicker(false, true)
+RegisterNetEvent('orbit:announce', function(msg, meta)
+  local hide = type(meta) == 'table' and meta.hide
+  if not hide then
+    chat(msg or '')
+    BeginTextCommandThefeedPost('STRING')
+    AddTextComponentSubstringPlayerName(('~o~Orbit~s~\n%s'):format(tostring(msg or '')))
+    EndTextCommandThefeedPostTicker(false, true)
+  end
 end)
 
-RegisterNetEvent('orbit:dm', function(author, message)
-  chat(('DM von %s: %s'):format(tostring(author or 'Admin'), tostring(message or '')))
+RegisterNetEvent('orbit:dm', function(author, message, meta)
+  local hideName = type(meta) == 'table' and meta.hideAdmin
+  local hideNotif = type(meta) == 'table' and meta.hide
+  if hideNotif then return end
+  local who = hideName and 'Admin' or tostring(author or 'Admin')
+  chat(('DM von %s: %s'):format(who, tostring(message or '')))
 end)
 
 RegisterNetEvent('orbit:showWarning', function(payload)
   local author = type(payload) == 'table' and payload.author or 'Admin'
   local reason = type(payload) == 'table' and payload.reason or tostring(payload or '')
-  chat(('WARNUNG von %s: %s'):format(tostring(author), tostring(reason)))
+  local hideName = type(payload) == 'table' and payload.hideAdmin
+  local hideNotif = type(payload) == 'table' and payload.hide
+  if hideNotif then return end
+  local who = hideName and 'Admin' or tostring(author)
+  chat(('WARNUNG von %s: %s'):format(who, tostring(reason)))
 end)
 
 RegisterNetEvent('orbit:heal', function()
@@ -399,7 +394,50 @@ end
 
 RegisterCommand('orbit', tryOpen, false)
 RegisterCommand('orbitmenu', tryOpen, false)
+RegisterCommand('orbitnoclip', function()
+  if not isAdmin then return end
+  setNoclip(not (OrbitIsNoclip and OrbitIsNoclip()))
+end, false)
 RegisterKeyMapping('orbit', 'Orbit Admin-Menü', 'keyboard', '')
+RegisterKeyMapping('orbitnoclip', 'Orbit NoClip umschalten', 'keyboard', '')
+
+-- Menü offen: Laufen/Fahren behalten, Blick/Schießen/Pause blocken (Pfeile → NUI)
+CreateThread(function()
+  while true do
+    if menuOpen then
+      DisableControlAction(0, 1, true)   -- Look LR
+      DisableControlAction(0, 2, true)   -- Look UD
+      DisableControlAction(0, 24, true)  -- Attack
+      DisableControlAction(0, 25, true)  -- Aim
+      DisableControlAction(0, 37, true)  -- Weapon wheel
+      DisableControlAction(0, 44, true)  -- Cover
+      DisableControlAction(0, 47, true)  -- Detonate
+      DisableControlAction(0, 58, true)  -- Throw
+      DisableControlAction(0, 140, true) -- Melee
+      DisableControlAction(0, 141, true)
+      DisableControlAction(0, 142, true)
+      DisableControlAction(0, 143, true)
+      DisableControlAction(0, 199, true) -- Pause
+      DisableControlAction(0, 200, true)
+      DisableControlAction(0, 245, true) -- Chat
+      DisableControlAction(0, 257, true) -- Attack2
+      DisableControlAction(0, 263, true)
+      DisableControlAction(0, 264, true)
+      -- Pfeiltasten dem NUI überlassen
+      DisableControlAction(0, 22, true)  -- Jump (Space → Menü-Enter)
+      DisableControlAction(0, 23, true)  -- Enter vehicle
+      DisableControlAction(0, 75, true)  -- Exit vehicle
+      DisableControlAction(0, 172, true)
+      DisableControlAction(0, 173, true)
+      DisableControlAction(0, 174, true)
+      DisableControlAction(0, 175, true)
+      DisableControlAction(0, 27, true) -- Phone up (arrow-ish)
+      Wait(0)
+    else
+      Wait(200)
+    end
+  end
+end)
 
 CreateThread(function()
   Wait(2000)

@@ -41,6 +41,7 @@ export default function LiveConsole({
   const [histIdx, setHistIdx] = useState(-1);
   const box = useRef(null);
   const drag = useRef(null);
+  const [autoScroll, setAutoScroll] = useState(true);
   const stick = useRef(true);
   const inputRef = useRef(null);
   const consoleBuf = useRef([]);
@@ -60,13 +61,20 @@ export default function LiveConsole({
   useEffect(() => {
     if (!active) return undefined;
     const es = new EventSource('/api/stream');
+    es.addEventListener('console_clear', () => {
+      consoleBuf.current = [];
+      consoleRaf.current = 0;
+      setLines([]);
+    });
     es.addEventListener('console', (e) => {
       let incoming;
       try { incoming = JSON.parse(e.data); } catch { return; }
       if (!Array.isArray(incoming) || !incoming.length) return;
       consoleBuf.current.push(...incoming);
       if (consoleRaf.current) return;
-      consoleRaf.current = requestAnimationFrame(() => {
+      // Sofort flushen (queueMicrotask) — RAF kann hinter Idle-Frames hängen
+      consoleRaf.current = 1;
+      queueMicrotask(() => {
         consoleRaf.current = 0;
         const batch = consoleBuf.current;
         consoleBuf.current = [];
@@ -76,7 +84,6 @@ export default function LiveConsole({
     es.onerror = () => {};
     return () => {
       es.close();
-      if (consoleRaf.current) cancelAnimationFrame(consoleRaf.current);
       consoleRaf.current = 0;
       consoleBuf.current = [];
     };
@@ -88,10 +95,14 @@ export default function LiveConsole({
   );
 
   useEffect(() => {
+    stick.current = autoScroll;
+  }, [autoScroll]);
+
+  useEffect(() => {
     if (active && stick.current && box.current) {
       box.current.scrollTop = box.current.scrollHeight;
     }
-  }, [visible, active]);
+  }, [visible, active, autoScroll]);
 
   useEffect(() => {
     if (!active || variant !== 'drawer') return undefined;
@@ -142,7 +153,20 @@ export default function LiveConsole({
   function onScroll() {
     const el = box.current;
     if (!el) return;
-    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    stick.current = atBottom;
+    setAutoScroll((prev) => (prev === atBottom ? prev : atBottom));
+  }
+
+  function toggleAutoScroll() {
+    setAutoScroll((prev) => {
+      const next = !prev;
+      stick.current = next;
+      if (next && box.current) {
+        box.current.scrollTop = box.current.scrollHeight;
+      }
+      return next;
+    });
   }
 
   function onKeyDown(e) {
@@ -225,6 +249,15 @@ export default function LiveConsole({
               <button type="button" className="btn btn-sm" onClick={onClose}>Schließen</button>
             </>
           )}
+          <button
+            type="button"
+            className={`btn btn-sm lc-auto${autoScroll ? ' on' : ''}`}
+            onClick={toggleAutoScroll}
+            aria-pressed={autoScroll}
+            title={autoScroll ? 'Auto-Scroll an — Klick zum Pausieren' : 'Auto-Scroll aus — Klick für sticky bottom'}
+          >
+            Auto
+          </button>
           {variant !== 'cockpit' && (
             <button type="button" className="btn btn-sm" onClick={() => setLines([])}>Leeren</button>
           )}

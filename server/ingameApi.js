@@ -13,6 +13,8 @@ import {
 import { createSession, cookieHeader, COOKIE, SESSION_MS } from './auth.js';
 import { normalizeIdentifiers, primaryId, upsertLivePlayer } from './playerIdentity.js';
 import { checkPlayerJoin, ensureModerationSchema } from './moderation.js';
+import { gameSettingsForBridge, resolveAllowlistMode } from './settingsSchema.js';
+import { checkDiscordGuildAccess } from './discordBot.js';
 
 function str(v, max) {
   return String(v ?? '').slice(0, max);
@@ -80,10 +82,54 @@ export async function handleIngamePublicApi(ctx) {
       return true;
     }
     try { ensureModerationSchema(db); } catch { /* */ }
+    const playerIds = Array.isArray(body.playerIds) ? body.playerIds : [];
+    const admin = resolveIngameAdmin(db, playerIds);
+    const discordId = playerIds.find((id) => typeof id === 'string' && id.startsWith('discord:'));
+    const roleCsv = String(settings.allowlistDiscordRoles || '');
+    const roleIds = roleCsv.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+    const mode = resolveAllowlistMode(settings);
+
+    let hasDiscord = Boolean(discordId) || body.hasDiscord === true;
+    let hasDiscordRole = body.hasDiscordRole === true
+      || (Array.isArray(body.discordRoles) && body.discordRoles.some((r) => roleIds.includes(String(r))));
+
+    // Voller Guild-Check über Bot (Members Intent)
+    if ((mode === 'discord_member' || mode === 'discord_roles') && discordId) {
+      const access = await checkDiscordGuildAccess(discordId, {
+        requireMember: true,
+        requiredRoleIds: mode === 'discord_roles' ? roleIds : [],
+      });
+      if (access.member) hasDiscord = true;
+      if (access.ok && mode === 'discord_roles') hasDiscordRole = true;
+      if (mode === 'discord_member' && !access.member) {
+        json(res, 200, {
+          allow: false,
+          reason: `[Orbit] Discord-Mitgliedschaft erforderlich.\n${access.reason || ''}\n${settings.allowlistInstructions || ''}`.trim(),
+        });
+        return true;
+      }
+      if (mode === 'discord_roles' && !access.ok) {
+        json(res, 200, {
+          allow: false,
+          reason: `[Orbit] ${access.reason || 'Erforderliche Discord-Rolle fehlt.'}\n${settings.allowlistInstructions || ''}`.trim(),
+        });
+        return true;
+      }
+    } else if ((mode === 'discord_member' || mode === 'discord_roles') && !discordId) {
+      json(res, 200, {
+        allow: false,
+        reason: `[Orbit] Discord muss mit FiveM verknüpft sein.\n${settings.allowlistInstructions || ''}`.trim(),
+      });
+      return true;
+    }
+
     const result = checkPlayerJoin(db, settings, {
-      playerIds: body.playerIds,
+      playerIds,
       playerHwids: body.playerHwids,
       playerName: body.playerName,
+      isPanelAdmin: !!admin,
+      hasDiscord,
+      hasDiscordRole,
     });
     json(res, 200, result);
     return true;
@@ -173,10 +219,16 @@ export async function handleIngamePublicApi(ctx) {
       json(res, 200, { logout: true, reason: 'Keine Menü-Rechte' });
       return true;
     }
+    const game = gameSettingsForBridge(settings);
+    if (!game.menuEnabled) {
+      json(res, 200, { logout: true, reason: 'Ingame-Menü ist in den Einstellungen deaktiviert.' });
+      return true;
+    }
     json(res, 200, {
       name: user.username,
       permissions: menu,
       role: user.role,
+      game,
     });
     return true;
   }

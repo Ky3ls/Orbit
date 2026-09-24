@@ -4,7 +4,14 @@ import { fmtFull, roleLabel } from '../format.js';
 import { Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
 import './team.css';
 
-const EMPTY_FORM = { username: '', password: '', role: 'moderator', permissions: [] };
+const EMPTY_FORM = {
+  username: '',
+  password: '',
+  role: 'moderator',
+  permissions: [],
+  cfxName: '',
+  discordId: '',
+};
 
 export default function Admins() {
   const [users, setUsers] = useState([]);
@@ -42,6 +49,8 @@ export default function Admins() {
       password: '',
       role: user.role === 'owner' ? 'owner' : user.role,
       permissions: [...(user.permissions || [])].filter((p) => p !== '*'),
+      cfxName: user.cfx_name || '',
+      discordId: user.discord_id || '',
     });
   }
 
@@ -75,6 +84,8 @@ export default function Admins() {
           password: form.password,
           role: form.role === 'custom' ? 'custom' : form.role,
           permissions: form.role === 'custom' ? form.permissions : undefined,
+          cfxName: form.cfxName || undefined,
+          discordId: form.discordId || undefined,
         },
       });
       setCreateOpen(false);
@@ -93,6 +104,8 @@ export default function Admins() {
       const body = {
         role: form.role,
         permissions: form.role === 'custom' ? form.permissions : null,
+        cfxName: form.cfxName,
+        discordId: form.discordId,
       };
       if (form.password.length >= 6) body.password = form.password;
       await api(`/api/admins/${edit.id}`, { method: 'PATCH', body });
@@ -233,6 +246,24 @@ export default function Admins() {
                 />
               </label>
               <label className="field">
+                <span>Cfx.re Benutzername</span>
+                <input
+                  form="tm-user-form"
+                  value={form.cfxName || ''}
+                  onChange={(e) => setForm({ ...form, cfxName: e.target.value })}
+                  placeholder="optional — für Cfx-Login"
+                />
+              </label>
+              <label className="field">
+                <span>Discord User-ID</span>
+                <input
+                  form="tm-user-form"
+                  value={form.discordId || ''}
+                  onChange={(e) => setForm({ ...form, discordId: e.target.value })}
+                  placeholder="optional — Snowflake"
+                />
+              </label>
+              <label className="field">
                 <span>Rolle</span>
                 <select
                   form="tm-user-form"
@@ -260,7 +291,7 @@ export default function Admins() {
                     <legend>{g.label}</legend>
                     <div className="tm-perm-grid">
                       {g.permissions.map((perm) => (
-                        <label key={perm.id} className="tm-perm">
+                        <label key={perm.id} className={`tm-perm${perm.sensitive ? ' sensitive' : ''}`}>
                           <input
                             type="checkbox"
                             checked={form.permissions.includes(perm.id)}

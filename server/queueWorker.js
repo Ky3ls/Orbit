@@ -21,11 +21,9 @@ export async function drainCommandQueue(db, settings, logLine) {
 
   const payload = JSON.parse(row.payload || '{}');
   try {
-    const out = await executeQueueItem(settings, row.kind, payload, logLine);
+    await executeQueueItem(settings, row.kind, payload, logLine);
     db.prepare("UPDATE queue SET status = 'done' WHERE id = ?").run(row.id);
-    if (!(row.author === 'system' && row.kind === 'console')) {
-      logLine('ok', `FX ✓ ${row.kind} (${row.author})${out ? `: ${String(out).slice(0, 120)}` : ''}`);
-    }
+    // Kein FX-✓-Spam — Echo kommt bereits beim Enqueue (`user → console cmd`)
     return { processed: 1, ok: true };
   } catch (err) {
     db.prepare("UPDATE queue SET status = 'failed' WHERE id = ?").run(row.id);

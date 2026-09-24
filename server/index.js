@@ -115,10 +115,18 @@ import {
   resolveUserPermissions,
   ROLE_TEMPLATES,
 } from './permissions.js';
+import { publicSettingsPayload, resolveAllowlistMode, ALLOWLIST_MODES } from './settingsSchema.js';
+import {
+  cleanDatabaseOptions,
+  cleanOrbitDatabase,
+  backupOrbitDatabase,
+  exportPlayersJson,
+  revokeAllowlists,
+} from './systemTools.js';
 import { hotDeployOrbit, ensureIngameToken, syncOrbitSystemResource } from './orbitBridgeSync.js';
 import { parseDropFromLogLine, recordDrop } from './playerDrops.js';
 import { notifyServerEvent, notifyPlayerDrop } from './discord.js';
-import { refreshDiscordBot, setDiscordBotDeps } from './discordBot.js';
+import { refreshDiscordBot, setDiscordBotDeps, sendDiscordWarning, forceStatusRefresh } from './discordBot.js';
 import { pollFxJournal } from './fxJournal.js';
 import {
   browseTable,
@@ -138,7 +146,7 @@ import { resolveConsoleSettings } from './consoleSettings.js';
 import { fxCommandReady } from './rcon.js';
 import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
 import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail.js';
-import { logLine, runtime, pushSeries, setLogHook, snapshot } from './state.js';
+import { logLine, runtime, pushSeries, setLogHook, snapshot, onConsoleWake } from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
@@ -361,8 +369,47 @@ let dummyHash = '';
 let fivemTick = 0;
 let firedMinute = '';
 let queueBusy = false;
+let queuePending = false;
 let lastResourceScan = 0;
 let playerCleanupDone = false;
+
+/** Sofort an FX stdin — kein Warten auf 1s-Monitor-Loop. */
+function kickQueue() {
+  if (queueBusy) {
+    queuePending = true;
+    return;
+  }
+  queueBusy = true;
+  queuePending = false;
+  (async () => {
+    try {
+      // Alle pending Items abarbeiten (nicht nur 1/s)
+      for (;;) {
+        const r = await drainCommandQueue(db, resolveConsoleSettings(db), logLine);
+        if (!r.processed) break;
+      }
+    } catch (err) {
+      logLine('bad', `Queue: ${err.message}`);
+    } finally {
+      queueBusy = false;
+      if (queuePending) kickQueue();
+    }
+  })();
+}
+
+/** FX-Log-Tail + Queue-Fallback — aggressiv für Live-Konsole. */
+function consoleHotTick() {
+  try {
+    const settings = settingMap(db);
+    const consolePaths = new Set();
+    for (const s of listOrbitServers(db)) {
+      if (s.data_path) consolePaths.add(s.data_path);
+    }
+    if (settings.fxDataPath) consolePaths.add(settings.fxDataPath);
+    for (const p of consolePaths) pollFxConsole(p, logLine);
+    kickQueue();
+  } catch { /* */ }
+}
 
 async function loop() {
   try {
@@ -441,20 +488,8 @@ async function loop() {
         pollOrbitLogDrops(db, settings.fxDataPath, settings);
       }
     }
-    // FX-Konsole live aus Log-Datei (auch nach Panel-Restart)
-    const consolePaths = new Set();
-    for (const s of listOrbitServers(db)) {
-      if (s.data_path) consolePaths.add(s.data_path);
-    }
-    if (settings.fxDataPath) consolePaths.add(settings.fxDataPath);
-    for (const p of consolePaths) pollFxConsole(p, logLine);
+    // Konsole/Queue laufen im consoleHotTick (100ms) — hier nur Journal + Pflege
     if (fivemTick % 3 === 0) pollFxJournal(logLine, settings).catch(() => {});
-    if (!queueBusy) {
-      queueBusy = true;
-      drainCommandQueue(db, resolveConsoleSettings(db), logLine)
-        .catch((err) => logLine('bad', `Queue: ${err.message}`))
-        .finally(() => { queueBusy = false; });
-    }
     if (fivemTick % 30 === 0) {
       const now = Date.now();
       db.prepare('DELETE FROM tickets WHERE expires < ?').run(now);
@@ -492,10 +527,14 @@ function checkSchedule() {
       : 'Zeitplan ausgelöst, Server-Steuerung ist aus.';
     logLine('info', detail);
     audit(db, 'system', 'schedule', `${job.label} ${hhmm}`, 'local');
+    sendDiscordWarning(settings, `⏰ Geplanter Neustart: **${job.label}** (${hhmm})`).catch(() => {});
     if (control) {
       runtime.controlPhase = 'restarting';
       controlFx('restart', settings, logLine)
-        .then(() => logLine('ok', `Zeitplan: Neustart (${via})`))
+        .then(() => {
+          logLine('ok', `Zeitplan: Neustart (${via})`);
+          forceStatusRefresh().catch(() => {});
+        })
         .catch((err) => {
           runtime.controlPhase = 'idle';
           logLine('bad', `Zeitplan-Neustart fehlgeschlagen: ${err.message}`);
@@ -509,6 +548,7 @@ function queueCommand(kind, payload, author, ip) {
     .run(kind, JSON.stringify(payload), author, 'queued', Date.now());
   audit(db, author, kind, JSON.stringify(payload).slice(0, 240), ip);
   logLine('info', `${author} → ${kind} ${payload.name || payload.identifier || payload.command || ''}`.trim());
+  kickQueue();
 }
 
 function requireFxCommand(res, settings, { serverControlOk = false } = {}) {
@@ -1511,6 +1551,7 @@ async function handleApi(req, res, url) {
       'X-Content-Type-Options': 'nosniff',
     });
     let cursor = runtime.consoleSeq;
+    let clearSeen = runtime.consoleClearId || 0;
     let timer = null;
     const send = (event, data) => {
       if (res.writableEnded || res.destroyed) return;
@@ -1520,23 +1561,38 @@ async function handleApi(req, res, url) {
         clearInterval(timer);
       }
     };
-    send('console', runtime.console.slice(-200));
-    send('state', snapshot());
-    let stateAge = 0;
-    timer = setInterval(() => {
+    const flushConsole = () => {
+      if ((runtime.consoleClearId || 0) > clearSeen) {
+        clearSeen = runtime.consoleClearId;
+        // Nur Clear-ID als Cursor — nicht consoleSeq (sonst gehen Start-Logs verloren,
+        // die zwischen clearConsole und diesem Tick geschrieben wurden).
+        cursor = clearSeen;
+        send('console_clear', { id: clearSeen, at: runtime.consoleClearedAt });
+      }
       const fresh = runtime.console.filter((line) => line.id > cursor);
       if (fresh.length) {
         cursor = fresh[fresh.length - 1].id;
         send('console', fresh);
       }
-      // State inkl. Series nur alle 2s — Charts brauchen keine 500ms-Flood
-      stateAge += 500;
+    };
+    send('console', runtime.console.slice(-200));
+    send('state', snapshot());
+    // Event-driven: neue Zeilen sofort pushen
+    const unsub = onConsoleWake(flushConsole);
+    // Backup-Poll + State (Charts brauchen kein Sub-Sekunden-Update)
+    let stateAge = 0;
+    timer = setInterval(() => {
+      flushConsole();
+      stateAge += 200;
       if (stateAge >= 2000) {
         stateAge = 0;
         send('state', snapshot());
       }
-    }, 500);
-    req.on('close', () => clearInterval(timer));
+    }, 200);
+    req.on('close', () => {
+      clearInterval(timer);
+      unsub();
+    });
     return;
   }
 
@@ -2300,6 +2356,9 @@ async function handleApi(req, res, url) {
       const via = orbitControlMode(settings) === 'orbit' ? 'Orbit FXServer' : FX_UNIT;
       logLine('ok', `${action} → ${via}`);
       notifyServerEvent(settings, `Server ${action}`, `${settings.hostname || 'Server'} via ${via}`).catch(() => {});
+      const emoji = action === 'start' ? '🟢' : action === 'stop' ? '🔴' : '🔄';
+      sendDiscordWarning(settings, `${emoji} Server **${action}** — ${settings.serverName || settings.hostname || 'Server'} (${via})`).catch(() => {});
+      setTimeout(() => forceStatusRefresh().catch(() => {}), 2500);
       return json(res, 200, { ok: true, action, phase: runtime.controlPhase });
     } catch (err) {
       runtime.controlPhase = 'idle';
@@ -2311,7 +2370,7 @@ async function handleApi(req, res, url) {
   if (method === 'GET' && pathname === '/api/admins') {
     if (me.role !== 'owner') return json(res, 403, { error: 'Nur der Inhaber verwaltet das Team.' });
     const users = db.prepare(
-      'SELECT id, username, role, disabled, totp_enabled, created, last_login, permissions FROM users ORDER BY id',
+      'SELECT id, username, role, disabled, totp_enabled, created, last_login, permissions, cfx_id, cfx_name, discord_id, ingame_license FROM users ORDER BY id',
     ).all().map((u) => ({
       ...u,
       permissions: resolveUserPermissions(u),
@@ -2333,10 +2392,15 @@ async function handleApi(req, res, url) {
     if (role === 'custom' || Array.isArray(body.permissions)) {
       permsJson = serializePermissions(body.permissions || ROLE_TEMPLATES.moderator);
     }
+    const discordId = str(body.discordId || body.discord_id || '', 32).replace(/\D/g, '').slice(0, 32);
+    const cfxName = str(body.cfxName || body.cfx_name || body.citizenfx || '', 64);
     try {
       const hash = await hashPassword(password);
-      db.prepare('INSERT INTO users (username, password_hash, role, must_change, created, permissions) VALUES (?, ?, ?, 1, ?, ?)')
-        .run(username, hash, role === 'custom' ? 'custom' : role, Date.now(), permsJson || null);
+      db.prepare(`INSERT INTO users (username, password_hash, role, must_change, created, permissions, discord_id, cfx_name)
+        VALUES (?, ?, ?, 1, ?, ?, ?, ?)`).run(
+        username, hash, role === 'custom' ? 'custom' : role, Date.now(),
+        permsJson || null, discordId || null, cfxName || null,
+      );
     } catch {
       return json(res, 409, { error: 'Benutzername ist vergeben.' });
     }
@@ -2371,6 +2435,14 @@ async function handleApi(req, res, url) {
         db.prepare('UPDATE users SET permissions = ? WHERE id = ?').run(permsJson || null, id);
         audit(db, me.username, 'admin.perms', target.username, ip);
       }
+      if (body.discordId !== undefined || body.discord_id !== undefined) {
+        const discordId = str(body.discordId ?? body.discord_id ?? '', 32).replace(/\D/g, '').slice(0, 32);
+        db.prepare('UPDATE users SET discord_id = ? WHERE id = ?').run(discordId || null, id);
+      }
+      if (body.cfxName !== undefined || body.cfx_name !== undefined) {
+        const cfxName = str(body.cfxName ?? body.cfx_name ?? '', 64);
+        db.prepare('UPDATE users SET cfx_name = ? WHERE id = ?').run(cfxName || null, id);
+      }
       if (typeof body.password === 'string' && body.password.length >= 6) {
         if (!passwordOk(body.password)) return json(res, 400, { error: 'Passwort ungültig.' });
         const hash = await hashPassword(body.password);
@@ -2386,44 +2458,23 @@ async function handleApi(req, res, url) {
     const settings = settingMap(db);
     return json(res, 200, {
       settings: {
-        hostname: settings.hostname || '',
-        project: settings.project || '',
-        fivemHost: settings.fivemHost || '127.0.0.1',
-        fivemPort: settings.fivemPort || '30120',
-        controlEnabled: settings.controlEnabled !== '0',
-        ipAllowlist: me.role === 'owner' ? (settings.ipAllowlist || '') : '',
-        maxClients: settings.maxClients || '48',
-        tags: settings.tags || '',
-        locale: settings.locale || 'de-DE',
-        onesync: settings.onesync === 'off' || settings.onesync === 'legacy' ? settings.onesync : 'on',
-        gameBuild: settings.gameBuild || '',
-        allowlistEnabled: settings.allowlistEnabled === '1',
-        discordEnabled: settings.discordEnabled === '1',
-        discordNotifyDrops: settings.discordNotifyDrops === '1',
-        discordBotEnabled: settings.discordBotEnabled === '1',
-        discordBotConfigured: Boolean(settings.discordBotToken),
-        discordWebhook: me.role === 'owner' ? (settings.discordWebhook || '') : '',
-        discordGuild: settings.discordGuild || '',
+        ...publicSettingsPayload(settings, { isOwner: me.role === 'owner' }),
         fxCommandReady: fxConsoleReady(settings),
         mysqlReady: mysqlReady(settings),
-        rconConfigured: Boolean(settings.rconPassword),
-        rconPort: settings.rconPort || '',
-        fxControlMode: settings.fxControlMode === 'orbit' ? 'orbit' : 'systemd',
-        fxServerRoot: me.role === 'owner' ? (settings.fxServerRoot || '') : '',
-        fxDataPath: me.role === 'owner' ? (settings.fxDataPath || '') : '',
-        fxServerExtraArgs: me.role === 'owner' ? (settings.fxServerExtraArgs || '') : '',
-        orbitServerName: settings.orbitServerName || '',
-        orbitServerSlug: settings.orbitServerSlug || '',
-        serverLabel: settings.serverLabel || settings.hostname || '',
         orbitServersRoot: me.role === 'owner' ? (settings.orbitServersRoot || ORBIT_SERVERS_ROOT) : '',
-        consoleTargetServerId: me.role === 'owner' ? (settings.consoleTargetServerId || '') : '',
-        autoRestartEnabled: settings.autoRestartEnabled !== '0',
+        allowlistModes: ALLOWLIST_MODES,
       },
     });
   }
 
   if (method === 'PUT' && pathname === '/api/settings') {
-    if (!hasPerm(me, 'settings')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hasPerm(me, 'settings') && !hasPerm(me, 'settings.write')) {
+      return json(res, 403, { error: 'Keine Berechtigung.' });
+    }
+    // settings.write für Änderungen; Owner/Admin mit settings dürfen speichern (Legacy)
+    if (!hasPerm(me, 'settings.write') && me.role !== 'owner' && !hasPerm(me, 'settings')) {
+      return json(res, 403, { error: 'Keine Schreibrechte für Einstellungen.' });
+    }
     const body = await readBody(req);
     const hostname = str(body.hostname, 80);
     const project = str(body.project, 80);
@@ -2443,7 +2494,75 @@ async function handleApi(req, res, url) {
     setSetting(db, 'project', project);
     setSetting(db, 'fivemHost', fivemHost);
     setSetting(db, 'fivemPort', fivemPort);
-    setSetting(db, 'allowlistEnabled', body.allowlistEnabled ? '1' : '0');
+
+    // General
+    if (body.serverName !== undefined) {
+      const sn = str(body.serverName, 18);
+      if (sn.length < 1) return json(res, 400, { error: 'Server-Name: 1–18 Zeichen.' });
+      setSetting(db, 'serverName', sn);
+      setSetting(db, 'serverLabel', sn);
+    }
+    if (body.language !== undefined) setSetting(db, 'language', str(body.language, 16));
+
+    // Allowlist modes
+    if (body.allowlistMode !== undefined) {
+      const mode = resolveAllowlistMode({ allowlistMode: body.allowlistMode });
+      const valid = ALLOWLIST_MODES.some((m) => m.value === String(body.allowlistMode));
+      const finalMode = valid ? String(body.allowlistMode) : mode;
+      setSetting(db, 'allowlistMode', finalMode);
+      setSetting(db, 'allowlistEnabled', finalMode !== 'disabled' && finalMode !== 'external' ? '1' : '0');
+    } else if (body.allowlistEnabled !== undefined) {
+      setSetting(db, 'allowlistEnabled', body.allowlistEnabled ? '1' : '0');
+      if (!body.allowlistEnabled) setSetting(db, 'allowlistMode', 'disabled');
+      else if (!settingMap(db).allowlistMode || settingMap(db).allowlistMode === 'disabled') {
+        setSetting(db, 'allowlistMode', 'approved_license');
+      }
+    }
+    if (body.allowlistInstructions !== undefined) {
+      setSetting(db, 'allowlistInstructions', str(body.allowlistInstructions, 1000));
+    }
+    if (body.allowlistDiscordRoles !== undefined) {
+      setSetting(db, 'allowlistDiscordRoles', str(body.allowlistDiscordRoles, 500));
+    }
+
+    // Bans
+    if (body.banChecking !== undefined) setSetting(db, 'banChecking', body.banChecking ? '1' : '0');
+    if (body.banRejectionMessage !== undefined) {
+      setSetting(db, 'banRejectionMessage', str(body.banRejectionMessage, 1000));
+    }
+    if (body.requiredHwidMatches !== undefined) {
+      const h = String(body.requiredHwidMatches);
+      if (!['0', '1', '2', '3', '4', '5', '6'].includes(h)) {
+        return json(res, 400, { error: 'HWID-Matches: 0–6.' });
+      }
+      setSetting(db, 'requiredHwidMatches', h);
+    }
+
+    // Game menu / notifications
+    if (body.gameMenuEnabled !== undefined) setSetting(db, 'gameMenuEnabled', body.gameMenuEnabled ? '1' : '0');
+    if (body.gameMenuAlignRight !== undefined) setSetting(db, 'gameMenuAlignRight', body.gameMenuAlignRight ? '1' : '0');
+    if (body.gameMenuPageKey !== undefined) {
+      const key = str(body.gameMenuPageKey, 32);
+      if (!key || /^(Escape|Backspace)$/i.test(key)) {
+        return json(res, 400, { error: 'Ungültige Menü-Taste (nicht Escape/Backspace).' });
+      }
+      setSetting(db, 'gameMenuPageKey', key);
+    }
+    if (body.hideAdminInPunishments !== undefined) {
+      setSetting(db, 'hideAdminInPunishments', body.hideAdminInPunishments ? '1' : '0');
+    }
+    if (body.hideAdminInMessages !== undefined) {
+      setSetting(db, 'hideAdminInMessages', body.hideAdminInMessages ? '1' : '0');
+    }
+    if (body.hideAnnouncementNotif !== undefined) {
+      setSetting(db, 'hideAnnouncementNotif', body.hideAnnouncementNotif ? '1' : '0');
+    }
+    if (body.hideDmNotif !== undefined) setSetting(db, 'hideDmNotif', body.hideDmNotif ? '1' : '0');
+    if (body.hideWarnNotif !== undefined) setSetting(db, 'hideWarnNotif', body.hideWarnNotif ? '1' : '0');
+    if (body.hideRestartWarnNotif !== undefined) {
+      setSetting(db, 'hideRestartWarnNotif', body.hideRestartWarnNotif ? '1' : '0');
+    }
+
     const onesync = body.onesync === 'off' ? 'off' : body.onesync === 'legacy' ? 'legacy' : 'on';
     setSetting(db, 'onesync', onesync);
     const maxSlots = Number(body.maxClients);
@@ -2452,7 +2571,7 @@ async function handleApi(req, res, url) {
       runtime.maxClients = maxSlots;
     }
     setSetting(db, 'tags', str(body.tags || '', 200));
-    setSetting(db, 'locale', str(body.locale || 'de-DE', 16));
+    setSetting(db, 'locale', str(body.locale || body.language || 'de-DE', 16));
     const gameBuild = str(body.gameBuild || '', 8);
     if (gameBuild && !/^\d{4,5}$/.test(gameBuild)) {
       return json(res, 400, { error: 'Game Build ungültig.' });
@@ -2470,6 +2589,21 @@ async function handleApi(req, res, url) {
       }
       setSetting(db, 'discordWebhook', webhook);
       setSetting(db, 'discordGuild', str(body.discordGuild || '', 64));
+      if (body.discordWarningsChannel !== undefined) {
+        setSetting(db, 'discordWarningsChannel', str(body.discordWarningsChannel, 64));
+      }
+      if (body.discordStatusEmbedJson !== undefined) {
+        const raw = String(body.discordStatusEmbedJson || '');
+        if (raw.length > 20000) return json(res, 400, { error: 'Status-Embed JSON zu groß.' });
+        try { JSON.parse(raw || '{}'); } catch { return json(res, 400, { error: 'Status-Embed JSON ungültig.' }); }
+        setSetting(db, 'discordStatusEmbedJson', raw);
+      }
+      if (body.discordStatusConfigJson !== undefined) {
+        const raw = String(body.discordStatusConfigJson || '');
+        if (raw.length > 20000) return json(res, 400, { error: 'Status-Config JSON zu groß.' });
+        try { JSON.parse(raw || '{}'); } catch { return json(res, 400, { error: 'Status-Config JSON ungültig.' }); }
+        setSetting(db, 'discordStatusConfigJson', raw);
+      }
       setSetting(db, 'discordBotEnabled', body.discordBotEnabled ? '1' : '0');
       const botTok = str(body.discordBotToken || '', 200);
       if (botTok) setSetting(db, 'discordBotToken', botTok);
@@ -2487,6 +2621,16 @@ async function handleApi(req, res, url) {
       const fxExtra = str(body.fxServerExtraArgs || '', 400);
       if (fxRoot) setSetting(db, 'fxServerRoot', fxRoot);
       if (fxData) setSetting(db, 'fxDataPath', fxData);
+      if (body.fxCfgPath !== undefined) setSetting(db, 'fxCfgPath', str(body.fxCfgPath, 256) || 'server.cfg');
+      if (body.quietMode !== undefined) setSetting(db, 'quietMode', body.quietMode ? '1' : '0');
+      if (body.fxAutostart !== undefined) setSetting(db, 'fxAutostart', body.fxAutostart ? '1' : '0');
+      if (body.resourceStartingTolerance !== undefined) {
+        const tol = String(body.resourceStartingTolerance);
+        if (!['60', '90', '120', '180', '300'].includes(tol)) {
+          return json(res, 400, { error: 'Resource-Start-Toleranz ungültig.' });
+        }
+        setSetting(db, 'resourceStartingTolerance', tol);
+      }
       if (body.autoRestartEnabled === false) setSetting(db, 'autoRestartEnabled', '0');
       else if (body.autoRestartEnabled === true) setSetting(db, 'autoRestartEnabled', '1');
       syncActiveCfgPath(settingMap(db));
@@ -2503,6 +2647,60 @@ async function handleApi(req, res, url) {
       refreshDiscordBot(settingMap(db)).catch((e) => logLine('warn', `Discord-Bot: ${e.message}`));
     }
     return json(res, 200, { ok: true });
+  }
+
+  // —— System-Tools (Clean / Backup / Revoke Allowlists) ——
+  if (method === 'GET' && pathname === '/api/system/options') {
+    if (!hasPerm(me, 'system') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    return json(res, 200, { clean: cleanDatabaseOptions() });
+  }
+
+  if (method === 'POST' && pathname === '/api/system/clean-database') {
+    if (!hasPerm(me, 'system') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    const body = await readBody(req);
+    if (!body.confirm) return json(res, 400, { error: 'Bestätigung fehlt (confirm: true).' });
+    try {
+      ensureModerationSchema(db);
+      const result = cleanOrbitDatabase(db, {
+        players: body.players || 'none',
+        bans: body.bans || 'none',
+        warns: body.warns || 'none',
+        hwids: body.hwids || 'none',
+      });
+      audit(db, me.username, 'system.clean', JSON.stringify(result), ip);
+      return json(res, 200, { ok: true, cleaned: result });
+    } catch (err) {
+      return json(res, 500, { error: err.message });
+    }
+  }
+
+  if (method === 'GET' && pathname === '/api/system/backup-database') {
+    if (!hasPerm(me, 'system') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    try {
+      const meta = backupOrbitDatabase();
+      const payload = exportPlayersJson(db);
+      audit(db, me.username, 'system.backup', meta.filename, ip);
+      return json(res, 200, {
+        ok: true,
+        file: meta.filename,
+        bytes: meta.bytes,
+        path: meta.file,
+        export: payload,
+      });
+    } catch (err) {
+      return json(res, 500, { error: err.message });
+    }
+  }
+
+  if (method === 'POST' && pathname === '/api/system/revoke-allowlists') {
+    if (!hasPerm(me, 'system') && !hasPerm(me, 'whitelist.write') && me.role !== 'owner') {
+      return json(res, 403, { error: 'Keine Berechtigung.' });
+    }
+    const body = await readBody(req);
+    if (!body.confirm) return json(res, 400, { error: 'Bestätigung fehlt.' });
+    const result = revokeAllowlists(db, { olderThanDays: body.olderThanDays ?? 'all' });
+    audit(db, me.username, 'system.revoke-allowlists', JSON.stringify(result), ip);
+    return json(res, 200, { ok: true, ...result });
   }
 
   if (method === 'POST' && pathname === '/api/settings/rcon-test') {
@@ -2930,6 +3128,8 @@ const boot = (async () => {
     settingMap: () => settingMap(db),
     getRuntime: () => runtime,
     probeFiveM,
+    nextRestartInfo,
+    setSetting: (k, v) => setSetting(db, k, v),
   });
   setLogHook((level, text) => {
     const drop = parseDropFromLogLine(text);
@@ -2969,6 +3169,7 @@ const boot = (async () => {
   refreshDiscordBot(settingMap(db)).catch((e) => auditSystem(db, 'discord.bot', e.message));
   await loop();
   setInterval(loop, 1000);
+  setInterval(consoleHotTick, 100);
   server.listen(PORT, HOST, () => {
     console.log(`Orbit hört auf http://${HOST}:${PORT}`);
     printBootstrapBanner(db).catch(() => {});

@@ -66,29 +66,125 @@ export function isWhitelisted(db, identifiers) {
   return false;
 }
 
+function hwidTokens(playerHwids = []) {
+  return (playerHwids || []).map((t) => {
+    const s = String(t || '').trim();
+    if (!s) return '';
+    return s.includes(':') ? s : `hardware:${s}`;
+  }).filter(Boolean);
+}
+
+function countHwidMatches(banIds, playerHwids) {
+  const want = new Set(hwidTokens(playerHwids));
+  if (!want.size) return 0;
+  let n = 0;
+  for (const id of banIds) {
+    if (want.has(id) || (String(id).startsWith('hardware:') && want.has(id))) n += 1;
+  }
+  return n;
+}
+
+/** Aktiver Ban inkl. optionaler HWID-Schwelle (txAdmin requiredHwidMatches). */
+export function findActiveBanWithHwid(db, identifiers, playerHwids = [], requiredMatches = 1) {
+  const ids = normalizeIdentifiers(identifiers);
+  const need = Math.max(0, Number(requiredMatches) || 0);
+  if (!ids.length && !hwidTokens(playerHwids).length) return null;
+  const bans = db.prepare(`
+    SELECT * FROM bans WHERE revoked = 0
+      AND (expires IS NULL OR expires > ?)
+    ORDER BY id DESC LIMIT 400
+  `).all(Date.now());
+  for (const ban of bans) {
+    const banIds = [ban.identifier, ...parseIdsJson(ban.ids)];
+    const idHit = ids.length && ids.some((id) => banIds.includes(id));
+    if (idHit) return ban;
+    if (need > 0) {
+      const hits = countHwidMatches(banIds, playerHwids);
+      if (hits >= need) return ban;
+    }
+  }
+  return null;
+}
+
+function allowlistModeOf(settings) {
+  const mode = String(settings.allowlistMode || '').trim();
+  if (mode) return mode;
+  if (settings.allowlistEnabled === '1' || settings.whitelistEnabled === '1') return 'approved_license';
+  return 'disabled';
+}
+
 /**
- * txAdmin-Style checkJoin: Ban + optional Whitelist.
+ * txAdmin-Style checkJoin: Ban + Allowlist-Modi.
  * @returns {{ allow: boolean, reason?: string }}
  */
-export function checkPlayerJoin(db, settings, { playerIds = [], playerHwids = [], playerName = '' } = {}) {
-  const ids = normalizeIdentifiers([...playerIds, ...playerHwids.map((t) => (String(t).includes(':') ? t : `hardware:${t}`))]);
-  const ban = findActiveBan(db, ids);
-  if (ban) {
-    const until = ban.expires
-      ? new Date(ban.expires).toLocaleString('de-DE')
-      : 'permanent';
-    return {
-      allow: false,
-      reason: `[Orbit] Du bist gebannt.\nGrund: ${ban.reason}\nBis: ${until}\nBan-ID: #${ban.id}`,
-    };
-  }
-  if (settings.whitelistEnabled === '1') {
-    if (!isWhitelisted(db, ids)) {
+export function checkPlayerJoin(db, settings, {
+  playerIds = [],
+  playerHwids = [],
+  playerName = '',
+  isPanelAdmin = false,
+  hasDiscord = false,
+  hasDiscordRole = false,
+} = {}) {
+  const hwids = hwidTokens(playerHwids);
+  const ids = normalizeIdentifiers([...playerIds, ...hwids]);
+  const banChecking = settings.banChecking !== '0';
+  if (banChecking) {
+    const need = settings.requiredHwidMatches === '0' || settings.requiredHwidMatches === 0
+      ? 0
+      : Math.max(1, Number(settings.requiredHwidMatches) || 1);
+    const ban = findActiveBanWithHwid(db, ids, hwids, need);
+    if (ban) {
+      const until = ban.expires
+        ? new Date(ban.expires).toLocaleString('de-DE')
+        : 'permanent';
+      const extra = String(settings.banRejectionMessage || '').trim();
       return {
         allow: false,
-        reason: `[Orbit] Dieser Server nutzt eine Allowlist.\nDein Account (${playerName || 'unbekannt'}) ist noch nicht freigeschaltet.`,
+        reason: [
+          `[Orbit] Du bist gebannt.`,
+          `Grund: ${ban.reason}`,
+          `Bis: ${until}`,
+          `Ban-ID: #${ban.id}`,
+          extra || '',
+        ].filter(Boolean).join('\n'),
       };
     }
+  }
+
+  const mode = allowlistModeOf(settings);
+  const instructions = String(settings.allowlistInstructions || '').trim()
+    || 'Dieser Server nutzt eine Allowlist.';
+
+  if (mode === 'disabled' || mode === 'external') {
+    return { allow: true };
+  }
+  if (mode === 'admin_only') {
+    if (isPanelAdmin) return { allow: true };
+    return {
+      allow: false,
+      reason: `[Orbit] Wartungsmodus — nur Panel-Admins.\n${instructions}`,
+    };
+  }
+  if (mode === 'discord_member') {
+    if (hasDiscord) return { allow: true };
+    return {
+      allow: false,
+      reason: `[Orbit] Discord-Mitgliedschaft erforderlich.\n${instructions}`,
+    };
+  }
+  if (mode === 'discord_roles') {
+    if (hasDiscordRole) return { allow: true };
+    return {
+      allow: false,
+      reason: `[Orbit] Erforderliche Discord-Rolle fehlt.\n${instructions}`,
+    };
+  }
+  // approved_license (default allowlist)
+  if (!isWhitelisted(db, ids)) {
+    return {
+      allow: false,
+      reason: `[Orbit] Allowlist aktiv.\nDein Account (${playerName || 'unbekannt'}) ist nicht freigeschaltet.\n${instructions}`,
+    };
   }
   return { allow: true };
 }

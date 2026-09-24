@@ -1,32 +1,38 @@
 import { hasPerm, sha256, randomToken } from './auth.js';
 
-/** Menü-Rechte aus Panel-Rolle / hasPerm */
+/** Menü-Rechte aus Panel-Permissions (txAdmin-Granularität). */
 export function menuPermsForUser(user) {
   if (!user || user.disabled) return null;
-  const adminTools = user.role === 'owner' || user.role === 'admin';
-  const players = hasPerm(user, 'players');
+  const ownerOrStar = user.role === 'owner' || hasPerm(user, 'all_permissions');
+  const playersHub = ownerOrStar || hasPerm(user, 'players');
+  const p = (id) => ownerOrStar || hasPerm(user, id) || (playersHub && [
+    'players.warn', 'players.kick', 'players.dm', 'players.freeze',
+    'players.heal', 'players.spectate', 'players.teleport', 'menu.viewids',
+  ].includes(id));
+
   return {
-    panel: hasPerm(user, 'overview') || hasPerm(user, 'monitor') || hasPerm(user, 'console'),
-    main: players || hasPerm(user, 'control'),
-    players: players,
-    vehicle: adminTools,
-    noclip: adminTools,
-    god: adminTools,
-    superjump: adminTools,
-    ids: players,
-    teleport: players,
-    healSelf: players,
-    healAll: hasPerm(user, 'control'),
-    clearArea: adminTools,
-    announce: hasPerm(user, 'control') || hasPerm(user, 'console'),
-    kick: players,
-    warn: players,
-    message: players,
-    ban: hasPerm(user, 'bans'),
-    goto: players,
-    bring: players,
-    spectate: players,
-    freeze: players,
+    panel: ownerOrStar || hasPerm(user, 'overview') || hasPerm(user, 'monitor') || hasPerm(user, 'console'),
+    main: playersHub || hasPerm(user, 'control') || hasPerm(user, 'players.playermode'),
+    players: playersHub,
+    vehicle: ownerOrStar || hasPerm(user, 'menu.vehicle'),
+    noclip: ownerOrStar || hasPerm(user, 'players.playermode'),
+    god: ownerOrStar || hasPerm(user, 'players.playermode'),
+    superjump: ownerOrStar || hasPerm(user, 'players.playermode'),
+    ids: p('menu.viewids'),
+    teleport: p('players.teleport'),
+    healSelf: p('players.heal'),
+    healAll: ownerOrStar || hasPerm(user, 'control') || hasPerm(user, 'players.heal'),
+    clearArea: ownerOrStar || hasPerm(user, 'menu.clear_area'),
+    announce: ownerOrStar || hasPerm(user, 'announcement') || hasPerm(user, 'control') || hasPerm(user, 'console'),
+    kick: p('players.kick'),
+    warn: p('players.warn'),
+    message: p('players.dm'),
+    ban: ownerOrStar || hasPerm(user, 'bans') || hasPerm(user, 'players.ban'),
+    goto: p('players.teleport'),
+    bring: p('players.teleport'),
+    spectate: p('players.spectate'),
+    freeze: p('players.freeze'),
+    troll: ownerOrStar || hasPerm(user, 'players.troll'),
   };
 }
 
@@ -35,7 +41,7 @@ export function fullAceMenuPerms() {
   return {
     panel: t, main: t, players: t, vehicle: t, noclip: t, god: t, superjump: t, ids: t,
     teleport: t, healSelf: t, healAll: t, clearArea: t, announce: t, kick: t, warn: t,
-    message: t, ban: t, goto: t, bring: t, spectate: t, freeze: t,
+    message: t, ban: t, goto: t, bring: t, spectate: t, freeze: t, troll: t,
   };
 }
 
@@ -83,7 +89,6 @@ function bindLicense(db, userId, license) {
 
 /**
  * License automatisch an Panel-Admin binden — ohne manuelles Verknüpfen.
- * Standard: freier Owner/Admin ohne ingame_license wird beim ersten Join gelinkt.
  */
 export function tryAutoClaimAdmin(db, identifiers) {
   const list = Array.isArray(identifiers) ? identifiers : [];
@@ -95,7 +100,6 @@ export function tryAutoClaimAdmin(db, identifiers) {
     return db.prepare('SELECT * FROM users WHERE id = ? AND disabled = 0').get(taken.id) || null;
   }
 
-  // Genau ein Owner/Admin ohne License → binden (auch wenn Cfx schon verknüpft)
   const unbound = db.prepare(`
     SELECT * FROM users
     WHERE disabled = 0 AND role IN ('owner', 'admin')
@@ -107,7 +111,6 @@ export function tryAutoClaimAdmin(db, identifiers) {
     return bindLicense(db, unbound[0].id, license);
   }
 
-  // Mehrere ohne License: nur wenn genau ein Owner darunter
   const owners = unbound.filter((u) => u.role === 'owner');
   if (owners.length === 1) {
     return bindLicense(db, owners[0].id, license);

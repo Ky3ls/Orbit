@@ -13,6 +13,9 @@ export const runtime = {
   series: [],
   console: [],
   consoleSeq: 0,
+  /** Letzte Clear-ID — Clients leeren bei console_clear */
+  consoleClearId: 0,
+  consoleClearedAt: 0,
   boot: Date.now(),
   onlineSince: null,
   /** @type {'idle'|'starting'|'stopping'|'restarting'} */
@@ -33,8 +36,23 @@ const MAX_CONSOLE = 2500;
 /** @type {((level: string, text: string) => void) | null} */
 let logHook = null;
 
+/** @type {Set<() => void>} SSE / Live-Console Wakeups */
+const consoleWake = new Set();
+
 export function setLogHook(fn) {
   logHook = fn;
+}
+
+/** Sofort-Push bei neuer Konsolenzeile (SSE). */
+export function onConsoleWake(fn) {
+  consoleWake.add(fn);
+  return () => consoleWake.delete(fn);
+}
+
+function notifyConsoleWake() {
+  for (const fn of consoleWake) {
+    try { fn(); } catch { /* */ }
+  }
 }
 
 export function pushSeries(point) {
@@ -55,6 +73,16 @@ export function logLine(level, text) {
   try {
     logHook?.(level, clean);
   } catch { /* */ }
+  notifyConsoleWake();
+}
+
+/** Panel-Konsole leeren (z. B. bei Server-Start). */
+export function clearConsole() {
+  runtime.console.length = 0;
+  runtime.consoleSeq += 1;
+  runtime.consoleClearedAt = Date.now();
+  runtime.consoleClearId = runtime.consoleSeq;
+  notifyConsoleWake();
 }
 
 export function snapshot() {
