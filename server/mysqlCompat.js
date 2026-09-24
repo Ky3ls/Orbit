@@ -39,27 +39,28 @@ export function patchMysql8CompatInResources(resourcesRoot, onLog = () => {}) {
     }
     if (!/ADD COLUMN IF NOT EXISTS/i.test(raw)) continue;
 
-    // Typischer esx_property One-Liner (MySQL 8 hat kein ADD COLUMN IF NOT EXISTS)
-    const next = raw.replace(
-      /MySQL\.query\(\s*"ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `last_property` LONGTEXT NULL"\s*,\s*function\(result\)\s*([\s\S]*?)\s*end\)/m,
-      (_m, body) => {
-        const inner = String(body || '').replace(/^\n/, '').replace(/\n$/, '');
-        return `do
+    let out = raw;
+
+    // esx_property: fester Upstream-Block → MySQL-8-sicher
+    const esxPropertyBlock =
+      /MySQL\.query\(\s*"ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `last_property` LONGTEXT NULL"\s*,\s*function\(result\)\s*\n\s*if result\?\.affectedRows > 0 then\s*\n\s*print\("\[\^2INFO\^7\] Added \^5last_property\^7 column to users table"\)\s*\n\s*end\s*\n\s*end\)/;
+    if (esxPropertyBlock.test(out)) {
+      out = out.replace(
+        esxPropertyBlock,
+        `do
 \tlocal col = MySQL.scalar.await([[SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'last_property']])
 \tif not col or tonumber(col) == 0 then
 \t\tMySQL.query("ALTER TABLE \`users\` ADD COLUMN \`last_property\` LONGTEXT NULL", function(result)
-${inner}
+\t\t\tif result?.affectedRows > 0 then
+\t\t\t\tprint("[^2INFO^7] Added ^5last_property^7 column to users table")
+\t\t\tend
 \t\tend)
 \tend
-end`;
-      },
-    );
-
-    let out = next;
-    // Generisch: "ADD COLUMN IF NOT EXISTS" in SQL-Strings → ohne IF NOT EXISTS
-    // (Spalte legen wir parallel per ensureMysqlColumns an)
-    if (out === raw) {
-      out = raw.replace(/ADD COLUMN IF NOT EXISTS/gi, 'ADD COLUMN');
+end`,
+      );
+    } else {
+      // Fallback: nur IF NOT EXISTS entfernen (Spalte wird via ensureEsxAddonColumns angelegt)
+      out = out.replace(/ADD COLUMN IF NOT EXISTS/gi, 'ADD COLUMN');
     }
 
     if (out !== raw) {
