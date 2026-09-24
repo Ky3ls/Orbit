@@ -24,6 +24,7 @@ import './workspace/workspace.css';
 import './workspace/appearance.css';
 import './cockpit/cockpit.css';
 import './pages/settings.css';
+import './pages/cfg-editor.css';
 import './styles-live-console.css';
 import './styles-responsive.css';
 

@@ -68,7 +68,142 @@ export function parseServerCfg(text) {
 
 export function readCfg() {
   const text = fs.readFileSync(activeCfgPath, 'utf8');
-  return { ...parseServerCfg(text), raw: text, path: activeCfgPath };
+  const root = getCfgRoot();
+  return {
+    ...parseServerCfg(text),
+    raw: text,
+    path: activeCfgPath,
+    rel: path.relative(root, activeCfgPath).replace(/\\/g, '/') || path.basename(activeCfgPath),
+    primary: true,
+  };
+}
+
+const CFG_SKIP_DIRS = new Set([
+  'cache', 'db', '.orbit', '.orbit-sql', '.git', 'node_modules',
+  'stream', 'browser_download', 'yarn_cache', 'citizen',
+]);
+
+/** Datenverzeichnis der aktiven Instanz (Ordner der server.cfg). */
+export function getCfgRoot() {
+  return path.resolve(path.dirname(activeCfgPath));
+}
+
+/**
+ * Relativen .cfg-Pfad unter dem Server-Root auflösen.
+ * Verhindert Path-Traversal und Nicht-.cfg-Dateien.
+ */
+export function resolveSafeCfgPath(relOrName) {
+  const root = getCfgRoot();
+  let cleaned = String(relOrName || '').trim().replace(/\\/g, '/');
+  if (!cleaned) cleaned = path.basename(activeCfgPath) || 'server.cfg';
+  if (
+    cleaned.includes('\0')
+    || cleaned.includes('..')
+    || cleaned.startsWith('/')
+    || path.isAbsolute(cleaned)
+    || /^[a-zA-Z]:/.test(cleaned)
+  ) {
+    throw new Error('Ungültiger CFG-Pfad.');
+  }
+  cleaned = cleaned.replace(/^(\.\/)+/, '');
+  if (!cleaned || cleaned.includes('..')) throw new Error('Ungültiger CFG-Pfad.');
+  if (!/\.cfg$/i.test(cleaned)) throw new Error('Nur .cfg-Dateien erlaubt.');
+  if (cleaned.length > 240) throw new Error('Pfad zu lang.');
+  const full = path.resolve(root, cleaned);
+  const relCheck = path.relative(root, full);
+  if (!relCheck || relCheck.startsWith('..') || path.isAbsolute(relCheck)) {
+    throw new Error('Pfad außerhalb des Server-Verzeichnisses.');
+  }
+  return full;
+}
+
+export function listCfgFiles(opts = {}) {
+  const root = getCfgRoot();
+  const maxDepth = Math.min(6, Number(opts.maxDepth) || 4);
+  const maxFiles = Math.min(500, Number(opts.maxFiles) || 200);
+  const out = [];
+  const primaryResolved = path.resolve(activeCfgPath);
+
+  function walk(dir, depth) {
+    if (out.length >= maxFiles || depth > maxDepth) return;
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      if (out.length >= maxFiles) break;
+      const name = ent.name;
+      if (!name || name === '.' || name === '..') continue;
+      if (name.startsWith('.') && name !== '.') continue;
+      const full = path.join(dir, name);
+      if (ent.isDirectory()) {
+        if (CFG_SKIP_DIRS.has(name.toLowerCase()) || CFG_SKIP_DIRS.has(name)) continue;
+        walk(full, depth + 1);
+        continue;
+      }
+      if (!ent.isFile() || !/\.cfg$/i.test(name)) continue;
+      let st;
+      try {
+        st = fs.statSync(full);
+      } catch {
+        continue;
+      }
+      if (st.size > 512_000) continue;
+      const rel = path.relative(root, full).replace(/\\/g, '/');
+      out.push({
+        rel,
+        name,
+        size: st.size,
+        mtime: st.mtimeMs,
+        primary: path.resolve(full) === primaryResolved,
+      });
+    }
+  }
+
+  if (fs.existsSync(root)) walk(root, 0);
+  // Fallback: aktive server.cfg immer listen, auch wenn Scan leer
+  if (!out.some((f) => f.primary) && fs.existsSync(activeCfgPath)) {
+    try {
+      const st = fs.statSync(activeCfgPath);
+      out.unshift({
+        rel: path.relative(root, activeCfgPath).replace(/\\/g, '/') || path.basename(activeCfgPath),
+        name: path.basename(activeCfgPath),
+        size: st.size,
+        mtime: st.mtimeMs,
+        primary: true,
+      });
+    } catch { /* ignore */ }
+  }
+  out.sort((a, b) => {
+    if (a.primary !== b.primary) return a.primary ? -1 : 1;
+    if (a.rel.includes('/') !== b.rel.includes('/')) return a.rel.includes('/') ? 1 : -1;
+    return a.rel.localeCompare(b.rel, 'de');
+  });
+  return { root, files: out, truncated: out.length >= maxFiles };
+}
+
+export function readCfgFile(rel) {
+  const full = resolveSafeCfgPath(rel || path.basename(activeCfgPath) || 'server.cfg');
+  if (!fs.existsSync(full)) throw new Error('CFG-Datei nicht gefunden.');
+  const text = fs.readFileSync(full, 'utf8');
+  const parsed = parseServerCfg(text);
+  const root = getCfgRoot();
+  return {
+    ...parsed,
+    raw: text,
+    path: full,
+    rel: path.relative(root, full).replace(/\\/g, '/'),
+    primary: path.resolve(full) === path.resolve(activeCfgPath),
+  };
+}
+
+export function writeCfgFile(rel, text) {
+  const full = resolveSafeCfgPath(rel || path.basename(activeCfgPath) || 'server.cfg');
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  fs.writeFileSync(full, text, { encoding: 'utf8', mode: 0o644 });
+  return full;
 }
 
 const SECRET_RE = /^(sv_licenseKey|set\s+steam_webApiKey|set\s+mysql_connection_string|rcon_password|set\s+sv_tebexSecret)\b/i;
@@ -103,7 +238,8 @@ export function mergeCfgSecrets(original, edited) {
   }).join('\n');
 }
 
-export function validateCfg(text) {
+export function validateCfg(text, opts = {}) {
+  const requireEndpoints = opts.requireEndpoints !== false;
   const errors = [];
   if (typeof text !== 'string') return ['Inhalt fehlt.'];
   if (text.length > 512_000) return ['CFG zu groß (max. 512 KB).'];
@@ -119,7 +255,9 @@ export function validateCfg(text) {
       errors.push(`Zeile ${i + 1}: verdächtiger Pfad.`);
     }
   }
-  if (!hasEndpoint) errors.push('Mindestens ein endpoint_add_tcp/udp empfohlen.');
+  if (requireEndpoints && !hasEndpoint) {
+    errors.push('Mindestens ein endpoint_add_tcp/udp empfohlen.');
+  }
   return errors;
 }
 

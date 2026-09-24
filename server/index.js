@@ -41,7 +41,21 @@ import { controlFx, fxProcessActive, FX_UNIT } from './control.js';
 import { fxConsoleReady } from './fxCommand.js';
 import { orbitControlMode } from './fxLaunch.js';
 import { patchCfgServerOpts } from './cfgPatch.js';
-import { mergeCfgSecrets, parseCfgIntegrations, parseServerCfg, probeFiveM, readCfg, redactCfg, readHost, syncActiveCfgPath, validateCfg, writeCfg } from './fivem.js';
+import {
+  listCfgFiles,
+  mergeCfgSecrets,
+  parseCfgIntegrations,
+  parseServerCfg,
+  probeFiveM,
+  readCfg,
+  readCfgFile,
+  redactCfg,
+  readHost,
+  syncActiveCfgPath,
+  validateCfg,
+  writeCfg,
+  writeCfgFile,
+} from './fivem.js';
 import { orbitServerProfile } from './orbitServer.js';
 import {
   activateOrbitServer,
@@ -2019,10 +2033,25 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ok: true, queued: true });
   }
 
+  if (method === 'GET' && pathname === '/api/cfg/list') {
+    if (!hasPerm(me, 'cfg') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    try {
+      syncActiveCfgPath(settingMap(db));
+      const listed = listCfgFiles();
+      return json(res, 200, listed);
+    } catch (err) {
+      return json(res, 500, { error: `CFG-Scan fehlgeschlagen: ${err.message}` });
+    }
+  }
+
   if (method === 'GET' && pathname === '/api/cfg') {
     if (!hasPerm(me, 'cfg') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
     try {
-      const parsed = readCfg();
+      syncActiveCfgPath(settingMap(db));
+      const fileParam = str(url.searchParams.get('file') || '', 240);
+      const parsed = fileParam ? readCfgFile(fileParam) : readCfg();
+      const rel = parsed.rel || path.basename(parsed.path);
+      const isPrimary = !!parsed.primary;
       let writable = false;
       try {
         fs.accessSync(parsed.path, fs.constants.W_OK);
@@ -2031,31 +2060,51 @@ async function handleApi(req, res, url) {
       return json(res, 200, {
         content: redactCfg(parsed.raw),
         path: parsed.path,
+        file: rel,
+        primary: isPrimary,
         writable,
-        warnings: validateCfg(parsed.raw),
+        warnings: validateCfg(parsed.raw, { requireEndpoints: isPrimary }),
         resources: parsed.resources.length,
       });
     } catch (err) {
-      return json(res, 500, { error: `CFG nicht lesbar: ${err.message}` });
+      const code = /nicht gefunden|Ungültig|außerhalb|Nur \.cfg/i.test(err.message) ? 400 : 500;
+      return json(res, code, { error: `CFG nicht lesbar: ${err.message}` });
     }
   }
 
   if (method === 'PUT' && pathname === '/api/cfg') {
     if (!hasPerm(me, 'cfg') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
     if (!hit(`cfg:${me.id}`, 6, 60_000)) return json(res, 429, { error: 'Zu viele CFG-Schreibvorgänge.' });
+    syncActiveCfgPath(settingMap(db));
     const body = await readBody(req, 600_000);
     const content = typeof body.content === 'string' ? body.content : '';
-    const errors = validateCfg(content);
+    const fileParam = str(body.file || '', 240);
+    let targetRel = fileParam;
+    let isPrimary = true;
+    try {
+      if (fileParam) {
+        const probe = readCfgFile(fileParam);
+        targetRel = probe.rel;
+        isPrimary = !!probe.primary;
+      } else {
+        const cur = readCfg();
+        targetRel = cur.rel || path.basename(cur.path);
+        isPrimary = true;
+      }
+    } catch (err) {
+      return json(res, 400, { error: err.message || 'CFG-Pfad ungültig.' });
+    }
+    const errors = validateCfg(content, { requireEndpoints: isPrimary });
     if (errors.length) return json(res, 400, { error: errors[0], errors });
     let original = '';
     try {
-      original = readCfg().raw;
+      original = readCfgFile(targetRel).raw;
     } catch (err) {
       return json(res, 500, { error: `Original-CFG nicht lesbar: ${err.message}` });
     }
     const merged = mergeCfgSecrets(original, content);
     try {
-      writeCfg(merged);
+      writeCfgFile(targetRel, merged);
     } catch (err) {
       const draft = path.join(DATA_DIR, 'server.cfg.draft');
       try {
@@ -2066,13 +2115,17 @@ async function handleApi(req, res, url) {
         draft: true,
       });
     }
-    const parsed = parseServerCfgSafe(merged);
-    const now = Date.now();
-    const insert = db.prepare('INSERT OR IGNORE INTO resources (name, actual, updated) VALUES (?, ?, ?)');
-    for (const name of parsed.resources) insert.run(name, 'unknown', now);
-    audit(db, me.username, 'cfg.save', `${merged.length} bytes`, ip);
-    logLine('ok', `${me.username} hat server.cfg gespeichert.`);
-    return json(res, 200, { ok: true, resources: parsed.resources.length });
+    let resources = 0;
+    if (isPrimary) {
+      const parsed = parseServerCfgSafe(merged);
+      resources = parsed.resources.length;
+      const now = Date.now();
+      const insert = db.prepare('INSERT OR IGNORE INTO resources (name, actual, updated) VALUES (?, ?, ?)');
+      for (const name of parsed.resources) insert.run(name, 'unknown', now);
+    }
+    audit(db, me.username, 'cfg.save', `${targetRel} · ${merged.length} bytes`, ip);
+    logLine('ok', `${me.username} hat ${targetRel} gespeichert.`);
+    return json(res, 200, { ok: true, resources, file: targetRel });
   }
 
   if (method === 'GET' && pathname === '/api/console/download') {
