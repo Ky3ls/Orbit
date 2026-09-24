@@ -52,6 +52,11 @@ export default function App() {
         }
         if ('user' in data) {
           setSession(data.user ? { user: data.user, setup: !!data.setup } : null);
+          if (data.language) {
+            try {
+              window.dispatchEvent(new CustomEvent('orbit:set-language', { detail: data.language }));
+            } catch { /* */ }
+          }
           return;
         }
         return api('/api/auth/me')

@@ -14,6 +14,7 @@ import {
   ButtonStyle,
 } from 'discord.js';
 import { ORIGIN } from './config.js';
+import { tServer } from './i18n.js';
 import { DEFAULT_STATUS_CONFIG, DEFAULT_STATUS_EMBED } from './settingsSchema.js';
 
 /** @type {Client | null} */
@@ -322,7 +323,9 @@ export async function refreshDiscordBot(settings) {
         const s = d?.settingMap() || {};
         const probe = await d.probeFiveM(s.fivemHost || '127.0.0.1', Number(s.fivemPort) || 30120);
         await ix.reply({
-          content: probe.online ? `${probe.clients} Spieler online` : 'Offline',
+          content: probe.online
+            ? tServer(s, 'discord.playersOnline', { n: probe.clients })
+            : tServer(s, 'discord.offline'),
           ephemeral: true,
         });
       } else if (ix.commandName === 'status') {

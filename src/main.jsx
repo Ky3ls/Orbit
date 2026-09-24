@@ -7,6 +7,8 @@ import '@fontsource/syne/800.css';
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import { initAppearance } from './appearance.js';
+import { I18nProvider } from './i18n/I18nProvider.jsx';
+import { applyDocumentLang, readStoredLang } from './i18n/core.js';
 import App from './App.jsx';
 import './styles.css';
 
@@ -29,11 +31,14 @@ import './styles-live-console.css';
 import './styles-responsive.css';
 
 initAppearance();
+applyDocumentLang(readStoredLang() || 'de');
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <I18nProvider>
+        <App />
+      </I18nProvider>
     </BrowserRouter>
   </StrictMode>,
 );

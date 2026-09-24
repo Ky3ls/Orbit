@@ -2,14 +2,45 @@
 
 import { MODULES } from '../layout/modules.js';
 
-export const PRIMARY = [
-  { to: '/panel', end: true, label: 'Command' },
-  { to: '/players', label: 'Spieler' },
-  { to: '/resources', label: 'Ressourcen' },
-  { to: '/monitoring', label: 'Monitoring' },
+export const PRIMARY_DEFS = [
+  { to: '/panel', end: true, labelKey: 'nav.command' },
+  { to: '/players', labelKey: 'nav.players' },
+  { to: '/resources', labelKey: 'nav.resources' },
+  { to: '/monitoring', labelKey: 'nav.monitoring' },
 ];
 
-/** System-Dropdown aus zentraler Modulliste — kein doppeltes „Plattform“ mehr. */
+/** @deprecated — nutze localizedPrimary(t) */
+export const PRIMARY = PRIMARY_DEFS.map((i) => ({ ...i, label: i.labelKey }));
+
+export function localizedPrimary(t) {
+  return PRIMARY_DEFS.map((i) => ({ ...i, label: t(i.labelKey) }));
+}
+
+export function localizedGroups(t) {
+  return [
+    {
+      id: 'server',
+      label: t('nav.server'),
+      items: [
+        { to: '/cfg', label: t('nav.cfg') },
+        { to: '/schedule', label: t('nav.schedule') },
+        { to: '/server-log', label: t('nav.serverLog') },
+        { to: '/ingame', label: t('nav.ingame') },
+      ],
+    },
+    {
+      id: 'system',
+      label: t('nav.sys'),
+      items: MODULES.find((m) => m.id === 'sys').items.map(({ to, labelKey, owner }) => ({
+        to,
+        label: t(labelKey),
+        owner,
+      })),
+    },
+  ];
+}
+
+/** @deprecated */
 export const GROUPS = [
   {
     id: 'server',
@@ -24,12 +55,20 @@ export const GROUPS = [
   {
     id: 'system',
     label: 'System',
-    items: MODULES.find((m) => m.id === 'sys').items.map(({ to, label, owner }) => ({ to, label, owner })),
+    items: MODULES.find((m) => m.id === 'sys').items.map(({ to, labelKey, owner }) => ({
+      to,
+      label: labelKey,
+      owner,
+    })),
   },
 ];
 
 export function pathInGroup(pathname) {
-  for (const g of GROUPS) {
+  const groups = [
+    { id: 'server', items: [{ to: '/cfg' }, { to: '/schedule' }, { to: '/server-log' }, { to: '/ingame' }] },
+    { id: 'system', items: MODULES.find((m) => m.id === 'sys').items },
+  ];
+  for (const g of groups) {
     if (g.items.some((i) => pathname === i.to || pathname.startsWith(`${i.to}/`))) return g.id;
   }
   return null;

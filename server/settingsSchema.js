@@ -2,6 +2,8 @@
  * Erweiterte Orbit-Settings (txAdmin-Capabilities, Orbit-Keys).
  */
 
+import { panelLangFromSettings, tServer } from './i18n.js';
+
 export const ALLOWLIST_MODES = [
   { value: 'disabled', label: 'Deaktiviert (öffentlich)' },
   { value: 'admin_only', label: 'Nur Admins (Wartung)' },
@@ -23,7 +25,7 @@ export const DEFAULT_STATUS_EMBED = JSON.stringify({
 
 export const DEFAULT_STATUS_CONFIG = JSON.stringify({
   onlineString: '🟢 Online',
-  partialString: '🟡 Teilweise',
+  partialString: '🟡 Partial',
   offlineString: '🔴 Offline',
   onlineColor: '#0BA70B',
   partialColor: '#FFFF00',
@@ -78,14 +80,14 @@ export function publicSettingsPayload(settings, { isOwner = false } = {}) {
 
     // Bans
     banChecking: settings.banChecking !== '0',
-    banRejectionMessage: settings.banRejectionMessage || 'Du kannst http://discord.gg/example joinieren, um gegen diesen Ban Einspruch einzulegen.',
+    banRejectionMessage: settings.banRejectionMessage || tServer(settings, 'ban.defaultReject'),
     requiredHwidMatches: String(settings.requiredHwidMatches ?? '1'),
 
     // Allowlist
     allowlistMode,
     allowlistEnabled: allowlistMode !== 'disabled' && allowlistMode !== 'external',
     allowlistInstructions: settings.allowlistInstructions
-      || 'Bitte trete http://discord.gg/example bei und beantrage die Allowlist.',
+      || tServer(settings, 'allowlist.defaultInstructions'),
     allowlistDiscordRoles: settings.allowlistDiscordRoles || '',
 
     // Discord
@@ -136,5 +138,6 @@ export function gameSettingsForBridge(settings) {
     hideDmNotif: BOOL01(settings.hideDmNotif, false),
     hideWarnNotif: BOOL01(settings.hideWarnNotif, false),
     hideRestartWarnNotif: BOOL01(settings.hideRestartWarnNotif, false),
+    language: panelLangFromSettings(settings),
   };
 }

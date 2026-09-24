@@ -100,6 +100,60 @@ const PACT_TROLL = [
   { id: 'fire', label: 'Feuer', pact: 'fire', perm: 'players' },
 ];
 
+const MENU_I18N = {
+  de: {
+    mode: 'Modus', noclip: 'NoClip', god: 'Godmode', superjump: 'Superjump',
+    tp: 'Teleport', wp: 'Wegpunkt', back: 'Zurück', coords: 'Koordinaten…',
+    heal: 'Heilung', self: 'Selbst', all: 'Alle',
+    veh: 'Aktion', repair: 'Reparieren', boost: 'Boost', flip: 'Aufrichten', del: 'Löschen',
+    announce: 'Ankündigung', area: 'Area bereinigen', ids: 'Spieler-IDs',
+    drunk: 'Betrunken', fire: 'Feuer',
+    announceTitle: 'Ankündigung', announcePh: 'Nachricht an alle…',
+    coordsTitle: 'Koordinaten', admin: 'Admin',
+  },
+  en: {
+    mode: 'Mode', noclip: 'NoClip', god: 'Godmode', superjump: 'Superjump',
+    tp: 'Teleport', wp: 'Waypoint', back: 'Back', coords: 'Coordinates…',
+    heal: 'Heal', self: 'Self', all: 'All',
+    veh: 'Action', repair: 'Repair', boost: 'Boost', flip: 'Flip', del: 'Delete',
+    announce: 'Announce', area: 'Clear area', ids: 'Player IDs',
+    drunk: 'Drunk', fire: 'Fire',
+    announceTitle: 'Announcement', announcePh: 'Message to everyone…',
+    coordsTitle: 'Coordinates', admin: 'Admin',
+  },
+};
+let menuLang = 'de';
+function mt(key) {
+  const pack = MENU_I18N[menuLang] || MENU_I18N.en;
+  return pack[key] || MENU_I18N.en[key] || MENU_I18N.de[key] || key;
+}
+function applyMenuLang(lang) {
+  const raw = String(lang || 'de').toLowerCase();
+  menuLang = raw.startsWith('de') ? 'de' : 'en';
+  selectors.mode.label = mt('mode');
+  selectors.mode.options[0].label = mt('noclip');
+  selectors.mode.options[1].label = mt('god');
+  selectors.mode.options[2].label = mt('superjump');
+  selectors.tp.label = mt('tp');
+  selectors.tp.options[0].label = mt('wp');
+  selectors.tp.options[1].label = mt('back');
+  selectors.tp.options[2].label = mt('coords');
+  selectors.heal.label = mt('heal');
+  selectors.heal.options[0].label = mt('self');
+  selectors.heal.options[1].label = mt('all');
+  selectors.veh.label = mt('veh');
+  selectors.veh.options[0].label = mt('repair');
+  selectors.veh.options[1].label = mt('boost');
+  selectors.veh.options[2].label = mt('flip');
+  selectors.veh.options[3].label = mt('del');
+  MAIN_ACTIONS[0].label = mt('announce');
+  MAIN_ACTIONS[1].label = mt('area');
+  MAIN_ACTIONS[2].label = mt('ids');
+  if (PACT_TROLL[0]) PACT_TROLL[0].label = mt('drunk');
+  if (PACT_TROLL[1]) PACT_TROLL[1].label = mt('fire');
+}
+
+
 const res = () => (typeof GetParentResourceName === 'function' ? GetParentResourceName() : 'orbit');
 
 function post(name, data = {}) {
@@ -261,11 +315,11 @@ function submitPrompt() {
 
 function runAction(act) {
   if (act === 'promptAnnounce') {
-    openPrompt('announce', 'Ankündigung', 'Nachricht an alle…');
+    openPrompt('announce', mt('announceTitle'), mt('announcePh'));
     return;
   }
   if (act === 'promptCoords') {
-    openPrompt('coords', 'Koordinaten', 'x, y, z');
+    openPrompt('coords', mt('coordsTitle'), 'x, y, z');
     post('copyCoords').then(async (r) => {
       try {
         const d = await r.json();
@@ -556,9 +610,12 @@ window.addEventListener('message', (e) => {
   if (d.action === 'open') {
     app.classList.remove('hidden');
     app.classList.toggle('align-right', !!(d.alignRight || (d.game && d.game.alignRight)));
-    who.textContent = d.name ? `Admin · ${d.name}` : 'Admin';
+    if (d.game && d.game.language) applyMenuLang(d.game.language);
+    else if (d.language) applyMenuLang(d.language);
+    who.textContent = d.name ? `${mt('admin')} · ${d.name}` : mt('admin');
     perms = d.perms || {};
     applyPerms();
+    buildMenus();
     renderPlayers(d.players || []);
     closePlayer();
     closePrompt();

@@ -7,33 +7,38 @@ import { Page, PageHeader } from '../components/Ui.jsx';
 import OrbitSelect from '../components/OrbitSelect.jsx';
 import { useAppearance } from '../hooks/useAppearance.js';
 import { ACCENT_PRESETS } from '../appearance.js';
+import { useI18n } from '../i18n/I18nProvider.jsx';
+import { LANGUAGE_OPTIONS } from '../i18n/catalog.js';
+import { toBcp47, toSettingsValue } from '../i18n/core.js';
 import { GAME_BUILD_OPTIONS, ONESYNC_OPTIONS } from './settingsOptions.js';
 import { BAN_DURATION_PRESETS, banDurationLabel } from './banPresets.js';
 
 const HOST_TABS = new Set(['servers', 'artifacts', 'prod']);
 
-const SECTIONS = [
-  { id: 'general', label: 'Allgemein', hint: 'Name & Sprache', owner: false },
-  { id: 'fxserver', label: 'FXServer', hint: 'Prozess & Pfade', owner: true },
-  { id: 'bans', label: 'Bans', hint: 'Prüfung & Vorlagen', owner: false, admin: true },
-  { id: 'allowlist', label: 'Allowlist', hint: 'Zugangskontrolle', owner: false, admin: true },
-  { id: 'discord', label: 'Discord', hint: 'Webhook & Bot', owner: true },
-  { id: 'game', label: 'Spiel', hint: 'Menü & Notifs', owner: false, admin: true },
-  { id: 'system', label: 'System', hint: 'Clean & Backup', owner: true },
-  { id: 'appearance', label: 'Aussehen', hint: 'UI & Konsole', owner: false },
-  { id: 'host', label: 'Host', hint: 'Builds & Instanzen', owner: true },
-  { id: 'account', label: 'Account', hint: 'Passwort & 2FA', owner: false },
-  { id: 'danger', label: 'Gefahrenzone', hint: 'Wipe & Deinstall', owner: true },
+const SECTION_DEFS = [
+  { id: 'general', labelKey: 'settings.sec.general', hintKey: 'settings.sec.generalHint', owner: false },
+  { id: 'fxserver', labelKey: 'settings.sec.fxserver', hintKey: 'settings.sec.fxserverHint', owner: true },
+  { id: 'bans', labelKey: 'settings.sec.bans', hintKey: 'settings.sec.bansHint', owner: false, admin: true },
+  { id: 'allowlist', labelKey: 'settings.sec.allowlist', hintKey: 'settings.sec.allowlistHint', owner: false, admin: true },
+  { id: 'discord', labelKey: 'settings.sec.discord', hintKey: 'settings.sec.discordHint', owner: true },
+  { id: 'game', labelKey: 'settings.sec.game', hintKey: 'settings.sec.gameHint', owner: false, admin: true },
+  { id: 'system', labelKey: 'settings.sec.system', hintKey: 'settings.sec.systemHint', owner: true },
+  { id: 'appearance', labelKey: 'settings.sec.appearance', hintKey: 'settings.sec.appearanceHint', owner: false },
+  { id: 'host', labelKey: 'settings.sec.host', hintKey: 'settings.sec.hostHint', owner: true },
+  { id: 'account', labelKey: 'settings.sec.account', hintKey: 'settings.sec.accountHint', owner: false },
+  { id: 'danger', labelKey: 'settings.sec.danger', hintKey: 'settings.sec.dangerHint', owner: true },
 ];
 
-const ALLOWLIST_MODES = [
-  { value: 'disabled', label: 'Deaktiviert (öffentlich)' },
-  { value: 'admin_only', label: 'Nur Admins (Wartung)' },
-  { value: 'discord_member', label: 'Discord-Mitglied' },
-  { value: 'discord_roles', label: 'Discord-Rollen' },
-  { value: 'approved_license', label: 'Freigeschaltete License' },
-  { value: 'external', label: 'Externe Allowlist-Resource' },
-];
+const ALLOWLIST_MODE_KEYS = {
+  disabled: 'settings.allowlist.mode.disabled',
+  admin_only: 'settings.allowlist.mode.admin_only',
+  discord_member: 'settings.allowlist.mode.discord_member',
+  discord_roles: 'settings.allowlist.mode.discord_roles',
+  approved_license: 'settings.allowlist.mode.approved_license',
+  external: 'settings.allowlist.mode.external',
+};
+
+const ALLOWLIST_MODE_VALUES = ['disabled', 'admin_only', 'discord_member', 'discord_roles', 'approved_license', 'external'];
 
 function ModuleCard({ title, lead, children, actions, wide }) {
   return (
@@ -56,7 +61,7 @@ function FieldRow({ children }) {
   return <div className="st-fields">{children}</div>;
 }
 
-function Toggle({ checked, onChange, onLabel = 'An', offLabel = 'Aus' }) {
+function Toggle({ checked, onChange, onLabel = 'On', offLabel = 'Off' }) {
   return (
     <label className={`st-chip${checked ? ' on' : ''}`}>
       <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
@@ -87,19 +92,14 @@ function SegControl({ label, value, options, onChange, ariaLabel }) {
 }
 
 export default function Settings({ user, onUser, onSetupReset }) {
+  const { t, setLanguage, syncFromSettings } = useI18n();
   const [form, setForm] = useState(null);
   const [pw, setPw] = useState({ current: '', next: '' });
   const [totp, setTotp] = useState(null);
   const [code, setCode] = useState('');
   const [sessions, setSessions] = useState([]);
   const [params, setParams] = useSearchParams();
-  const [msg, setMsg] = useState(
-    params.get('cfx') === 'ok'
-      ? 'Cfx.re ist verbunden.'
-      : params.get('cfx') === 'taken'
-        ? 'Dieses Cfx.re-Konto ist schon vergeben.'
-        : '',
-  );
+  const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [resetBusy, setResetBusy] = useState(false);
   const [templates, setTemplates] = useState([]);
@@ -112,15 +112,21 @@ export default function Settings({ user, onUser, onSetupReset }) {
   const hostTab = HOST_TABS.has(params.get('tab')) ? params.get('tab') : 'servers';
   const [prefs, setAppearance] = useAppearance();
 
+  useEffect(() => {
+    const cfx = params.get('cfx');
+    if (cfx === 'ok') setMsg(t('settings.cfxOk'));
+    else if (cfx === 'taken') setMsg(t('settings.cfxTaken'));
+  }, [params, t]);
+
   const isOwner = user?.role === 'owner';
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const nav = useMemo(
-    () => SECTIONS.filter((s) => {
+    () => SECTION_DEFS.filter((s) => {
       if (s.owner && !isOwner) return false;
       if (s.admin && !isAdmin) return false;
       return true;
-    }),
-    [isOwner, isAdmin],
+    }).map((s) => ({ ...s, label: t(s.labelKey), hint: t(s.hintKey) })),
+    [isOwner, isAdmin, t],
   );
 
   const sectionParam = params.get('section');
@@ -138,7 +144,10 @@ export default function Settings({ user, onUser, onSetupReset }) {
   }
 
   function load() {
-    api('/api/settings').then((d) => setForm(d.settings)).catch((e) => setErr(e.message));
+    api('/api/settings').then((d) => {
+      setForm(d.settings);
+      if (d.settings) syncFromSettings(d.settings);
+    }).catch((e) => setErr(e.message));
     api('/api/sessions').then((d) => setSessions(d.sessions)).catch(() => {});
   }
 
@@ -172,7 +181,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
       });
       setTplReason('');
       setTplDuration('2d');
-      setMsg('Ban-Vorlage gespeichert.');
+      setMsg(t('settings.tplSaved'));
       loadTemplates();
     } catch (error) {
       setErr(error.message);
@@ -197,8 +206,14 @@ export default function Settings({ user, onUser, onSetupReset }) {
     setErr('');
     setMsg('');
     try {
-      await api('/api/settings', { method: 'PUT', body: form });
-      setMsg('Gespeichert.');
+      const payload = {
+        ...form,
+        language: form.language || form.locale,
+        locale: toBcp47(form.language || form.locale || 'de'),
+      };
+      await api('/api/settings', { method: 'PUT', body: payload });
+      setLanguage(payload.language);
+      setMsg(t('common.saved'));
       load();
     } catch (error) {
       setErr(error.message);
@@ -210,7 +225,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
     setErr('');
     try {
       await api('/api/auth/password', { method: 'POST', body: pw });
-      setMsg('Passwort geändert. Andere Sitzungen sind ungültig.');
+      setMsg(t('settings.pwChanged'));
       onUser({ ...user, mustChange: false });
       setPw({ current: '', next: '' });
     } catch (error) {
@@ -219,15 +234,17 @@ export default function Settings({ user, onUser, onSetupReset }) {
   }
 
   if (!form) {
-    return <Page>{err ? <div className="err">{err}</div> : <p className="muted">Lade…</p>}</Page>;
+    return <Page>{err ? <div className="err">{err}</div> : <p className="muted">{t('common.loading')}</p>}</Page>;
   }
 
   const set = (patch) => setForm({ ...form, ...patch });
   const activeMeta = nav.find((s) => s.id === section);
-  const modes = form.allowlistModes?.length ? form.allowlistModes : ALLOWLIST_MODES;
+  const modes = (form.allowlistModes?.length
+    ? form.allowlistModes.map((m) => ({ ...m, label: t(ALLOWLIST_MODE_KEYS[m.value] || m.label) }))
+    : ALLOWLIST_MODE_VALUES.map((value) => ({ value, label: t(ALLOWLIST_MODE_KEYS[value]) })));
 
   const aside = (
-    <nav className="st-nav" aria-label="Einstellungs-Bereiche">
+    <nav className="st-nav" aria-label={t('settings.navAria')}>
       {nav.map((s) => (
         <button
           key={s.id}
@@ -245,9 +262,9 @@ export default function Settings({ user, onUser, onSetupReset }) {
   return (
     <Page className="settings-page">
       <PageHeader
-        eyebrow="System"
-        title="Einstellungen"
-        description={activeMeta ? `${activeMeta.label} — ${activeMeta.hint}` : 'Orbit-Server und Panel konfigurieren.'}
+        eyebrow={t('settings.eyebrow')}
+        title={t('settings.title')}
+        description={activeMeta ? `${activeMeta.label} — ${activeMeta.hint}` : t('settings.desc')}
       />
       {err && <div className="err">{err}</div>}
       {msg && <div className="banner">{msg}</div>}
@@ -260,54 +277,54 @@ export default function Settings({ user, onUser, onSetupReset }) {
           <form className="st-stack" onSubmit={save}>
             <ModuleCard
               wide
-              title="Allgemein"
-              lead="Kurzer Panel-/Discord-Name und Sprache für Nachrichten."
-              actions={<button className="btn btn-primary btn-sm" type="submit">Speichern</button>}
+              title={t('settings.general.title')}
+              lead={t('settings.general.lead')}
+              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <FieldRow>
                 <label className="field">
-                  <span>Server-Name <em className="req">Pflicht</em></span>
+                  <span>{t('settings.serverName')} <em className="req">{t('common.required')}</em></span>
                   <input
                     value={form.serverName || ''}
                     maxLength={18}
                     required
                     onChange={(e) => set({ serverName: e.target.value })}
-                    placeholder="Kurzname (1–18)"
+                    placeholder={t('settings.serverNamePh')}
                   />
                 </label>
                 <label className="field">
-                  <span>Sprache <em className="req">Pflicht</em></span>
+                  <span>{t('settings.language')} <em className="req">{t('common.required')}</em></span>
                   <select
-                    value={form.language || form.locale || 'de-DE'}
-                    onChange={(e) => set({ language: e.target.value, locale: e.target.value })}
+                    value={toSettingsValue(form.language || form.locale || 'de-DE')}
+                    onChange={(e) => {
+                      const language = e.target.value;
+                      set({ language, locale: toBcp47(language) });
+                      setLanguage(language);
+                    }}
                   >
-                    <option value="de-DE">Deutsch</option>
-                    <option value="en">English (default)</option>
-                    <option value="fr">Français</option>
-                    <option value="es">Español</option>
-                    <option value="pt">Português</option>
-                    <option value="nl">Nederlands</option>
-                    <option value="custom">Custom</option>
+                    {LANGUAGE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
+                    ))}
                   </select>
                 </label>
               </FieldRow>
             </ModuleCard>
-            <ModuleCard wide title="Server-Identität" lead="Werte landen in der aktiven server.cfg.">
+            <ModuleCard wide title={t('settings.identity')} lead={t('settings.identityLead')}>
               <FieldRow>
-                <label className="field"><span>Anzeigename (hostname)</span><input value={form.hostname} onChange={(e) => set({ hostname: e.target.value })} /></label>
-                <label className="field"><span>Projekt</span><input value={form.project} onChange={(e) => set({ project: e.target.value })} /></label>
-                <label className="field"><span>Slots</span><input type="number" min={1} max={2048} value={form.maxClients} onChange={(e) => set({ maxClients: e.target.value })} /></label>
-                <label className="field"><span>Tags</span><input value={form.tags || ''} onChange={(e) => set({ tags: e.target.value })} placeholder="roleplay, german, …" /></label>
-                <label className="field"><span>Game Build</span>
+                <label className="field"><span>{t('settings.hostname')}</span><input value={form.hostname} onChange={(e) => set({ hostname: e.target.value })} /></label>
+                <label className="field"><span>{t('settings.project')}</span><input value={form.project} onChange={(e) => set({ project: e.target.value })} /></label>
+                <label className="field"><span>{t('settings.slots')}</span><input type="number" min={1} max={2048} value={form.maxClients} onChange={(e) => set({ maxClients: e.target.value })} /></label>
+                <label className="field"><span>{t('settings.tags')}</span><input value={form.tags || ''} onChange={(e) => set({ tags: e.target.value })} placeholder="roleplay, german, …" /></label>
+                <label className="field"><span>{t('settings.gameBuild')}</span>
                   <select value={form.gameBuild || ''} onChange={(e) => set({ gameBuild: e.target.value })}>
                     {GAME_BUILD_OPTIONS.map((o) => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
                   </select>
                 </label>
-                <label className="field"><span>Port</span><input value={form.fivemPort} onChange={(e) => set({ fivemPort: e.target.value })} /></label>
+                <label className="field"><span>{t('settings.port')}</span><input value={form.fivemPort} onChange={(e) => set({ fivemPort: e.target.value })} /></label>
               </FieldRow>
             </ModuleCard>
             <div className="st-foot st-wide">
-              <button className="btn btn-primary" type="submit">Allgemein speichern</button>
+              <button className="btn btn-primary" type="submit">{t('settings.saveGeneral')}</button>
             </div>
           </form>
         )}
@@ -316,9 +333,9 @@ export default function Settings({ user, onUser, onSetupReset }) {
           <form className="st-stack" onSubmit={save}>
             <ModuleCard
               wide
-              title="FXServer"
-              lead="Datenordner, Start und erweiterte Optionen."
-              actions={<button className="btn btn-primary btn-sm" type="submit">Speichern</button>}
+              title={t('settings.fx.title')}
+              lead={t('settings.fx.lead')}
+              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <label className="field">
                 <span>Steuerungsmodus</span>
@@ -371,15 +388,15 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 Resource-Start-Toleranz: wenn der Endpunkt nach der Zeit nicht online ist (oder „failed to start in time“), wird neu gestartet.
               </p>
             </ModuleCard>
-            <ModuleCard title="RCON">
+            <ModuleCard title={t('settings.rcon')}>
               <div className="st-fields st-fields-1">
                 <label className="field"><span>Port</span><input value={form.rconPort || ''} onChange={(e) => set({ rconPort: e.target.value })} placeholder={form.fivemPort || '30120'} /></label>
                 <label className="field"><span>Passwort</span><input type="password" value={form.rconPassword || ''} onChange={(e) => set({ rconPassword: e.target.value })} placeholder={form.rconConfigured ? 'leer lassen' : 'eintragen'} autoComplete="new-password" /></label>
               </div>
             </ModuleCard>
             <div className="st-foot st-wide">
-              <button className="btn btn-primary" type="submit">FX speichern</button>
-              <button className="btn" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || 'RCON OK')).catch((e) => setErr(e.message))}>RCON testen</button>
+              <button className="btn btn-primary" type="submit">{t('settings.fx.save')}</button>
+              <button className="btn" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || 'RCON OK')).catch((e) => setErr(e.message))}>{t('settings.fx.rconTest')}</button>
             </div>
           </form>
         )}
@@ -388,9 +405,9 @@ export default function Settings({ user, onUser, onSetupReset }) {
           <div className="st-stack">
             <form onSubmit={save}>
               <ModuleCard
-                title="Ban-Prüfung"
-                lead="Beim Join gegen die Orbit-Banliste prüfen."
-                actions={<button className="btn btn-primary btn-sm" type="submit">Speichern</button>}
+                title={t('settings.bans.title')}
+                lead={t('settings.bans.lead')}
+                actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
               >
                 <Toggle checked={form.banChecking !== false} onChange={(v) => set({ banChecking: v })} onLabel="Prüfung an" offLabel="Prüfung aus" />
                 <label className="field" style={{ marginTop: 12 }}>
@@ -411,7 +428,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 </label>
               </ModuleCard>
             </form>
-            <ModuleCard title="Ban-Vorlagen" lead="Vorlagen beim Sperren vorausfüllen.">
+            <ModuleCard title={t('settings.bans.templates')} lead={t('settings.bans.templatesLead')}>
               <form className="st-fields st-fields-1" onSubmit={addTemplate}>
                 <label className="field">
                   <span>Grund</span>
@@ -431,13 +448,13 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 <p className="muted" style={{ marginTop: 16 }}>Noch keine Vorlagen.</p>
               ) : (
                 <ul className="st-tpl-list">
-                  {templates.map((t) => (
-                    <li key={t.id}>
+                  {templates.map((tpl) => (
+                    <li key={tpl.id}>
                       <div>
-                        <strong>{t.reason}</strong>
-                        <span className="muted">{banDurationLabel(t.duration_id)}</span>
+                        <strong>{tpl.reason}</strong>
+                        <span className="muted">{banDurationLabel(tpl.duration_id)}</span>
                       </div>
-                      <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(t.id)}>Löschen</button>
+                      <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(tpl.id)}>{t('common.delete')}</button>
                     </li>
                   ))}
                 </ul>
@@ -450,9 +467,9 @@ export default function Settings({ user, onUser, onSetupReset }) {
           <form className="st-stack" onSubmit={save}>
             <ModuleCard
               wide
-              title="Allowlist-Modus"
-              lead="Zugangskontrolle beim Connect — analog zu txAdmin."
-              actions={<button className="btn btn-primary btn-sm" type="submit">Speichern</button>}
+              title={t('settings.allowlist.title')}
+              lead={t('settings.allowlist.lead')}
+              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <div className="st-radio-list">
                 {modes.map((m) => (
@@ -500,7 +517,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
             <ModuleCard
               title="Webhook"
               lead="Start/Stop und optional Player-Drops."
-              actions={<button className="btn btn-primary btn-sm" type="submit">Speichern</button>}
+              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <div className="st-chips">
                 <Toggle checked={!!form.discordEnabled} onChange={(v) => set({ discordEnabled: v })} onLabel="Webhook an" offLabel="Webhook aus" />
@@ -556,7 +573,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
             <ModuleCard
               title="Menü"
               lead="Orbit Ingame-Menü (/orbit) — Einstellungen gehen an orbit_bridge."
-              actions={<button className="btn btn-primary btn-sm" type="submit">Speichern</button>}
+              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <div className="st-chips">
                 <Toggle checked={form.gameMenuEnabled !== false} onChange={(v) => set({ gameMenuEnabled: v })} onLabel="Menü an" offLabel="Menü aus" />
@@ -692,7 +709,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
 
         {section === 'appearance' && (
           <div className="st-stack">
-            <ModuleCard title="Oberfläche" lead="Pro Account — gilt auf jedem Gerät nach Login.">
+            <ModuleCard title={t('settings.appearance.title')} lead={t('settings.appearance.lead')}>
               <SegControl
                 label="Navigation"
                 value={prefs.navLayout}
@@ -775,7 +792,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
 
         {section === 'account' && (
           <div className="st-stack">
-            <ModuleCard title="Passwort">
+            <ModuleCard title={t('settings.account.password')}>
               <form onSubmit={password}>
                 <div className="st-fields st-fields-1">
                   <label className="field"><span>Aktuell</span><input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></label>
@@ -794,7 +811,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 <a className="btn cfx" href="/api/auth/cfx/start?mode=link">Mit Cfx.re verbinden</a>
               )}
             </ModuleCard>
-            <ModuleCard title="Zwei-Faktor">
+            <ModuleCard title={t('settings.account.totp')}>
               {!totp ? (
                 <button className="btn" type="button" onClick={() => api('/api/auth/totp/setup', { method: 'POST', body: {} }).then(setTotp)}>Einrichten</button>
               ) : (
@@ -807,7 +824,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 </>
               )}
             </ModuleCard>
-            <ModuleCard title="Sitzungen">
+            <ModuleCard title={t('settings.account.sessions')}>
               <ul className="st-sessions">
                 {sessions.map((s) => (
                   <li key={s.id}>

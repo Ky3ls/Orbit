@@ -1,37 +1,37 @@
-/** Zentrale Modul-Navigation — eine Quelle für Sidebar + Mobile-Dock */
+/** Zentrale Modul-Navigation — Labels via i18n labelKey */
 
 export const MODULES = [
   {
     id: 'ops',
-    label: 'Betrieb',
+    labelKey: 'nav.ops',
     items: [
-      { to: '/panel', end: true, label: 'Übersicht', short: 'Home', icon: 'home' },
-      { to: '/players', label: 'Spieler', short: 'Spieler', icon: 'users' },
-      { to: '/resources', label: 'Ressourcen', short: 'Scripts', icon: 'box' },
-      { to: '/monitoring', label: 'Monitoring', icon: 'chart' },
-      { to: '/cfg', label: 'CFG', icon: 'cfg' },
-      { to: '/schedule', label: 'Automationen', icon: 'clock' },
+      { to: '/panel', end: true, labelKey: 'nav.overview', shortKey: 'nav.home', icon: 'home' },
+      { to: '/players', labelKey: 'nav.players', shortKey: 'nav.players', icon: 'users' },
+      { to: '/resources', labelKey: 'nav.resources', shortKey: 'nav.scripts', icon: 'box' },
+      { to: '/monitoring', labelKey: 'nav.monitoring', icon: 'chart' },
+      { to: '/cfg', labelKey: 'nav.cfg', icon: 'cfg' },
+      { to: '/schedule', labelKey: 'nav.schedule', icon: 'clock' },
     ],
   },
   {
     id: 'sys',
-    label: 'System',
+    labelKey: 'nav.sys',
     items: [
-      { to: '/database', label: 'Datenbank', icon: 'db' },
-      { to: '/server-log', label: 'Server-/FX-Log', icon: 'log' },
-      { to: '/audit', label: 'Admin-Aktionen', icon: 'audit' },
-      { to: '/admins', label: 'Team', icon: 'team', owner: true },
-      { to: '/settings', label: 'Einstellungen', icon: 'gear' },
+      { to: '/database', labelKey: 'nav.database', icon: 'db' },
+      { to: '/server-log', labelKey: 'nav.serverLog', icon: 'log' },
+      { to: '/audit', labelKey: 'nav.audit', icon: 'audit' },
+      { to: '/admins', labelKey: 'nav.admins', icon: 'team', owner: true },
+      { to: '/settings', labelKey: 'nav.settings', icon: 'gear' },
     ],
   },
 ];
 
 export const MOBILE_DOCK = [
-  { to: '/players', label: 'Spieler', icon: 'users' },
-  { to: '/resources', label: 'Scripts', icon: 'box' },
-  { to: '/panel', end: true, label: 'Home', icon: 'home', center: true },
-  { to: '/monitoring', label: 'Monitor', icon: 'chart', powerAdjacent: true },
-  { to: '/more', label: 'Mehr', icon: 'more' },
+  { to: '/players', labelKey: 'nav.players', icon: 'users' },
+  { to: '/resources', labelKey: 'nav.scripts', icon: 'box' },
+  { to: '/panel', end: true, labelKey: 'nav.home', icon: 'home', center: true },
+  { to: '/monitoring', labelKey: 'nav.monitoring', icon: 'chart', powerAdjacent: true },
+  { to: '/more', labelKey: 'nav.more', icon: 'more' },
 ];
 
 export function flatModulePaths() {
@@ -40,4 +40,17 @@ export function flatModulePaths() {
     for (const item of g.items) paths.push(item.to);
   }
   return paths;
+}
+
+/** MODULES mit übersetzten Labels */
+export function localizedModules(t) {
+  return MODULES.map((group) => ({
+    ...group,
+    label: t(group.labelKey),
+    items: group.items.map((item) => ({
+      ...item,
+      label: t(item.labelKey),
+      short: item.shortKey ? t(item.shortKey) : undefined,
+    })),
+  }));
 }

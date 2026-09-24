@@ -2,22 +2,23 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Mark } from '../components/Ui.jsx';
-
-const HINTS = {
-  unknown: 'Dieses Cfx.re-Konto ist noch keinem Team-Account zugeordnet.',
-  error: 'Cfx.re hat die Anmeldung nicht abgeschlossen.',
-  rate: 'Zu viele Cfx-Versuche. Kurz warten.',
-  locked: 'Anmeldung vorübergehend gesperrt.',
-};
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 export default function Login({ onUser }) {
+  const { t } = useI18n();
   const [params] = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [totp, setTotp] = useState(params.get('totp') === '1');
   const masterOk = params.get('master') === '1';
-  const [err, setErr] = useState(HINTS[params.get('cfx')] || '');
+  const hintKey = {
+    unknown: 'login.hint.unknown',
+    error: 'login.hint.error',
+    rate: 'login.hint.rate',
+    locked: 'login.hint.locked',
+  }[params.get('cfx')];
+  const [err, setErr] = useState(hintKey ? t(hintKey) : '');
   const [busy, setBusy] = useState(false);
 
   async function submit(e) {
@@ -45,31 +46,33 @@ export default function Login({ onUser }) {
       <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
       <form className="login-card login-box login-page-card" onSubmit={submit}>
         <div className="brand-link"><Mark /> Orbit</div>
-        <h2>{totp ? 'Zweiter Faktor' : 'Anmelden'}</h2>
+        <h2>{totp ? t('login.totpTitle') : t('login.title')}</h2>
         <p className="sub">
           {totp
-            ? 'Code aus der Authenticator-App.'
+            ? t('login.subTotp')
             : masterOk
-              ? 'Master ist bereit. Mit Passwort oder Cfx.re anmelden — danach der Server-Setup.'
-              : 'Mit Passwort oder verknüpftem Cfx.re-Konto.'}
+              ? t('login.subMaster')
+              : t('login.sub')}
         </p>
         {masterOk && !err && (
           <div className="ok" style={{ marginBottom: 12, fontSize: 13 }}>
-            Master angelegt und mit Cfx.re verknüpft. Bitte anmelden.
+            {t('login.masterOk')}
           </div>
         )}
         {err && <div className="err">{err}</div>}
-        {!totp && <a className="btn cfx" href="/api/auth/cfx/start?mode=login">Mit Cfx.re anmelden</a>}
-        {!totp && <div className="or">oder mit Passwort</div>}
+        {!totp && <a className="btn cfx" href="/api/auth/cfx/start?mode=login">{t('login.cfx')}</a>}
+        {!totp && <div className="or">{t('login.orPassword')}</div>}
         {!totp ? (
           <>
-            <label className="field"><span>Benutzer</span><input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} /></label>
-            <label className="field"><span>Passwort</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+            <label className="field"><span>{t('login.user')}</span><input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} /></label>
+            <label className="field"><span>{t('login.password')}</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           </>
         ) : (
-          <label className="field"><span>Code</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} /></label>
+          <label className="field"><span>{t('login.code')}</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} /></label>
         )}
-        <button className="btn btn-primary" disabled={busy} type="submit">{busy ? 'Prüfe…' : totp ? 'Bestätigen' : 'Anmelden'}</button>
+        <button className="btn btn-primary" disabled={busy} type="submit">
+          {busy ? t('login.checking') : totp ? t('login.confirm') : t('login.submit')}
+        </button>
       </form>
     </div>
   );

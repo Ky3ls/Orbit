@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { fxModeShort } from '../fxMeta.js';
+import { CATALOG } from '../i18n/catalog.js';
+import { getLang, translate } from '../i18n/core.js';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
-const LABELS = {
-  online: 'Online',
-  offline: 'Offline',
-  starting: 'Startet…',
-  stopping: 'Stoppt…',
-  restarting: 'Neustart…',
+const STATUS_KEYS = {
+  online: 'status.online',
+  offline: 'status.offline',
+  starting: 'status.starting',
+  stopping: 'status.stopping',
+  restarting: 'status.restarting',
 };
 
 export function statusTone(status) {
@@ -18,7 +21,8 @@ export function statusTone(status) {
 }
 
 export function statusLabel(status) {
-  return LABELS[status] || LABELS.offline;
+  const key = STATUS_KEYS[status] || STATUS_KEYS.offline;
+  return translate(CATALOG, getLang(), key);
 }
 
 /**
@@ -43,6 +47,7 @@ export default function ServerControls({
   fxControlMode = 'systemd',
   fxCommandReady = false,
 }) {
+  const { t } = useI18n();
   const [pending, setPending] = useState('');
   const [err, setErr] = useState('');
   const locked = busy || !!pending || status === 'starting' || status === 'stopping' || status === 'restarting';
@@ -61,28 +66,30 @@ export default function ServerControls({
     }
   }
 
+  const hintMode = fxControlMode === 'orbit' ? t('ctl.hintOrbit') : t('ctl.hintRcon');
+
   return (
     <div className={`srv-ctl${compact ? ' compact' : ''}`}>
       <div className={`srv-badge tone-${statusTone(status)}`}>
         <span className="srv-dot" />
-        {statusLabel(status)}
+        {t(STATUS_KEYS[status] || STATUS_KEYS.offline)}
         <em className="srv-mode">{fxModeShort(fxControlMode)}</em>
       </div>
       {!fxCommandReady && status === 'online' && (
         <p className="srv-hint muted">
-          Konsole/Ressourcen: {fxControlMode === 'orbit' ? 'Orbit hält den Prozess nicht' : 'RCON oder Orbit-Modus'} —
-          <Link to="/settings"> Setup</Link>
+          {t('ctl.hintPrefix')}: {hintMode} —
+          <Link to="/settings"> {t('ctl.setup')}</Link>
         </p>
       )}
       {canControl && (
-        <div className="srv-actions" role="group" aria-label="Server-Steuerung">
+        <div className="srv-actions" role="group" aria-label={t('shell.serverControls')}>
           <button
             type="button"
             className="btn btn-sm srv-start"
             disabled={locked || status === 'online'}
             onClick={() => run('start')}
           >
-            {pending === 'start' ? '…' : 'Start'}
+            {pending === 'start' ? '…' : t('ctl.start')}
           </button>
           <button
             type="button"
@@ -90,7 +97,7 @@ export default function ServerControls({
             disabled={locked || status === 'offline'}
             onClick={() => run('stop')}
           >
-            {pending === 'stop' ? '…' : 'Stop'}
+            {pending === 'stop' ? '…' : t('ctl.stop')}
           </button>
           <button
             type="button"
@@ -98,7 +105,7 @@ export default function ServerControls({
             disabled={locked}
             onClick={() => run('restart')}
           >
-            {pending === 'restart' ? '…' : 'Restart'}
+            {pending === 'restart' ? '…' : t('ctl.restart')}
           </button>
         </div>
       )}

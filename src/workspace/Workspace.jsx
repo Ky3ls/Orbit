@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
 import ServerControls, { statusLabel, statusTone } from '../components/ServerControls.jsx';
 import { Mark } from '../components/Ui.jsx';
 import { useAppearance } from '../hooks/useAppearance.js';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 import { NavIcon } from '../layout/icons.jsx';
-import { MODULES } from '../layout/modules.js';
-import { GROUPS, PRIMARY, pathInGroup } from './nav.js';
+import { localizedModules } from '../layout/modules.js';
+import { localizedGroups, localizedPrimary, pathInGroup } from './nav.js';
 
-const DOCK_LEFT = [
-  { to: '/players', label: 'Spieler', icon: 'users' },
-  { to: '/resources', label: 'Scripts', icon: 'box' },
+const DOCK_LEFT_DEFS = [
+  { to: '/players', labelKey: 'nav.players', icon: 'users' },
+  { to: '/resources', labelKey: 'nav.scripts', icon: 'box' },
 ];
 
 /** Bereits in der unteren Toolbar — nicht nochmal unter „Mehr“. */
@@ -19,7 +20,7 @@ const DOCK_PATHS = new Set([
   '/players',
   '/resources',
   '/monitoring',
-  ...DOCK_LEFT.map((i) => i.to),
+  ...DOCK_LEFT_DEFS.map((i) => i.to),
 ]);
 
 const RAIL_PRIMARY = new Set(['/panel', '/players', '/resources', '/monitoring']);
@@ -53,10 +54,10 @@ function RailLink({ to, end, icon, label, active, onClick, asButton, pressed, pr
   );
 }
 
-function MoreSheet({ open, onClose, user, hideDockDuplicates }) {
+function MoreSheet({ open, onClose, user, hideDockDuplicates, modules, t }) {
   if (!open) return null;
 
-  const columns = MODULES.map((group) => {
+  const columns = modules.map((group) => {
     const items = group.items.filter((item) => {
       if (item.owner && user.role !== 'owner') return false;
       if (hideDockDuplicates && DOCK_PATHS.has(item.to)) return false;
@@ -64,14 +65,14 @@ function MoreSheet({ open, onClose, user, hideDockDuplicates }) {
     });
     const extra = [];
     if (group.id === 'ops') {
-      extra.push({ to: '/ingame', label: 'Ingame', icon: 'cfg' });
+      extra.push({ to: '/ingame', label: t('nav.ingame'), icon: 'cfg' });
     }
     return { ...group, items: [...items, ...extra] };
   }).filter((g) => g.items.length > 0);
 
   return (
-    <div className="ws-more-sheet" role="dialog" aria-label="Module">
-      <button type="button" className="ws-more-backdrop" aria-label="Schließen" onClick={onClose} />
+    <div className="ws-more-sheet" role="dialog" aria-label={t('nav.modules')}>
+      <button type="button" className="ws-more-backdrop" aria-label={t('common.close')} onClick={onClose} />
       <div className="ws-more-panel">
         <div className={`ws-more-grid ws-more-cols-${Math.min(columns.length, 3)}`}>
           {columns.map((group) => (
@@ -94,6 +95,14 @@ function MoreSheet({ open, onClose, user, hideDockDuplicates }) {
 }
 
 export default function Workspace({ user, onLogout }) {
+  const { t } = useI18n();
+  const modules = useMemo(() => localizedModules(t), [t]);
+  const primary = useMemo(() => localizedPrimary(t), [t]);
+  const groups = useMemo(() => localizedGroups(t), [t]);
+  const dockLeft = useMemo(
+    () => DOCK_LEFT_DEFS.map((i) => ({ ...i, label: t(i.labelKey) })),
+    [t],
+  );
   const [status, setStatus] = useState('offline');
   const [live, setLive] = useState({ clients: 0, maxClients: 48, hostname: 'Server', serverLabel: 'Game Server' });
   const [controlEnabled, setControlEnabled] = useState(true);
@@ -243,9 +252,9 @@ export default function Workspace({ user, onLogout }) {
       </button>
       {menuOpen && (
         <div className="profile-menu ws-profile-menu">
-          <Link to="/settings" className="pm-item" onClick={() => setMenuOpen(false)}>Einstellungen</Link>
-          <button type="button" className="pm-item" onClick={() => { setMenuOpen(false); setMoreOpen(true); }}>Module</button>
-          <button type="button" className="pm-item pm-logout" onClick={() => { setMenuOpen(false); onLogout(); }}>Abmelden</button>
+          <Link to="/settings" className="pm-item" onClick={() => setMenuOpen(false)}>{t('common.settings')}</Link>
+          <button type="button" className="pm-item" onClick={() => { setMenuOpen(false); setMoreOpen(true); }}>{t('nav.modules')}</button>
+          <button type="button" className="pm-item pm-logout" onClick={() => { setMenuOpen(false); onLogout(); }}>{t('common.logout')}</button>
         </div>
       )}
     </div>
@@ -259,7 +268,7 @@ export default function Workspace({ user, onLogout }) {
       data-sidebar={prefs.sidebarCollapsed ? 'collapsed' : 'expanded'}
     >
       {isSidebar && (
-        <aside className="ws-rail" aria-label="Hauptnavigation">
+        <aside className="ws-rail" aria-label={t('nav.main')}>
           <div className="ws-rail-top">
             <NavLink to="/panel" className="ws-rail-brand" title="Orbit">
               <Mark />
@@ -271,7 +280,7 @@ export default function Workspace({ user, onLogout }) {
             <button
               type="button"
               className="ws-rail-collapse"
-              aria-label={prefs.sidebarCollapsed ? 'Sidebar ausklappen' : 'Sidebar einklappen'}
+              aria-label={prefs.sidebarCollapsed ? t('shell.expandSidebar') : t('shell.collapseSidebar')}
               onClick={() => setAppearance({ sidebarCollapsed: !prefs.sidebarCollapsed })}
             >
               <NavIcon name={prefs.sidebarCollapsed ? 'expand' : 'collapse'} />
@@ -287,7 +296,7 @@ export default function Workspace({ user, onLogout }) {
           </div>
 
           <nav className="ws-rail-nav">
-            {MODULES.map((group) => (
+            {modules.map((group) => (
               <div key={group.id} className="ws-rail-group">
                 <span className="ws-rail-group-label">{group.label}</span>
                 {group.items.map((item) => {
@@ -307,14 +316,14 @@ export default function Workspace({ user, onLogout }) {
               </div>
             ))}
             <div className="ws-rail-group">
-              <span className="ws-rail-group-label">Extra</span>
-              <RailLink to="/ingame" icon="cfg" label="Ingame" pri={false} />
+              <span className="ws-rail-group-label">{t('nav.extra')}</span>
+              <RailLink to="/ingame" icon="cfg" label={t('nav.ingame')} pri={false} />
               {canControl && (
                 <div className="ws-rail-power" ref={powerRef}>
                   <RailLink
                     asButton
                     icon="power"
-                    label="Power"
+                    label={t('nav.power')}
                     pri
                     active={powerOpen}
                     pressed={powerOpen}
@@ -326,7 +335,7 @@ export default function Workspace({ user, onLogout }) {
               <RailLink
                 asButton
                 icon="more"
-                label="Module"
+                label={t('nav.modules')}
                 pri
                 active={moreOpen}
                 pressed={moreOpen}
@@ -340,14 +349,14 @@ export default function Workspace({ user, onLogout }) {
               type="button"
               className={`ws-rail-theme${isLight ? ' on' : ''}`}
               aria-pressed={isLight}
-              title={isLight ? 'Dunkelmodus' : 'Hellmodus'}
+              title={isLight ? t('shell.darkMode') : t('shell.lightMode')}
               onClick={() => setAppearance({ theme: isLight ? 'dark' : 'light' })}
             >
               <span className="ws-rail-ico"><NavIcon name={isLight ? 'moon' : 'sun'} /></span>
-              <span className="ws-rail-label">{isLight ? 'Dunkelmodus' : 'Hellmodus'}</span>
+              <span className="ws-rail-label">{isLight ? t('shell.darkMode') : t('shell.lightMode')}</span>
               <span className="ws-rail-switch" aria-hidden="true"><i /></span>
             </button>
-            <button type="button" className="ws-rail-item" title="Abmelden" onClick={onLogout}>
+            <button type="button" className="ws-rail-item" title={t('common.logout')} onClick={onLogout}>
               <span className="ws-rail-ico"><NavIcon name="logout" /></span>
               <span className="ws-rail-label">Logout</span>
             </button>
@@ -359,7 +368,7 @@ export default function Workspace({ user, onLogout }) {
         <header className="ws-header">
           <div className="ws-header-start">
             {!isSidebar && (
-              <button type="button" className="ws-burger" aria-label="Menü" onClick={() => setMoreOpen(true)}>
+              <button type="button" className="ws-burger" aria-label={t('nav.menu')} onClick={() => setMoreOpen(true)}>
                 <span /><span /><span />
               </button>
             )}
@@ -370,8 +379,8 @@ export default function Workspace({ user, onLogout }) {
           </div>
 
           {!isSidebar && !isDock && (
-            <nav className="ws-nav" aria-label="Module">
-              {PRIMARY.map((item) => (
+            <nav className="ws-nav" aria-label={t('nav.modules')}>
+              {primary.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -381,7 +390,7 @@ export default function Workspace({ user, onLogout }) {
                   {item.label}
                 </NavLink>
               ))}
-              {GROUPS.map((group) => (
+              {groups.map((group) => (
                 <div key={group.id} className="ws-nav-drop">
                   <button
                     type="button"
@@ -411,7 +420,11 @@ export default function Workspace({ user, onLogout }) {
         </header>
 
         {user.mustChange && (
-          <div className="ws-banner">Passwort unter <Link to="/settings">Einstellungen</Link> ändern.</div>
+          <div className="ws-banner">
+            {t('shell.mustChangePrefix')}
+            <Link to="/settings">{t('common.settings')}</Link>
+            {t('shell.mustChangeSuffix')}
+          </div>
         )}
 
         <div className="ws-body">
@@ -431,13 +444,13 @@ export default function Workspace({ user, onLogout }) {
         {isDock && (
           <nav
             className={`ws-dock${dockShow > 0.08 ? ' is-hot' : ''}`}
-            aria-label="Hauptnavigation"
+            aria-label={t('nav.main')}
             style={{ ['--dock-show']: String(dockShow) }}
             onMouseEnter={() => { dockHover.current = true; setDockShow(1); }}
             onMouseLeave={() => { dockHover.current = false; }}
           >
             <div className="ws-dock-side">
-              {DOCK_LEFT.map((item) => (
+              {dockLeft.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
@@ -451,7 +464,7 @@ export default function Workspace({ user, onLogout }) {
 
             <NavLink to="/panel" end className={`ws-dock-item ws-dock-home${onCockpit ? ' active' : ''}`}>
               <span className="ws-dock-ico"><NavIcon name="home" /></span>
-              <span className="ws-dock-label">Home</span>
+              <span className="ws-dock-label">{t('nav.home')}</span>
             </NavLink>
 
             <div className="ws-dock-side">
@@ -464,7 +477,7 @@ export default function Workspace({ user, onLogout }) {
                     onClick={() => { setPowerOpen((v) => !v); setMenuOpen(false); }}
                   >
                     <span className="ws-dock-ico"><NavIcon name="power" /></span>
-                    <span className="ws-dock-label">Power</span>
+                    <span className="ws-dock-label">{t('nav.power')}</span>
                   </button>
                   {powerMenu}
                 </div>
@@ -475,7 +488,7 @@ export default function Workspace({ user, onLogout }) {
                 onClick={() => setMoreOpen(true)}
               >
                 <span className="ws-dock-ico"><NavIcon name="more" /></span>
-                <span className="ws-dock-label">Mehr</span>
+                <span className="ws-dock-label">{t('nav.more')}</span>
               </button>
             </div>
           </nav>
@@ -487,6 +500,8 @@ export default function Workspace({ user, onLogout }) {
         onClose={() => setMoreOpen(false)}
         user={user}
         hideDockDuplicates={isDock}
+        modules={modules}
+        t={t}
       />
     </div>
   );
