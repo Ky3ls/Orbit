@@ -42,6 +42,18 @@ export function upsertCfgSet(cfg, key, value, { allowBare = false } = {}) {
   return `${String(cfg).trimEnd()}\n${setLine}\n`;
 }
 
+/** setr key value (bools/Zahlen) oder setr key "value". */
+export function upsertCfgSetr(cfg, key, value, { quoted = false } = {}) {
+  const k = escapeRe(key);
+  const val = quoted ? `"${String(value).replace(/"/g, '')}"` : String(value);
+  const line = `setr ${key} ${val}`;
+  const re = new RegExp(`^\\s*setr\\s+${k}\\s+.*$`, 'mi');
+  if (re.test(cfg)) return cfg.replace(re, line);
+  const commentRe = new RegExp(`^\\s*#\\s*setr\\s+${k}\\b.*$`, 'mi');
+  if (commentRe.test(cfg)) return cfg.replace(commentRe, line);
+  return `${String(cfg).trimEnd()}\n${line}\n`;
+}
+
 /** ensure-Zeile nur einmal; Namen mit [brackets] korrekt. */
 export function ensureOnce(cfg, resourceName) {
   const name = String(resourceName || '').trim();
