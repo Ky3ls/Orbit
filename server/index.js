@@ -346,9 +346,20 @@ async function loop() {
       runtime.supervisorPhase = runtime.fxControlMode === 'orbit' ? supervisorPhase() : 'n/a';
       const was = runtime.online;
       runtime.online = probe.online;
-      runtime.players = probe.players;
+      // Live-Spieler kommen vom orbit Bridge (GetPlayers + playerJoining) — players.json ist oft Ghost-only.
+      // clients-Zähler aus dynamic.json bleibt zuverlässig für Gauge (1/48).
       runtime.fxResources = probe.resources;
-      runtime.clients = probe.online ? probe.clients : 0;
+      runtime.clients = probe.online ? (probe.clients || (runtime.players || []).length) : 0;
+      if (!probe.online) {
+        runtime.players = [];
+        runtime.playersSyncedAt = 0;
+      } else {
+        const bridgeAge = runtime.playersSyncedAt ? Date.now() - runtime.playersSyncedAt : Infinity;
+        // Nur wenn Bridge länger als 20s still ist: weicher Fallback auf players.json (mit Identifiern)
+        if (bridgeAge > 20_000 && probe.players.length) {
+          runtime.players = probe.players;
+        }
+      }
       if (probe.hostname) runtime.hostname = probe.hostname;
       else runtime.hostname = settings.hostname || 'FiveM';
       runtime.maxClients = probe.maxClients || Number(settings.maxClients) || 48;
@@ -366,29 +377,12 @@ async function loop() {
       }
       if (probe.online && !runtime.onlineSince) runtime.onlineSince = Date.now();
       if (!probe.online) runtime.onlineSince = null;
-      if (probe.online) {
+      if (probe.online && probe.resources.length) {
         const now = Date.now();
-        const up = db.prepare(`
-          INSERT INTO players (identifier, name, ping, ids, first_seen, last_seen, play_ms)
-          VALUES (?, ?, ?, ?, ?, ?, 0)
-          ON CONFLICT(identifier) DO UPDATE SET
-            name = excluded.name,
-            ping = excluded.ping,
-            ids = excluded.ids,
-            last_seen = excluded.last_seen,
-            play_ms = play_ms + 2000
-        `);
-        for (const player of probe.players) {
-          const identifier = primaryId(player.identifiers);
-          if (!identifier) continue;
-          up.run(identifier, player.name, player.ping, JSON.stringify(player.identifiers), now, now);
-        }
-        if (probe.resources.length) {
-          const names = new Set(probe.resources);
-          const known = db.prepare('SELECT name FROM resources').all();
-          const mark = db.prepare('UPDATE resources SET actual = ?, updated = ? WHERE name = ?');
-          for (const row of known) mark.run(names.has(row.name) ? 'started' : 'stopped', now, row.name);
-        }
+        const names = new Set(probe.resources);
+        const known = db.prepare('SELECT name FROM resources').all();
+        const mark = db.prepare('UPDATE resources SET actual = ?, updated = ? WHERE name = ?');
+        for (const row of known) mark.run(names.has(row.name) ? 'started' : 'stopped', now, row.name);
       }
     }
     pushSeries({
@@ -1560,17 +1554,19 @@ async function handleApi(req, res, url) {
     ).all();
 
     const onlineById = new Map();
+    const onlineByNet = new Map();
     for (const p of runtime.players || []) {
+      onlineByNet.set(Number(p.id), p);
       for (const id of p.identifiers || []) onlineById.set(id, p);
-      const prim = primaryId(p.identifiers);
-      if (prim) onlineById.set(prim, p);
+      const prim = primaryId(p.identifiers) || `fivem:${p.id}`;
+      onlineById.set(prim, p);
     }
 
-    // Online-Spieler, die noch nicht in DB sind, einmischen
+    // Live-Spieler (FX Bridge) immer einmischen — nicht nur DB
     const seen = new Set(rows.map((r) => r.identifier));
     for (const p of runtime.players || []) {
-      const identifier = primaryId(p.identifiers);
-      if (!identifier || seen.has(identifier)) continue;
+      const identifier = primaryId(p.identifiers) || `fivem:${p.id}`;
+      if (seen.has(identifier)) continue;
       rows.unshift({
         identifier,
         name: p.name,
@@ -1589,6 +1585,9 @@ async function handleApi(req, res, url) {
       try { ids = JSON.parse(row.ids || '[]'); } catch { ids = []; }
       const live = onlineById.get(row.identifier)
         || ids.map((id) => onlineById.get(id)).find(Boolean)
+        || (String(row.identifier || '').startsWith('fivem:')
+          ? onlineByNet.get(Number(String(row.identifier).slice(6)))
+          : null)
         || null;
       return {
         ...row,

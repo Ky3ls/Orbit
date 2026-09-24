@@ -1,12 +1,15 @@
---[[ Orbit server — Auth + Playerlisten ]]
+--[[ Orbit server — Auth + Live-Playerlist (wie txAdmin: playerJoining/Dropped, nicht players.json) ]]
 
 local RESOURCE = GetCurrentResourceName()
 local PANEL = GetConvar('orbit_panelUrl', GetConvar('orbit_panel_url', 'http://127.0.0.1:40220'))
+-- Token aus Convar ODER GlobalState (überlebt ensure orbit — Convar wird nach Read geleert wie txAdmin)
 ORBIT_TOKEN = GetConvar('orbit_luaComToken', GetConvar('orbit_ingame_token', ''))
-
 if ORBIT_TOKEN ~= '' and ORBIT_TOKEN ~= 'removed' then
+  GlobalState['orbit_luaComToken'] = ORBIT_TOKEN
   SetConvar('orbit_luaComToken', 'removed')
   SetConvar('orbit_ingame_token', 'removed')
+elseif type(GlobalState['orbit_luaComToken']) == 'string' and GlobalState['orbit_luaComToken'] ~= '' then
+  ORBIT_TOKEN = GlobalState['orbit_luaComToken']
 end
 
 ADMINS = ADMINS or {}
@@ -24,7 +27,7 @@ function OrbitHttp(method, path, body, extraHeaders, cb)
   end
   PerformHttpRequest(url, function(code, data)
     local ok, parsed = pcall(json.decode, data or '')
-    cb(code, ok and parsed or nil)
+    if cb then cb(code, ok and parsed or nil) end
   end, method, body and json.encode(body) or '', hdrs)
 end
 
@@ -58,6 +61,7 @@ function OrbitCan(src, perm)
   return a.menu[perm] == true
 end
 
+--- Echte FX-Playerlist via GetPlayers() — players.json liefert oft Ghosts ohne Identifier
 function OrbitPlayerList()
   local list = {}
   for _, id in ipairs(GetPlayers()) do
@@ -73,18 +77,80 @@ function OrbitPlayerList()
   return list
 end
 
---- Panel-Sync: echte Identifier (players.json liefert oft Ghosts ohne IDs)
-CreateThread(function()
-  Wait(4000)
-  while true do
-    if ORBIT_TOKEN ~= '' and ORBIT_TOKEN ~= 'removed' then
-      local list = OrbitPlayerList()
-      OrbitHttp('POST', '/api/ingame/players-sync', {
-        token = ORBIT_TOKEN,
-        players = list,
-      }, nil, function() end)
+local function tokenReady()
+  return ORBIT_TOKEN ~= '' and ORBIT_TOKEN ~= 'removed'
+end
+
+local function pushPlayers(payload)
+  if not tokenReady() then return end
+  payload.token = ORBIT_TOKEN
+  OrbitHttp('POST', '/api/ingame/players-sync', payload, nil, function(code)
+    if code ~= 200 then
+      print(('^1[orbit]^0 players-sync HTTP %s'):format(tostring(code)))
+    elseif payload.event == 'playerJoining' then
+      local p = payload.player or {}
+      print(('^2[orbit]^0 Spieler online: %s (#%s)'):format(tostring(p.name or '?'), tostring(p.id or '?')))
+    elseif payload.event == 'playerDropped' then
+      print(('^3[orbit]^0 Spieler offline: #%s'):format(tostring(payload.id or '?')))
     end
-    Wait(4000)
+  end)
+end
+
+local function syncFull()
+  pushPlayers({ event = 'full', players = OrbitPlayerList() })
+end
+
+local function syncJoin(src)
+  src = tonumber(src)
+  if not src then return end
+  -- Identifier sind oft erst nach 1 Tick verfügbar
+  for _ = 1, 8 do
+    local ids = GetPlayerIdentifiers(src) or {}
+    if #ids > 0 or GetPlayerName(src) == nil then break end
+    Wait(50)
+  end
+  if GetPlayerName(src) == nil then return end
+  pushPlayers({
+    event = 'playerJoining',
+    player = {
+      id = src,
+      name = GetPlayerName(src) or ('#' .. src),
+      ping = GetPlayerPing(src) or 0,
+      identifiers = GetPlayerIdentifiers(src) or {},
+    },
+  })
+end
+
+local function syncDrop(src, reason)
+  src = tonumber(src)
+  if not src then return end
+  pushPlayers({
+    event = 'playerDropped',
+    id = src,
+    reason = reason and tostring(reason) or '',
+  })
+end
+
+--- txAdmin-Style: sofort bei Join/Leave melden
+AddEventHandler('playerJoining', function()
+  local src = source
+  CreateThread(function()
+    syncJoin(src)
+  end)
+end)
+
+AddEventHandler('playerDropped', function(reason)
+  local src = source
+  ADMINS[tostring(src)] = nil
+  syncDrop(src, reason)
+end)
+
+--- Backup-Vollsync (falls Event verpasst / Panel neu gestartet)
+CreateThread(function()
+  Wait(2500)
+  while true do
+    syncFull()
+    Wait(3000)
   end
 end)
 
@@ -116,20 +182,21 @@ RegisterNetEvent('orbit:requestPlayerList', function()
   TriggerClientEvent('orbit:playerList', src, OrbitPlayerList())
 end)
 
-AddEventHandler('playerDropped', function()
-  ADMINS[tostring(source)] = nil
-end)
-
 AddEventHandler('onResourceStart', function(res)
   if res ~= RESOURCE then return end
-  print(('^2[orbit]^0 v3 · Panel %s · Token %s'):format(
+  print(('^2[orbit]^0 v4 · Panel %s · Token %s · Live-Playerlist'):format(
     PANEL,
-    (ORBIT_TOKEN ~= '' and ORBIT_TOKEN ~= 'removed') and 'ok' or 'fehlt'
+    tokenReady() and 'ok' or 'fehlt'
   ))
+  CreateThread(function()
+    Wait(1500)
+    syncFull()
+  end)
 end)
 
 RegisterCommand('orbit', function(source)
   if source == 0 then
-    print(('[orbit] Panel %s'):format(PANEL))
+    print(('[orbit] Panel %s · online %d'):format(PANEL, #GetPlayers()))
+    syncFull()
   end
 end, false)
