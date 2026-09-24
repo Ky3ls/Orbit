@@ -424,7 +424,7 @@ CreateThread(function()
       DisableControlAction(0, 263, true)
       DisableControlAction(0, 264, true)
       -- Pfeiltasten dem NUI überlassen
-      DisableControlAction(0, 22, true)  -- Jump (Space → Menü-Enter)
+      DisableControlAction(0, 22, true)  -- Jump (Space) — Menü nutzt Space nicht als Enter
       DisableControlAction(0, 23, true)  -- Enter vehicle
       DisableControlAction(0, 75, true)  -- Exit vehicle
       DisableControlAction(0, 172, true)

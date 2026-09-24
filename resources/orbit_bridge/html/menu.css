@@ -49,7 +49,9 @@ html, body {
 }
 .hidden { display: none !important; }
 
-/* —— Schmales Panel (kein Sidebar+Grid) —— */
+/* —— Schmales Panel ——
+   FiveM/CEF: backdrop-filter + border-radius + overflow = schwarzes Rechteck.
+   Deshalb kein Blur, nur halbtransparente Fläche. */
 #app {
   position: absolute;
   top: 4.5vh;
@@ -60,13 +62,13 @@ html, body {
   flex-direction: column;
   border-radius: 12px;
   overflow: hidden;
-  background: var(--bg);
+  background: rgba(12, 12, 14, 0.94);
   border: 1px solid rgba(var(--accent-rgb), 0.22);
   box-shadow:
     0 24px 64px rgba(0, 0, 0, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(18px) saturate(1.15);
-  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 #app.align-right {
   left: auto;
@@ -423,8 +425,8 @@ button[disabled] { opacity: 0.35; pointer-events: none; }
   display: grid;
   place-items: center;
   background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   z-index: 40;
 }
 .pm-card {
@@ -434,11 +436,11 @@ button[disabled] { opacity: 0.35; pointer-events: none; }
   flex-direction: column;
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(12, 12, 14, 0.94);
+  background: rgba(12, 12, 14, 0.96);
   border: 1px solid rgba(var(--accent-rgb), 0.28);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .pm-hdr {
   display: flex;
@@ -601,7 +603,8 @@ button[disabled] { opacity: 0.35; pointer-events: none; }
   display: grid;
   place-items: center;
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   z-index: 50;
 }
 .prompt-card {
