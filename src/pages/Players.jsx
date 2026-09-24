@@ -430,12 +430,6 @@ export default function Players() {
                   <button type="button" className="btn pl-ban-btn" disabled={busy} onClick={applyBan}>
                     Sperre setzen
                   </button>
-                  <p className="muted pl-ban-hint">
-                    Auch offline — Online-Spieler werden gekickt.
-                    {(detail?.banTemplates || []).length === 0
-                      ? ' Vorlagen legst du unter Einstellungen → Moderation an.'
-                      : null}
-                  </p>
                 </div>
               )}
             </div>
