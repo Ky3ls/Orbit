@@ -108,6 +108,13 @@ import {
   ensureModerationSchema,
   isWhitelisted,
 } from './moderation.js';
+import {
+  permissionsCatalog,
+  serializePermissions,
+  parseStoredPermissions,
+  resolveUserPermissions,
+  ROLE_TEMPLATES,
+} from './permissions.js';
 import { hotDeployOrbit, ensureIngameToken, syncOrbitSystemResource } from './orbitBridgeSync.js';
 import { parseDropFromLogLine, recordDrop } from './playerDrops.js';
 import { notifyServerEvent, notifyPlayerDrop } from './discord.js';
@@ -1577,7 +1584,7 @@ async function handleApi(req, res, url) {
   if (method === 'GET' && pathname === '/api/players') {
     if (!hasPerm(me, 'players')) return json(res, 403, { error: 'Keine Berechtigung.' });
     const q = str(url.searchParams.get('q') || '', 64).toLowerCase();
-    const filter = str(url.searchParams.get('filter') || 'all', 16); // all|online|offline
+    const filter = str(url.searchParams.get('filter') || 'all', 16); // all|online|offline|banned|allowlist
     const settings = settingMap(db);
 
     if (!playerCleanupDone) {
@@ -1614,6 +1621,31 @@ async function handleApi(req, res, url) {
       seen.add(identifier);
     }
 
+    const activeBans = db.prepare(`
+      SELECT * FROM bans WHERE revoked = 0 AND (expires IS NULL OR expires > ?)
+      ORDER BY id DESC LIMIT 500
+    `).all(Date.now());
+    const wlIds = new Set(
+      db.prepare('SELECT identifier FROM whitelist').all().map((r) => r.identifier),
+    );
+
+    function banForIds(ids) {
+      if (!ids?.length) return null;
+      for (const ban of activeBans) {
+        let banIds = [ban.identifier];
+        try {
+          const parsed = JSON.parse(ban.ids || '[]');
+          if (Array.isArray(parsed)) banIds = [...banIds, ...parsed.map(String)];
+        } catch { /* */ }
+        const set = new Set(banIds);
+        if (ids.some((id) => set.has(id))) return ban;
+      }
+      return null;
+    }
+    function wlForIds(ids) {
+      return (ids || []).some((id) => wlIds.has(id));
+    }
+
     let merged = rows.map((row) => {
       let ids = [];
       try { ids = normalizeIdentifiers(JSON.parse(row.ids || '[]')); } catch { ids = []; }
@@ -1622,6 +1654,8 @@ async function handleApi(req, res, url) {
         || ids.map((id) => onlineById.get(id)).find(Boolean)
         || null;
       if (live?.identifiers?.length) ids = mergeIdLists(ids, live.identifiers);
+      const ban = banForIds(ids.length ? ids : [row.identifier]);
+      const whitelisted = wlForIds(ids.length ? ids : [row.identifier]);
       return {
         ...row,
         ids: JSON.stringify(ids),
@@ -1630,6 +1664,11 @@ async function handleApi(req, res, url) {
         serverId: live?.id ?? null,
         ping: live?.ping ?? row.ping,
         name: live?.name || row.name,
+        banned: !!ban,
+        banId: ban?.id ?? null,
+        banReason: ban?.reason || '',
+        banExpires: ban?.expires ?? null,
+        whitelisted,
       };
     });
 
@@ -1644,6 +1683,7 @@ async function handleApi(req, res, url) {
       const newer = (row.last_seen || 0) >= (prev.last_seen || 0) ? row : prev;
       const older = newer === row ? prev : row;
       const ids = mergeIdLists(newer.identifiers, older.identifiers);
+      const ban = banForIds(ids.length ? ids : [key]);
       dedup.set(key, {
         ...newer,
         identifier: key,
@@ -1653,31 +1693,44 @@ async function handleApi(req, res, url) {
         first_seen: Math.min(Number(newer.first_seen || Date.now()), Number(older.first_seen || Date.now())),
         online: !!(newer.online || older.online),
         serverId: newer.serverId ?? older.serverId,
+        banned: !!ban || !!(newer.banned || older.banned),
+        banId: ban?.id ?? newer.banId ?? older.banId,
+        banReason: ban?.reason || newer.banReason || older.banReason || '',
+        banExpires: ban?.expires ?? newer.banExpires ?? older.banExpires ?? null,
+        whitelisted: !!(newer.whitelisted || older.whitelisted || wlForIds(ids)),
       });
     }
     merged = [...dedup.values()];
 
     if (q) {
-      merged = merged.filter((row) => `${row.name} ${row.identifier} ${(row.identifiers || []).join(' ')} ${row.note || ''}`.toLowerCase().includes(q));
+      merged = merged.filter((row) => `${row.name} ${row.identifier} ${(row.identifiers || []).join(' ')} ${row.note || ''} ${row.banReason || ''}`.toLowerCase().includes(q));
     }
     if (filter === 'online') merged = merged.filter((r) => r.online);
     if (filter === 'offline') merged = merged.filter((r) => !r.online);
+    if (filter === 'banned') merged = merged.filter((r) => r.banned);
+    if (filter === 'allowlist' || filter === 'whitelist') merged = merged.filter((r) => r.whitelisted);
 
     merged.sort((a, b) => {
       if (a.online !== b.online) return a.online ? -1 : 1;
       return (b.last_seen || 0) - (a.last_seen || 0);
     });
 
+    const series = (runtime.series || []).map((s) => ({ t: s.t, players: s.players }));
+
     return json(res, 200, {
       online: runtime.online,
       players: runtime.players,
       history: merged,
       list: merged,
+      series,
+      maxClients: runtime.maxClients,
       stats: {
         ...playerStats(),
         online: (runtime.players || []).length,
         offline: merged.filter((r) => !r.online).length,
         total: merged.length,
+        banned: merged.filter((r) => r.banned).length,
+        allowlist: merged.filter((r) => r.whitelisted).length,
       },
       fxCommandReady: fxConsoleReady(settings),
       fxControlMode: orbitControlMode(settings),
@@ -1766,7 +1819,7 @@ async function handleApi(req, res, url) {
   }
 
   if (method === 'POST' && pathname === '/api/players/whitelist') {
-    if (!hasPerm(me, 'whitelist') || me.role === 'moderator') return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hasPerm(me, 'whitelist.write')) return json(res, 403, { error: 'Keine Berechtigung.' });
     const body = await readBody(req);
     const identifier = str(body.identifier, 96);
     const enable = body.enable !== false && body.enable !== 0 && body.enable !== '0';
@@ -1841,7 +1894,7 @@ async function handleApi(req, res, url) {
 
   const revoke = pathname.match(/^\/api\/bans\/(\d+)\/revoke$/);
   if (method === 'POST' && revoke) {
-    if (!hasPerm(me, 'bans') || me.role === 'moderator') return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hasPerm(me, 'bans.revoke')) return json(res, 403, { error: 'Keine Berechtigung.' });
     db.prepare('UPDATE bans SET revoked = 1 WHERE id = ?').run(Number(revoke[1]));
     audit(db, me.username, 'unban', revoke[1], ip);
     return json(res, 200, { ok: true });
@@ -1857,7 +1910,7 @@ async function handleApi(req, res, url) {
   }
 
   if (method === 'POST' && pathname === '/api/ban-templates') {
-    if (!hasPerm(me, 'bans') || me.role === 'moderator') return json(res, 403, { error: 'Nur Admins/Owner.' });
+    if (!hasPerm(me, 'bans.revoke')) return json(res, 403, { error: 'Nur Admins/Owner.' });
     ensureModerationSchema(db);
     const body = await readBody(req);
     try {
@@ -1875,7 +1928,7 @@ async function handleApi(req, res, url) {
 
   const tplPatch = pathname.match(/^\/api\/ban-templates\/(\d+)$/);
   if (tplPatch && method === 'PUT') {
-    if (!hasPerm(me, 'bans') || me.role === 'moderator') return json(res, 403, { error: 'Nur Admins/Owner.' });
+    if (!hasPerm(me, 'bans.revoke')) return json(res, 403, { error: 'Nur Admins/Owner.' });
     ensureModerationSchema(db);
     const body = await readBody(req);
     try {
@@ -1891,7 +1944,7 @@ async function handleApi(req, res, url) {
     }
   }
   if (tplPatch && method === 'DELETE') {
-    if (!hasPerm(me, 'bans') || me.role === 'moderator') return json(res, 403, { error: 'Nur Admins/Owner.' });
+    if (!hasPerm(me, 'bans.revoke')) return json(res, 403, { error: 'Nur Admins/Owner.' });
     ensureModerationSchema(db);
     try {
       deleteBanTemplate(db, tplPatch[1]);
@@ -1908,7 +1961,7 @@ async function handleApi(req, res, url) {
   }
 
   if (method === 'POST' && pathname === '/api/whitelist') {
-    if (!hasPerm(me, 'whitelist') || me.role === 'moderator') return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hasPerm(me, 'whitelist.write')) return json(res, 403, { error: 'Keine Berechtigung.' });
     const body = await readBody(req);
     const identifier = str(body.identifier, 80);
     const note = str(body.note, 160);
@@ -1924,7 +1977,7 @@ async function handleApi(req, res, url) {
 
   const wlDel = pathname.match(/^\/api\/whitelist\/(\d+)$/);
   if (method === 'DELETE' && wlDel) {
-    if (!hasPerm(me, 'whitelist') || me.role === 'moderator') return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hasPerm(me, 'whitelist.write')) return json(res, 403, { error: 'Keine Berechtigung.' });
     db.prepare('DELETE FROM whitelist WHERE id = ?').run(Number(wlDel[1]));
     audit(db, me.username, 'whitelist.remove', wlDel[1], ip);
     return json(res, 200, { ok: true });
@@ -2004,6 +2057,21 @@ async function handleApi(req, res, url) {
   if (method === 'GET' && pathname === '/api/audit') {
     if (!hasPerm(me, 'audit')) return json(res, 403, { error: 'Keine Berechtigung.' });
     return json(res, 200, { entries: db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 400').all() });
+  }
+
+  if (method === 'GET' && pathname === '/api/server-log') {
+    if (!hasPerm(me, 'console') && !hasPerm(me, 'audit') && !hasPerm(me, 'monitor')) {
+      return json(res, 403, { error: 'Keine Berechtigung.' });
+    }
+    const after = Math.max(0, Number(url.searchParams.get('after') || 0));
+    const lines = after > 0
+      ? runtime.console.filter((l) => l.id > after)
+      : runtime.console.slice(-400);
+    return json(res, 200, {
+      lines,
+      seq: runtime.consoleSeq,
+      hint: 'FX-/Server-Konsolenausgabe (nicht Admin-Aktionen).',
+    });
   }
 
   if (method === 'GET' && pathname === '/api/queue') {
@@ -2236,8 +2304,14 @@ async function handleApi(req, res, url) {
 
   if (method === 'GET' && pathname === '/api/admins') {
     if (me.role !== 'owner') return json(res, 403, { error: 'Nur der Inhaber verwaltet das Team.' });
-    const users = db.prepare('SELECT id, username, role, disabled, totp_enabled, created, last_login FROM users ORDER BY id').all();
-    return json(res, 200, { users });
+    const users = db.prepare(
+      'SELECT id, username, role, disabled, totp_enabled, created, last_login, permissions FROM users ORDER BY id',
+    ).all().map((u) => ({
+      ...u,
+      permissions: resolveUserPermissions(u),
+      customPermissions: !!parseStoredPermissions(u.permissions),
+    }));
+    return json(res, 200, { users, catalog: permissionsCatalog() });
   }
 
   if (method === 'POST' && pathname === '/api/admins') {
@@ -2246,13 +2320,17 @@ async function handleApi(req, res, url) {
     const username = str(body.username, 24);
     const password = typeof body.password === 'string' ? body.password : '';
     const role = str(body.role, 16);
-    if (!userOk(username) || !passwordOk(password) || !['admin', 'moderator'].includes(role)) {
+    if (!userOk(username) || !passwordOk(password) || !['admin', 'moderator', 'custom'].includes(role)) {
       return json(res, 400, { error: 'Benutzer, Passwort oder Rolle ungültig.' });
+    }
+    let permsJson = '';
+    if (role === 'custom' || Array.isArray(body.permissions)) {
+      permsJson = serializePermissions(body.permissions || ROLE_TEMPLATES.moderator);
     }
     try {
       const hash = await hashPassword(password);
-      db.prepare('INSERT INTO users (username, password_hash, role, must_change, created) VALUES (?, ?, ?, 1, ?)')
-        .run(username, hash, role, Date.now());
+      db.prepare('INSERT INTO users (username, password_hash, role, must_change, created, permissions) VALUES (?, ?, ?, 1, ?, ?)')
+        .run(username, hash, role === 'custom' ? 'custom' : role, Date.now(), permsJson || null);
     } catch {
       return json(res, 409, { error: 'Benutzername ist vergeben.' });
     }
@@ -2272,10 +2350,27 @@ async function handleApi(req, res, url) {
       audit(db, me.username, 'admin.remove', target.username, ip);
     } else {
       const body = await readBody(req);
-      const disabled = body.disabled ? 1 : 0;
-      db.prepare('UPDATE users SET disabled = ? WHERE id = ?').run(disabled, id);
-      if (disabled) db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(id);
-      audit(db, me.username, disabled ? 'admin.disable' : 'admin.enable', target.username, ip);
+      if (typeof body.disabled === 'boolean' || body.disabled === 0 || body.disabled === 1) {
+        const disabled = body.disabled ? 1 : 0;
+        db.prepare('UPDATE users SET disabled = ? WHERE id = ?').run(disabled, id);
+        if (disabled) db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(id);
+        audit(db, me.username, disabled ? 'admin.disable' : 'admin.enable', target.username, ip);
+      }
+      if (body.role && ['admin', 'moderator', 'custom'].includes(body.role)) {
+        db.prepare('UPDATE users SET role = ? WHERE id = ?').run(body.role, id);
+        audit(db, me.username, 'admin.role', `${target.username}:${body.role}`, ip);
+      }
+      if (Array.isArray(body.permissions) || body.permissions === null) {
+        const permsJson = body.permissions === null ? null : serializePermissions(body.permissions);
+        db.prepare('UPDATE users SET permissions = ? WHERE id = ?').run(permsJson || null, id);
+        audit(db, me.username, 'admin.perms', target.username, ip);
+      }
+      if (typeof body.password === 'string' && body.password.length >= 6) {
+        if (!passwordOk(body.password)) return json(res, 400, { error: 'Passwort ungültig.' });
+        const hash = await hashPassword(body.password);
+        db.prepare('UPDATE users SET password_hash = ?, must_change = 1 WHERE id = ?').run(hash, id);
+        audit(db, me.username, 'admin.password', target.username, ip);
+      }
     }
     return json(res, 200, { ok: true });
   }

@@ -40,7 +40,17 @@ export function listDrops(db, hours = 24, limit = 200) {
     SELECT reason, COUNT(*) AS c FROM player_drops
     WHERE created >= ? GROUP BY reason ORDER BY c DESC LIMIT 15
   `).all(since);
-  return { rows, stats, hours };
+  const bucketMs = hours <= 24 ? 3600_000 : 3 * 3600_000;
+  const bucketCount = Math.max(1, Math.ceil((hours * 3600_000) / bucketMs));
+  const series = Array.from({ length: bucketCount }, (_, i) => {
+    const t = since + (i + 1) * bucketMs;
+    return { t, drops: 0 };
+  });
+  for (const row of rows) {
+    const idx = Math.min(bucketCount - 1, Math.max(0, Math.floor((row.created - since) / bucketMs)));
+    series[idx].drops += 1;
+  }
+  return { rows, stats, hours, series, total: rows.length };
 }
 
 export function ensureDropsTable(db) {

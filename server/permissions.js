@@ -15,8 +15,8 @@ export const PERMISSION_GROUPS = [
     id: 'players',
     label: 'Spieler',
     permissions: [
-      { id: 'players', label: 'Spielerliste & Aktionen' },
-      { id: 'history', label: 'Verlauf / Joins' },
+      { id: 'players', label: 'Spieler-Hub (Liste, Drops, Aktionen)' },
+      { id: 'history', label: 'Erweiterte Spielerdaten / Drops' },
     ],
   },
   {
@@ -44,7 +44,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { id: 'settings', label: 'Einstellungen' },
       { id: 'database', label: 'Datenbank-Tool' },
-      { id: 'audit', label: 'Audit-Log' },
+      { id: 'audit', label: 'Admin-Aktionen (Audit)' },
       { id: 'sessions', label: 'Eigene Sitzungen' },
     ],
   },
@@ -59,6 +59,7 @@ export const ROLE_TEMPLATES = {
     'bans', 'bans.revoke', 'whitelist', 'whitelist.write',
     'resources', 'schedule', 'cfg', 'settings', 'database', 'audit', 'sessions',
   ],
+  custom: [],
 };
 
 export function permissionsCatalog() {

@@ -127,6 +127,7 @@ export function getDb() {
     'ALTER TABLE users ADD COLUMN prefs TEXT',
     'ALTER TABLE users ADD COLUMN ingame_license TEXT',
     'ALTER TABLE users ADD COLUMN discord_id TEXT',
+    'ALTER TABLE users ADD COLUMN permissions TEXT',
     'ALTER TABLE bans ADD COLUMN ids TEXT',
     'ALTER TABLE players ADD COLUMN play_ms INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE resources ADD COLUMN folder TEXT',

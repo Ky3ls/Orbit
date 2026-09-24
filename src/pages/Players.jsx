@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtFull, fmtPlaytime } from '../format.js';
-import { Badge, Empty, Modal, Page, PageHeader } from '../components/Ui.jsx';
+import { AreaChart, Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
 import OrbitSelect from '../components/OrbitSelect.jsx';
 import { BAN_DURATION_PRESETS, banDurationLabel } from './banPresets.js';
 import './players.css';
@@ -28,6 +28,14 @@ function playerIds(p) {
   return p.identifier ? [p.identifier] : [];
 }
 
+const FILTERS = [
+  { id: 'all', label: 'Alle' },
+  { id: 'online', label: 'Online' },
+  { id: 'offline', label: 'Offline' },
+  { id: 'banned', label: 'Gebannt' },
+  { id: 'allowlist', label: 'Allowlist' },
+];
+
 const SECTIONS = [
   { id: 'info', label: 'Übersicht' },
   { id: 'ids', label: 'Identifier' },
@@ -35,13 +43,24 @@ const SECTIONS = [
   { id: 'ban', label: 'Sperre' },
 ];
 
-export default function Players() {
-  const { openConsole } = useOutletContext();
+const intAxis = (v) => `${Math.round(v)}`;
+
+export default function Players({ user }) {
+  const { openConsole } = useOutletContext() || {};
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilter = FILTERS.some((f) => f.id === searchParams.get('filter'))
+    ? searchParams.get('filter')
+    : 'all';
+
   const [data, setData] = useState({
-    online: false, players: [], list: [], history: [], stats: {}, fxCommandReady: false,
+    online: false, players: [], list: [], series: [], stats: {}, maxClients: 48, fxCommandReady: false,
   });
+  const [drops, setDrops] = useState({ rows: [], stats: [], series: [], total: 0, hours: 72 });
+  const [bans, setBans] = useState([]);
+  const [wlEntries, setWlEntries] = useState([]);
+  const [wlForm, setWlForm] = useState({ identifier: '', note: '' });
   const [q, setQ] = useState('');
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState(initialFilter);
   const [pick, setPick] = useState(null);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState('info');
@@ -54,9 +73,30 @@ export default function Players() {
   const [err, setErr] = useState('');
   const [sort, setSort] = useState('status');
   const [busy, setBusy] = useState(false);
+  const qRef = useRef(q);
+  qRef.current = q;
 
-  function load(silent = false) {
-    api(`/api/players?${new URLSearchParams({ filter, q })}`)
+  const canRevoke = user?.role === 'owner' || user?.role === 'admin'
+    || (user?.permissions || []).includes('bans.revoke')
+    || (user?.permissions || []).includes('*');
+  const canWlWrite = user?.role === 'owner' || user?.role === 'admin'
+    || (user?.permissions || []).includes('whitelist.write')
+    || (user?.permissions || []).includes('*');
+
+  const setHubFilter = useCallback((id) => {
+    setFilter(id);
+    const next = new URLSearchParams(searchParams);
+    if (id === 'all') next.delete('filter');
+    else next.set('filter', id);
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  function loadPlayers(silent = false) {
+    const params = new URLSearchParams({
+      filter: ['banned', 'allowlist'].includes(filter) ? 'all' : filter,
+      q: qRef.current,
+    });
+    api(`/api/players?${params}`)
       .then((d) => {
         setData(d);
         setPick((cur) => {
@@ -64,6 +104,24 @@ export default function Players() {
           return (d.list || []).find((p) => p.identifier === cur.identifier) || cur;
         });
       })
+      .catch((e) => { if (!silent) setErr(e.message); });
+  }
+
+  function loadDrops(silent = false) {
+    api('/api/drops?hours=72')
+      .then(setDrops)
+      .catch((e) => { if (!silent) setErr(e.message); });
+  }
+
+  function loadBans(silent = false) {
+    api('/api/bans')
+      .then((d) => setBans(d.bans || []))
+      .catch((e) => { if (!silent) setErr(e.message); });
+  }
+
+  function loadWl(silent = false) {
+    api('/api/whitelist')
+      .then((d) => setWlEntries(d.entries || []))
       .catch((e) => { if (!silent) setErr(e.message); });
   }
 
@@ -96,19 +154,47 @@ export default function Players() {
   }
 
   useEffect(() => {
-    load();
-    const id = setInterval(() => load(true), 3000);
+    loadPlayers();
+    const id = setInterval(() => loadPlayers(true), 5000);
     return () => clearInterval(id);
   }, [filter]);
 
+  useEffect(() => {
+    loadDrops();
+    const id = setInterval(() => loadDrops(true), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (filter === 'banned') loadBans();
+    if (filter === 'allowlist') loadWl();
+  }, [filter]);
+
   const rows = useMemo(() => {
-    const list = [...(data.list || [])];
+    let list = [...(data.list || [])];
+    if (filter === 'banned') list = list.filter((r) => r.banned);
+    if (filter === 'allowlist') list = list.filter((r) => r.whitelisted);
     if (sort === 'name') list.sort((a, b) => String(a.name).localeCompare(String(b.name)));
     else if (sort === 'play') list.sort((a, b) => (b.play_ms || 0) - (a.play_ms || 0));
     else if (sort === 'last') list.sort((a, b) => (b.last_seen || 0) - (a.last_seen || 0));
     else list.sort((a, b) => (!!a.online === !!b.online ? (b.last_seen || 0) - (a.last_seen || 0) : a.online ? -1 : 1));
     return list;
-  }, [data.list, sort]);
+  }, [data.list, sort, filter]);
+
+  const banRows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    let list = bans.filter((b) => !b.revoked && (!b.expires || b.expires > Date.now()));
+    if (needle) {
+      list = list.filter((b) => `${b.name} ${b.identifier} ${b.reason}`.toLowerCase().includes(needle));
+    }
+    return list;
+  }, [bans, q]);
+
+  const wlRows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return wlEntries;
+    return wlEntries.filter((e) => `${e.identifier} ${e.note || ''} ${e.author || ''}`.toLowerCase().includes(needle));
+  }, [wlEntries, q]);
 
   const p = detail?.player || pick;
   const ids = p ? playerIds(p) : [];
@@ -141,7 +227,7 @@ export default function Players() {
     setBusy(true);
     try {
       await api('/api/players/note', { method: 'POST', body: { identifier: p.identifier, name: p.name, note } });
-      load(true);
+      loadPlayers(true);
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
@@ -155,6 +241,7 @@ export default function Players() {
         body: { identifier: p.identifier, enable: !p.whitelisted },
       });
       await openPlayer(p);
+      if (filter === 'allowlist') loadWl(true);
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
@@ -173,7 +260,7 @@ export default function Players() {
         body: { action, id: p.serverId, reason },
       });
       setReason('');
-      load(true);
+      loadPlayers(true);
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
@@ -198,22 +285,60 @@ export default function Players() {
       });
       setReason('');
       await openPlayer(p);
-      load(true);
+      loadPlayers(true);
+      if (filter === 'banned') loadBans(true);
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+
+  async function revokeBan(id) {
+    setBusy(true);
+    try {
+      await api(`/api/bans/${id}/revoke`, { method: 'POST', body: {} });
+      loadBans(true);
+      loadPlayers(true);
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+
+  async function addWl(e) {
+    e.preventDefault();
+    setBusy(true);
+    setErr('');
+    try {
+      await api('/api/whitelist', { method: 'POST', body: wlForm });
+      setWlForm({ identifier: '', note: '' });
+      loadWl(true);
+      loadPlayers(true);
+    } catch (error) { setErr(error.message); }
+    setBusy(false);
+  }
+
+  async function removeWl(id) {
+    setBusy(true);
+    try {
+      await api(`/api/whitelist/${id}`, { method: 'DELETE' });
+      loadWl(true);
+      loadPlayers(true);
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
 
   const stats = data.stats || {};
   const onlineCount = stats.online ?? 0;
-  const totalCount = stats.total ?? rows.length;
+  const totalKnown = stats.total ?? (data.list || []).length;
   const initial = (p?.name || '?').slice(0, 1).toUpperCase();
+  const playerSeries = data.series || [];
+  const dropSeries = drops.series || [];
+  const maxClients = Math.max(data.maxClients || 48, 1);
+  const dropTotal = drops.total ?? (drops.rows || []).length;
 
   return (
     <Page>
       <PageHeader
-        eyebrow="Spieler"
-        title="Alle Spieler"
-        description={`${onlineCount} online · ${Math.max(0, totalCount - onlineCount)} offline · ${totalCount} gesamt`}
+        eyebrow="Spieler-Hub"
+        title="Spieler"
+        description={`${onlineCount} online · ${Math.max(0, totalKnown - onlineCount)} offline · Drops 72h: ${dropTotal}`}
         actions={(
           <>
             <Badge tone={data.online ? 'ok' : 'bad'}>{onlineCount} live</Badge>
@@ -222,34 +347,197 @@ export default function Players() {
         )}
       />
 
+      <section className="pl-hub-charts" aria-label="Trends">
+        <PanelCard className="pl-hub-chart">
+          <div className="spread mon-chart-head">
+            <div>
+              <h3>Spieleranzahl</h3>
+              <p className="pl-hub-hint">Live-Trend (Monitoring-Samples)</p>
+            </div>
+            <b className="mon-chart-val">{onlineCount} / {maxClients}</b>
+          </div>
+          <AreaChart
+            data={playerSeries}
+            accessor={(d) => d.players}
+            color="#ff7a1a"
+            yMax={maxClients}
+            formatY={intAxis}
+            ariaLabel="Spieleranzahl über Zeit"
+          />
+        </PanelCard>
+        <PanelCard className="pl-hub-chart">
+          <div className="spread mon-chart-head">
+            <div>
+              <h3>Player Drops</h3>
+              <p className="pl-hub-hint">Crashes & Disconnects · 72h</p>
+            </div>
+            <b className="mon-chart-val">{dropTotal}</b>
+          </div>
+          <AreaChart
+            data={dropSeries}
+            accessor={(d) => d.drops}
+            color="#e85d4a"
+            formatY={intAxis}
+            ariaLabel="Player Drops über Zeit"
+          />
+          {(drops.stats || []).length > 0 && (
+            <div className="pl-drop-tags">
+              {(drops.stats || []).slice(0, 6).map((s) => (
+                <span key={s.reason} className="pl-drop-tag" title={s.reason}>
+                  <em>{s.c}</em> {String(s.reason).slice(0, 28)}{String(s.reason).length > 28 ? '…' : ''}
+                </span>
+              ))}
+            </div>
+          )}
+        </PanelCard>
+      </section>
+
       <div className="pl-toolbar">
         <div className="pl-filters" role="tablist">
-          {[{ id: 'all', label: 'Alle' }, { id: 'online', label: 'Online' }, { id: 'offline', label: 'Offline' }].map((f) => (
-            <button key={f.id} type="button" role="tab" aria-selected={filter === f.id}
-              className={`pl-filter${filter === f.id ? ' active' : ''}`} onClick={() => setFilter(f.id)}>{f.label}</button>
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              role="tab"
+              aria-selected={filter === f.id}
+              className={`pl-filter${filter === f.id ? ' active' : ''}`}
+              onClick={() => setHubFilter(f.id)}
+            >
+              {f.label}
+            </button>
           ))}
         </div>
-        <input className="search grow" placeholder="Name oder Identifier…" value={q}
-          onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load(); }} />
-        <select value={sort} onChange={(e) => setSort(e.target.value)}>
-          <option value="status">Status</option>
-          <option value="last">Zuletzt</option>
-          <option value="play">Spielzeit</option>
-          <option value="name">Name</option>
-        </select>
-        <button className="btn btn-sm" type="button" onClick={() => load()}>Aktualisieren</button>
+        <input
+          className="search grow"
+          placeholder={filter === 'banned' ? 'Ban suchen…' : filter === 'allowlist' ? 'Allowlist suchen…' : 'Name oder Identifier…'}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (filter === 'banned') loadBans();
+              else if (filter === 'allowlist') loadWl();
+              else loadPlayers();
+            }
+          }}
+        />
+        {!['banned', 'allowlist'].includes(filter) && (
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="status">Status</option>
+            <option value="last">Zuletzt</option>
+            <option value="play">Spielzeit</option>
+            <option value="name">Name</option>
+          </select>
+        )}
+        <button
+          className="btn btn-sm"
+          type="button"
+          onClick={() => {
+            if (filter === 'banned') loadBans();
+            else if (filter === 'allowlist') loadWl();
+            else loadPlayers();
+            loadDrops(true);
+          }}
+        >
+          Aktualisieren
+        </button>
       </div>
 
       {err && !pick && <div className="err" style={{ marginBottom: 12 }}>{err}</div>}
 
-      {rows.length === 0 ? (
+      {filter === 'banned' ? (
+        <PanelCard padded={false} className="pl-manage">
+          <div className="table-wrap">
+            {banRows.length === 0 ? (
+              <Empty title="Keine aktiven Bans" text="Gebannte Spieler erscheinen hier — Unban direkt aus der Liste." />
+            ) : (
+              <table className="o-table">
+                <thead>
+                  <tr><th>Name</th><th>Identifier</th><th>Grund</th><th>Bis</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {banRows.map((ban) => (
+                    <tr key={ban.id}>
+                      <td data-label="Name">{ban.name || '–'}</td>
+                      <td className="mono" data-label="Identifier">{ban.identifier}</td>
+                      <td data-label="Grund">{ban.reason}</td>
+                      <td data-label="Bis">{ban.expires ? fmtFull(ban.expires) : 'Permanent'}</td>
+                      <td className="td-actions" data-label="">
+                        {canRevoke && (
+                          <button className="btn btn-sm" type="button" disabled={busy} onClick={() => revokeBan(ban.id)}>
+                            Unban
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </PanelCard>
+      ) : filter === 'allowlist' ? (
+        <div className="pl-manage-stack">
+          {canWlWrite && (
+            <PanelCard>
+              <form className="row" onSubmit={addWl}>
+                <input
+                  className="grow"
+                  placeholder="license:… / discord:… / steam:…"
+                  value={wlForm.identifier}
+                  onChange={(e) => setWlForm({ ...wlForm, identifier: e.target.value })}
+                  required
+                />
+                <input
+                  className="grow"
+                  placeholder="Notiz"
+                  value={wlForm.note}
+                  onChange={(e) => setWlForm({ ...wlForm, note: e.target.value })}
+                />
+                <button className="btn btn-primary" style={{ width: 'auto' }} type="submit" disabled={busy}>
+                  Hinzufügen
+                </button>
+              </form>
+            </PanelCard>
+          )}
+          <PanelCard padded={false}>
+            <div className="table-wrap">
+              {wlRows.length === 0 ? (
+                <Empty title="Allowlist leer" text="Freigaben anlegen oder Spieler im Modal auf die Allowlist setzen." />
+              ) : (
+                <table className="o-table">
+                  <thead>
+                    <tr><th>Identifier</th><th>Notiz</th><th>Von</th><th>Seit</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {wlRows.map((row) => (
+                      <tr key={row.id}>
+                        <td className="mono" data-label="Identifier">{row.identifier}</td>
+                        <td data-label="Notiz">{row.note || '–'}</td>
+                        <td data-label="Von">{row.author}</td>
+                        <td data-label="Seit">{fmtFull(row.created)}</td>
+                        <td className="td-actions" data-label="">
+                          {canWlWrite && (
+                            <button className="btn btn-sm btn-danger" type="button" disabled={busy} onClick={() => removeWl(row.id)}>
+                              Entfernen
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </PanelCard>
+        </div>
+      ) : rows.length === 0 ? (
         <Empty title="Noch keine Spieler" text="Sobald jemand joined, erscheint er hier." />
       ) : (
         <div className="pl-grid">
           {rows.map((row) => {
             const preview = playerIds(row).filter((id) => !id.startsWith('ip:')).slice(0, 3);
             return (
-              <button key={row.identifier} type="button" className={`pl-card${row.online ? ' online' : ''}`} onClick={() => openPlayer(row)}>
+              <button key={row.identifier} type="button" className={`pl-card${row.online ? ' online' : ''}${row.banned ? ' banned' : ''}`} onClick={() => openPlayer(row)}>
                 <div className="pl-card-top">
                   <div>
                     <strong>{row.name}</strong>
@@ -257,7 +545,11 @@ export default function Players() {
                       {row.online ? `ID ${row.serverId} · ${row.ping ?? 0} ms` : 'Offline'} · {fmtPlaytime(row.play_ms)}
                     </div>
                   </div>
-                  {row.online ? <Badge tone="ok">Online</Badge> : <Badge>Offline</Badge>}
+                  <div className="pl-card-badges">
+                    {row.banned && <Badge tone="bad">Ban</Badge>}
+                    {row.whitelisted && <Badge tone="ok">WL</Badge>}
+                    {row.online ? <Badge tone="ok">Online</Badge> : <Badge>Offline</Badge>}
+                  </div>
                 </div>
                 <div className="pl-card-ids">
                   {preview.map((id) => (
@@ -349,7 +641,7 @@ export default function Players() {
               <button
                 type="button"
                 className={`pl-allow${p.whitelisted ? ' on' : ''}`}
-                disabled={busy}
+                disabled={busy || !canWlWrite}
                 onClick={toggleWl}
               >
                 {p.whitelisted ? 'Allowlist ✓' : 'Auf Allowlist'}

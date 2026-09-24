@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 import { COOKIE, COOKIE_SECURE, IDLE_MS, SESSION_MS, TICKET_COOKIE } from './config.js';
+import { hasPermission, resolveUserPermissions } from './permissions.js';
 
 const scrypt = promisify(crypto.scrypt);
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
@@ -48,16 +49,12 @@ export function userOk(username) {
   return typeof username === 'string' && /^[a-zA-Z0-9._-]{3,24}$/.test(username);
 }
 
-const PERMS = {
-  owner: ['*'],
-  admin: ['overview', 'monitor', 'console', 'control', 'players', 'history', 'bans', 'whitelist', 'resources', 'schedule', 'audit', 'settings', 'sessions', 'cfg', 'database'],
-  moderator: ['overview', 'monitor', 'players', 'history', 'bans', 'whitelist'],
-};
-
 export function hasPerm(user, perm) {
-  if (!user || user.disabled) return false;
-  const list = PERMS[user.role] || [];
-  return list.includes('*') || list.includes(perm);
+  return hasPermission(user, perm);
+}
+
+export function userPermissions(user) {
+  return resolveUserPermissions(user);
 }
 
 export function sha256(value) {
@@ -108,6 +105,7 @@ export function publicUser(row) {
     mustChange: !!row.must_change,
     cfxName: row.cfx_name || '',
     prefs,
+    permissions: resolveUserPermissions(row),
   };
 }
 
@@ -116,7 +114,7 @@ export function loadSession(db, req) {
   if (!token || token.length < 20) return null;
   const row = db.prepare(`
     SELECT s.id AS sid, s.created, s.last_seen, s.expires, s.ip, s.ua,
-           u.id, u.username, u.role, u.disabled, u.totp_enabled, u.must_change, u.cfx_id, u.cfx_name, u.prefs
+           u.id, u.username, u.role, u.disabled, u.totp_enabled, u.must_change, u.cfx_id, u.cfx_name, u.prefs, u.permissions
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ? AND s.revoked = 0
   `).get(sha256(token));

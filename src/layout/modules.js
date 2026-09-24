@@ -15,22 +15,12 @@ export const MODULES = [
     ],
   },
   {
-    id: 'mod',
-    label: 'Moderation',
-    items: [
-      { to: '/history', label: 'Verlauf', icon: 'list' },
-      { to: '/drops', label: 'Player Drops', icon: 'drop' },
-      { to: '/bans', label: 'Bans', icon: 'ban' },
-      { to: '/whitelist', label: 'Allowlist', icon: 'wl' },
-    ],
-  },
-  {
     id: 'sys',
     label: 'System',
     items: [
       { to: '/database', label: 'Datenbank', icon: 'db' },
-      { to: '/server-log', label: 'Server Log', icon: 'log' },
-      { to: '/audit', label: 'Audit', icon: 'audit' },
+      { to: '/server-log', label: 'Server-/FX-Log', icon: 'log' },
+      { to: '/audit', label: 'Admin-Aktionen', icon: 'audit' },
       { to: '/admins', label: 'Team', icon: 'team', owner: true },
       { to: '/settings', label: 'Einstellungen', icon: 'gear' },
     ],

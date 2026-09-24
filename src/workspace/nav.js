@@ -12,17 +12,12 @@ export const PRIMARY = [
 /** System-Dropdown aus zentraler Modulliste — kein doppeltes „Plattform“ mehr. */
 export const GROUPS = [
   {
-    id: 'mod',
-    label: 'Moderation',
-    items: MODULES.find((m) => m.id === 'mod').items.map(({ to, label, owner }) => ({ to, label, owner })),
-  },
-  {
     id: 'server',
     label: 'Server',
     items: [
       { to: '/cfg', label: 'CFG' },
       { to: '/schedule', label: 'Zeitpläne' },
-      { to: '/server-log', label: 'Server-Log' },
+      { to: '/server-log', label: 'Server-/FX-Log' },
       { to: '/ingame', label: 'Ingame' },
     ],
   },
