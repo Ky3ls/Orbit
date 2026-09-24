@@ -26,11 +26,11 @@ function playerIds(p) {
   return p.identifier ? [p.identifier] : [];
 }
 
-const TABS = [
-  { id: 'info', label: 'Info' },
-  { id: 'history', label: 'History' },
-  { id: 'ids', label: 'IDs' },
-  { id: 'ban', label: 'Ban' },
+const SECTIONS = [
+  { id: 'info', label: 'Übersicht' },
+  { id: 'ids', label: 'Identifier' },
+  { id: 'history', label: 'Verlauf' },
+  { id: 'ban', label: 'Sperre' },
 ];
 
 export default function Players() {
@@ -168,6 +168,7 @@ export default function Players() {
   const stats = data.stats || {};
   const onlineCount = stats.online ?? 0;
   const totalCount = stats.total ?? rows.length;
+  const initial = (p?.name || '?').slice(0, 1).toUpperCase();
 
   return (
     <Page>
@@ -234,138 +235,163 @@ export default function Players() {
       )}
 
       {pick && p && (
-        <Modal
-          title={(
-            <span className="pl-modal-title">
-              {p.online ? <em>[{p.serverId}]</em> : null} {p.name}
-            </span>
-          )}
-          onClose={() => { setPick(null); setDetail(null); setErr(''); }}
-          wide
-        >
-          <div className="pl-modal">
-            <nav className="pl-side" aria-label="Spieler-Tabs">
-              {TABS.map((t) => (
-                <button key={t.id} type="button" className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
-                  {t.label}
+        <Modal title="Spieler" onClose={() => { setPick(null); setDetail(null); setErr(''); }} wide>
+          <div className="pl-sheet">
+            <header className="pl-hero">
+              <div className="pl-hero-mark" aria-hidden="true">{initial}</div>
+              <div className="pl-hero-copy">
+                <div className="pl-hero-row">
+                  <h2>{p.name}</h2>
+                  {p.online
+                    ? <span className="pl-live">Live · #{p.serverId}</span>
+                    : <span className="pl-off">Offline</span>}
+                </div>
+                <p className="pl-hero-sub">
+                  {p.online ? `${p.ping ?? 0} ms · Session ${fmtPlaytime(p.session_ms || detail?.player?.session_ms)}` : `Zuletzt ${fmtFull(p.last_seen)}`}
+                  {' · '}
+                  Gesamt {fmtPlaytime(p.play_ms)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={`pl-allow${p.whitelisted ? ' on' : ''}`}
+                disabled={busy}
+                onClick={toggleWl}
+              >
+                {p.whitelisted ? 'Allowlist ✓' : 'Auf Allowlist'}
+              </button>
+            </header>
+
+            <div className="pl-rail" aria-hidden="true">
+              <div><small>Beigetreten</small><strong>{fmtFull(p.first_seen)}</strong></div>
+              <div><small>Bans</small><strong>{p.bans ?? 0}</strong></div>
+              <div><small>Warns</small><strong>{p.warns ?? 0}</strong></div>
+              <div><small>IDs</small><strong>{ids.length}</strong></div>
+            </div>
+
+            <div className="pl-seg" role="tablist" aria-label="Ansicht">
+              {SECTIONS.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === s.id}
+                  className={tab === s.id ? 'active' : ''}
+                  onClick={() => setTab(s.id)}
+                >
+                  {s.label}
                 </button>
               ))}
-            </nav>
-            <div className="pl-main">
-              {err && <div className="err" style={{ marginBottom: 10 }}>{err}</div>}
+            </div>
 
+            {err && <div className="err" style={{ marginBottom: 10 }}>{err}</div>}
+
+            <div className="pl-body">
               {tab === 'info' && (
-                <>
-                  <div className="pl-stats">
-                    <div><span>Session</span><b>{p.online ? fmtPlaytime(p.session_ms || detail?.player?.session_ms) : '—'}</b></div>
-                    <div><span>Spielzeit</span><b>{fmtPlaytime(p.play_ms)}</b></div>
-                    <div><span>Beigetreten</span><b>{fmtFull(p.first_seen)}</b></div>
-                    <div>
-                      <span>Allowlist</span>
-                      <b className="pl-wl-row">
-                        {p.whitelisted ? 'ja' : 'noch nicht'}
-                        <button type="button" className="btn btn-sm" disabled={busy} onClick={toggleWl}>
-                          {p.whitelisted ? 'Entfernen' : 'Allow'}
-                        </button>
-                      </b>
-                    </div>
-                    <div>
-                      <span>Sanktionen</span>
-                      <b>
-                        <Badge tone="bad">{p.bans ?? 0} Bans</Badge>
-                        {' '}
-                        <Badge>{p.warns ?? 0} Warns</Badge>
-                      </b>
-                    </div>
-                  </div>
+                <div className="pl-panel">
                   <label className="field">
-                    <span>Notizen</span>
-                    <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Notizen zum Spieler…" />
+                    <span>Interne Notiz</span>
+                    <textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nur für Admins sichtbar…" />
                   </label>
-                  <button type="button" className="btn btn-sm" disabled={busy} onClick={saveNote}>Notiz speichern</button>
-                </>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={saveNote}>
+                    Speichern
+                  </button>
+                </div>
+              )}
+
+              {tab === 'ids' && (
+                <div className="pl-id-stack">
+                  {ids.length === 0 ? (
+                    <p className="muted">Keine Identifier</p>
+                  ) : ids.map((id) => (
+                    <div key={id} className="pl-id-row">
+                      <span>{idLabel(id)}</span>
+                      <code className="mono">{id}</code>
+                    </div>
+                  ))}
+                </div>
               )}
 
               {tab === 'history' && (
                 <div className="pl-hist">
                   {(detail?.history?.bans || []).length === 0 && (detail?.history?.warns || []).length === 0 ? (
-                    <p className="muted">Keine Bans/Warns gefunden.</p>
+                    <p className="muted">Noch keine Einträge.</p>
                   ) : (
                     <>
                       {(detail?.history?.bans || []).map((b) => (
-                        <div key={`b${b.id}`} className="pl-hist-row">
-                          <Badge tone="bad">Ban #{b.id}</Badge>
-                          <span>{b.reason}</span>
-                          <em>{fmtFull(b.created)} · {b.author}</em>
-                        </div>
+                        <article key={`b${b.id}`} className="pl-hist-card ban">
+                          <header><strong>Ban #{b.id}</strong><span>{fmtFull(b.created)}</span></header>
+                          <p>{b.reason}</p>
+                          <footer>{b.author}</footer>
+                        </article>
                       ))}
                       {(detail?.history?.warns || []).map((w) => (
-                        <div key={`w${w.id}`} className="pl-hist-row">
-                          <Badge>Warn #{w.id}</Badge>
-                          <span>{w.reason}</span>
-                          <em>{fmtFull(w.created)} · {w.author}</em>
-                        </div>
+                        <article key={`w${w.id}`} className="pl-hist-card">
+                          <header><strong>Warn #{w.id}</strong><span>{fmtFull(w.created)}</span></header>
+                          <p>{w.reason}</p>
+                          <footer>{w.author}</footer>
+                        </article>
                       ))}
                     </>
                   )}
                 </div>
               )}
 
-              {tab === 'ids' && (
-                <ul className="pl-id-list">
-                  {ids.length === 0 ? <li className="muted">Keine Identifier</li> : ids.map((id) => (
-                    <li key={id}>
-                      <span className="pl-id-kind">{idLabel(id)}</span>
-                      <code className="mono">{id}</code>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
               {tab === 'ban' && (
-                <div className="pl-ban">
+                <div className="pl-panel pl-ban">
                   <label className="field">
                     <span>Grund</span>
-                    <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Regelverstoß, Grund…" />
+                    <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Regel, Kontext…" />
                   </label>
-                  <label className="field">
-                    <span>Dauer</span>
-                    <select value={durationId} onChange={(e) => setDurationId(e.target.value)}>
-                      {presets.map((pr) => <option key={pr.id} value={pr.id}>{pr.label}</option>)}
-                      <option value="custom">Benutzerdefiniert</option>
-                    </select>
-                  </label>
-                  {durationId === 'custom' && (
-                    <div className="pl-ban-custom">
-                      <input type="number" min={1} value={customAmt} onChange={(e) => setCustomAmt(e.target.value)} placeholder="123" />
-                      <select value={customUnit} onChange={(e) => setCustomUnit(e.target.value)}>
-                        <option value="hours">Stunden</option>
-                        <option value="days">Tage</option>
-                        <option value="weeks">Wochen</option>
+                  <div className="pl-ban-row">
+                    <label className="field grow">
+                      <span>Dauer</span>
+                      <select value={durationId} onChange={(e) => setDurationId(e.target.value)}>
+                        {presets.map((pr) => <option key={pr.id} value={pr.id}>{pr.label}</option>)}
+                        <option value="custom">Benutzerdefiniert</option>
                       </select>
-                    </div>
-                  )}
-                  <button type="button" className="btn btn-danger" disabled={busy} onClick={applyBan}>Ban anwenden</button>
-                  <p className="muted" style={{ fontSize: 12 }}>Funktioniert auch offline — Online-Spieler werden gekickt.</p>
+                    </label>
+                    {durationId === 'custom' && (
+                      <>
+                        <label className="field" style={{ maxWidth: 100 }}>
+                          <span>Wert</span>
+                          <input type="number" min={1} value={customAmt} onChange={(e) => setCustomAmt(e.target.value)} />
+                        </label>
+                        <label className="field" style={{ maxWidth: 120 }}>
+                          <span>Einheit</span>
+                          <select value={customUnit} onChange={(e) => setCustomUnit(e.target.value)}>
+                            <option value="hours">Stunden</option>
+                            <option value="days">Tage</option>
+                            <option value="weeks">Wochen</option>
+                          </select>
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <button type="button" className="btn pl-ban-btn" disabled={busy} onClick={applyBan}>
+                    Sperre setzen
+                  </button>
+                  <p className="muted" style={{ fontSize: 12, margin: 0 }}>Auch offline — Online-Spieler werden gekickt.</p>
                 </div>
               )}
             </div>
-          </div>
 
-          <div className="pl-footer">
-            <button type="button" className="btn btn-sm" disabled title="Demnächst">Give Admin</button>
-            <div className="pl-footer-actions">
-              <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('message')}>DM</button>
-              <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('kick')}>Kick</button>
-              <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('warn')}>Warn</button>
-            </div>
+            {tab !== 'ban' && (
+              <div className="pl-actions">
+                <input
+                  className="pl-actions-reason"
+                  placeholder="Grund für DM / Kick / Warn…"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <div className="pl-actions-btns">
+                  <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('message')}>DM</button>
+                  <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('kick')}>Kick</button>
+                  <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('warn')}>Warn</button>
+                </div>
+              </div>
+            )}
           </div>
-          {(tab !== 'ban') && (
-            <label className="field" style={{ marginTop: 10 }}>
-              <span>Grund (für DM/Kick/Warn)</span>
-              <input value={reason} onChange={(e) => setReason(e.target.value)} />
-            </label>
-          )}
         </Modal>
       )}
     </Page>
