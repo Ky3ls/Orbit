@@ -2344,17 +2344,44 @@ async function handleApi(req, res, url) {
     audit(db, me.username, 'orbit.uninstall', 'full', ip);
     logLine('warn', 'Orbit-Deinstallation gestartet — Panel geht offline.');
     const script = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'uninstall-orbit.sh');
-    // Antwort zuerst, dann uninstall (Dienst stirbt)
+    // Außerhalb der orbit.service-CGroup starten — sonst killt systemctl stop das Script.
     setTimeout(async () => {
       try {
         const { execFile } = await import('node:child_process');
-        execFile('sudo', ['-n', 'bash', script], { timeout: 300_000 }, (err) => {
+        const bash = fs.existsSync('/usr/bin/bash') ? '/usr/bin/bash' : '/bin/bash';
+        const run = fs.existsSync('/usr/bin/systemd-run') ? '/usr/bin/systemd-run' : null;
+        const onErr = (err) => {
           if (err) logLine('bad', `Uninstall: ${err.message}`);
-        });
+        };
+        if (run) {
+          execFile('sudo', [
+            '-n', run,
+            '--uid=root',
+            '--gid=root',
+            '--working-directory=/',
+            '--collect',
+            bash, script,
+          ], { timeout: 15_000 }, (err) => {
+            if (!err) {
+              logLine('info', 'Uninstall-Job (systemd-run) gestartet.');
+              return;
+            }
+            // Fallback nohup
+            execFile('sudo', [
+              '-n', bash, '-c',
+              `setsid ${bash} ${JSON.stringify(script)} >/tmp/orbit-uninstall.log 2>&1 < /dev/null &`,
+            ], { timeout: 10_000 }, onErr);
+          });
+        } else {
+          execFile('sudo', [
+            '-n', bash, '-c',
+            `setsid ${bash} ${JSON.stringify(script)} >/tmp/orbit-uninstall.log 2>&1 < /dev/null &`,
+          ], { timeout: 10_000 }, onErr);
+        }
       } catch (err) {
         logLine('bad', `Uninstall start: ${err.message}`);
       }
-    }, 800);
+    }, 600);
     return json(res, 200, {
       ok: true,
       uninstalling: true,
