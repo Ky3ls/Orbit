@@ -65,20 +65,28 @@ export async function handleIngamePublicApi(ctx) {
       json(res, 401, { error: 'Unauthorized' });
       return true;
     }
-    json(res, 200, { ok: true, panel: 'orbit' });
+    json(res, 200, {
+      ok: true,
+      panel: 'orbit',
+      players: (runtime.players || []).length,
+      playersSyncedAt: runtime.playersSyncedAt || 0,
+      names: (runtime.players || []).map((p) => p.name).slice(0, 32),
+    });
     return true;
   }
 
-  /** Spielerliste vom FX-Resource (Identifier + Name) → Panel-DB */
+  /**
+   * Live-Playerlist vom FX-Resource (wie txAdmin FxPlayerlist):
+   * event=full | playerJoining | playerDropped — Quelle ist GetPlayers(), nicht players.json / DB.
+   */
   if (method === 'POST' && pathname === '/api/ingame/players-sync') {
     const body = await readBody(req);
     if (!tokenOk(settings, body.token || req.headers['x-orbit-token'] || req.headers['x-orbit-ingame'])) {
       json(res, 401, { error: 'Unauthorized' });
       return true;
     }
-    const raw = Array.isArray(body.players) ? body.players : [];
     const now = Date.now();
-    const list = [];
+    const event = String(body.event || 'full');
     const up = db.prepare(`
       INSERT INTO players (identifier, name, ping, ids, first_seen, last_seen, play_ms)
       VALUES (?, ?, ?, ?, ?, ?, 0)
@@ -87,26 +95,59 @@ export async function handleIngamePublicApi(ctx) {
         ping = excluded.ping,
         ids = excluded.ids,
         last_seen = excluded.last_seen,
-        play_ms = play_ms + 4000
+        play_ms = play_ms + 3000
     `);
-    for (const p of raw) {
+
+    const normalize = (p) => {
+      const id = Number(p?.id);
+      if (!Number.isFinite(id)) return null;
       const identifiers = Array.isArray(p.identifiers)
         ? p.identifiers.map((x) => String(x).slice(0, 80)).filter(Boolean).slice(0, 16)
         : [];
-      const identifier = primaryId(identifiers);
-      if (!identifier) continue;
+      // Fallback-Key wenn Identifier noch fehlen (Join-Frame) — trotzdem live anzeigen
+      const identifier = primaryId(identifiers) || `fivem:${id}`;
       const name = String(p.name || 'Unbekannt').slice(0, 64);
       const ping = Number(p.ping) || 0;
-      const id = Number(p.id);
-      list.push({ id, name, ping, identifiers });
+      return { id, name, ping, identifiers, identifier };
+    };
+
+    const persist = (row) => {
+      if (!row?.identifier) return;
       try {
-        up.run(identifier, name, ping, JSON.stringify(identifiers), now, now);
+        up.run(row.identifier, row.name, row.ping, JSON.stringify(row.identifiers || []), now, now);
       } catch { /* */ }
+    };
+
+    let list = Array.isArray(runtime.players) ? [...runtime.players] : [];
+
+    if (event === 'playerDropped') {
+      const dropId = Number(body.id);
+      list = list.filter((p) => Number(p.id) !== dropId);
+    } else if (event === 'playerJoining') {
+      const row = normalize(body.player || body);
+      if (row) {
+        list = list.filter((p) => Number(p.id) !== row.id);
+        list.push({ id: row.id, name: row.name, ping: row.ping, identifiers: row.identifiers });
+        persist(row);
+      }
+    } else {
+      // full snapshot
+      const raw = Array.isArray(body.players) ? body.players : [];
+      list = [];
+      for (const p of raw) {
+        const row = normalize(p);
+        if (!row) continue;
+        list.push({ id: row.id, name: row.name, ping: row.ping, identifiers: row.identifiers });
+        persist(row);
+      }
     }
+
     runtime.players = list;
+    runtime.playersSyncedAt = now;
     runtime.clients = list.length;
     if (list.length && !runtime.online) runtime.online = true;
-    json(res, 200, { ok: true, count: list.length });
+    try { logLine?.('ok', `players-sync ${event}: ${list.length}`); } catch { /* */ }
+    json(res, 200, { ok: true, event, count: list.length });
     return true;
   }
 

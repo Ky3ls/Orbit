@@ -6,6 +6,8 @@ export const runtime = {
   maxClients: 48,
   clients: 0,
   players: [],
+  /** Timestamp letzter Bridge-Sync (GetPlayers / playerJoining) */
+  playersSyncedAt: 0,
   fxResources: [],
   host: { cpu: 0, ramPct: 0, ramUsed: 0, ramTotal: 0 },
   series: [],
