@@ -152,7 +152,7 @@ export default function App() {
           <Route path="platform" element={<Navigate to="/settings?tab=servers" replace />} />
           <Route path="database" element={setupOk ? <Database user={session.user} /> : <Navigate to="/setup" replace />} />
           <Route path="more" element={setupOk ? <More /> : <Navigate to="/setup" replace />} />
-          <Route path="setup" element={<Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={() => setSession({ ...session, setup: true })} />} />
+          <Route path="setup" element={setupOk ? <Navigate to="/panel" replace /> : <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={() => { setSession({ ...session, setup: true }); window.location.assign('/panel'); }} />} />
           <Route
             path="settings"
             element={
@@ -199,8 +199,12 @@ function Authed({ session, setSession }) {
     setSession(null);
     navigate('/login');
   }
+  function finishSetup() {
+    setSession({ ...session, setup: true });
+    navigate('/panel', { replace: true });
+  }
   if (!session.setup) {
-    return <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={() => setSession({ ...session, setup: true })} />;
+    return <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={finishSetup} />;
   }
   return <Shell user={session.user} onLogout={onLogout} />;
 }

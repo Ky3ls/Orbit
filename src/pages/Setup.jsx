@@ -341,18 +341,21 @@ export default function Setup({ onDone, userName = '' }) {
         },
       });
       setResult(data);
-      setStep(8);
       setMaxReached((m) => Math.max(m, 8));
 
       const url = String(data.panelUrl || '').replace(/\/$/, '');
+      // Immer zur Übersicht — nicht auf dem Wizard bleiben
       if (panelMode === 'domain' && url && /^https?:\/\//i.test(url)) {
         const dest = `${url}/panel`;
         setRedirectTo(dest);
         window.setTimeout(() => {
           window.location.replace(dest);
-        }, 400);
+        }, 350);
       } else {
-        onDone();
+        onDone?.();
+        window.setTimeout(() => {
+          window.location.assign('/panel');
+        }, 150);
       }
     } catch (e) {
       setErr(e.message);
