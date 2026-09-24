@@ -41,6 +41,9 @@ setr sv_stateBagStrictMode true
 add_ace resource.es_extended command allow
 add_ace resource.es_extended command.quit allow
 add_ace resource.ox_lib command allow
+add_principal group.admin group.user
+add_ace group.admin command allow
+add_ace group.admin command.quit deny
 `,
   },
   qb: {
@@ -58,6 +61,9 @@ add_ace resource.ox_lib command allow
 setr qb_locale "de"
 setr sv_stateBagStrictMode true
 add_ace resource.qb-core command allow
+add_principal group.admin group.user
+add_ace group.admin command allow
+add_ace group.admin command.quit deny
 `,
   },
 };

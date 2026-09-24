@@ -195,16 +195,22 @@ export async function installCfxServerData(dataPath, onLog = () => {}, { profile
   return { ok: true };
 }
 
-/** ACE damit Frameworks add_principal / add_ace ausführen dürfen. */
+/** ACE damit Frameworks add_principal / add_ace ausführen dürfen + Admin-Commands. */
 export function applyFrameworkAce(cfg, profile = '') {
   let out = String(cfg || '');
   const lines = [];
   if (profile === 'esx' || /ensure\s+\[core\]/i.test(out) || /es_extended/i.test(out)) {
     lines.push('add_ace resource.es_extended command allow');
     lines.push('add_ace resource.es_extended command.quit allow');
+    lines.push('add_principal group.admin group.user');
+    lines.push('add_ace group.admin command allow');
+    lines.push('add_ace group.admin command.quit deny');
   }
   if (profile === 'qb' || /qb-core/i.test(out)) {
     lines.push('add_ace resource.qb-core command allow');
+    lines.push('add_principal group.admin group.user');
+    lines.push('add_ace group.admin command allow');
+    lines.push('add_ace group.admin command.quit deny');
   }
   if (/ox_lib|ensure\s+ox_lib/i.test(out) || profile === 'esx') {
     lines.push('add_ace resource.ox_lib command allow');
