@@ -1,4 +1,5 @@
 import { Children, isValidElement, memo, useEffect, useId, useState } from 'react';
+import { getLang, toBcp47 } from '../i18n/core.js';
 import { ModuleShell } from '../workspace/Module.jsx';
 
 /** Orbit-Mark: Kern + gekreuzte Orbits + Satellit — skaliert scharf, Farbe via currentColor / --accent */
@@ -159,7 +160,7 @@ export function Modal({ title, onClose, children, wide, aside, showClose = true 
 
 function chartClock(ts) {
   if (!ts) return '';
-  return new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(ts);
+  return new Intl.DateTimeFormat(toBcp47(getLang()), { hour: '2-digit', minute: '2-digit' }).format(ts);
 }
 
 function niceYTicks(scaleMax, fixed) {

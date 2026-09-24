@@ -116,6 +116,7 @@ import {
   ROLE_TEMPLATES,
 } from './permissions.js';
 import { publicSettingsPayload, resolveAllowlistMode, ALLOWLIST_MODES } from './settingsSchema.js';
+import { tServer } from './i18n.js';
 import {
   cleanDatabaseOptions,
   cleanOrbitDatabase,
@@ -527,7 +528,7 @@ function checkSchedule() {
       : 'Zeitplan ausgelöst, Server-Steuerung ist aus.';
     logLine('info', detail);
     audit(db, 'system', 'schedule', `${job.label} ${hhmm}`, 'local');
-    sendDiscordWarning(settings, `⏰ Geplanter Neustart: **${job.label}** (${hhmm})`).catch(() => {});
+    sendDiscordWarning(settings, tServer(settings, 'discord.scheduledRestart', { label: job.label, time: hhmm })).catch(() => {});
     if (control) {
       runtime.controlPhase = 'restarting';
       controlFx('restart', settings, logLine)
@@ -635,6 +636,7 @@ async function handleApi(req, res, url) {
         setupPin = await bootstrapPinPublicInfo(db);
       } catch { /* */ }
     }
+    const bootSettings = settingMap(db);
     return json(res, 200, {
       brand: 'Orbit',
       needsMaster: boot.needsMaster,
@@ -643,6 +645,7 @@ async function handleApi(req, res, url) {
       setup: setupDone(),
       hasUsers: boot.hasUsers,
       user: me ? publicUser(me) : null,
+      language: bootSettings.language || bootSettings.locale || 'de-DE',
       setupPin,
       tls: { required: REQUIRE_TLS, secure: res._orbitSecure === true, origin: ORIGIN },
     });

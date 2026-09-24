@@ -1,6 +1,14 @@
+import { getLang, toBcp47 } from './i18n/core.js';
+import { CATALOG } from './i18n/catalog.js';
+import { translate } from './i18n/core.js';
+
+function locale() {
+  return toBcp47(getLang());
+}
+
 export function fmtTime(ts) {
   if (!ts) return '–';
-  return new Intl.DateTimeFormat('de-DE', {
+  return new Intl.DateTimeFormat(locale(), {
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
@@ -10,7 +18,7 @@ export function fmtTime(ts) {
 
 export function fmtFull(ts) {
   if (!ts) return '–';
-  return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(ts);
+  return new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(ts);
 }
 
 export function fmtBytes(n) {
@@ -29,7 +37,7 @@ export function fmtUptime(from) {
   const sec = Math.max(0, Math.floor((Date.now() - from) / 1000));
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  if (h > 48) return `${Math.floor(h / 24)} Tage`;
+  if (h > 48) return translate(CATALOG, getLang(), 'fmt.days', { n: Math.floor(h / 24) });
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
@@ -46,8 +54,9 @@ export function fmtPlaytime(ms) {
 }
 
 export function roleLabel(role) {
-  if (role === 'owner') return 'Inhaber';
-  if (role === 'admin') return 'Admin';
-  if (role === 'custom') return 'Individuell';
-  return 'Moderator';
+  const key = role === 'owner' ? 'role.owner'
+    : role === 'admin' ? 'role.admin'
+      : role === 'custom' ? 'role.custom'
+        : 'role.mod';
+  return translate(CATALOG, getLang(), key);
 }
