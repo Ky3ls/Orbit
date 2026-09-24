@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { Badge, Page, PageHeader } from '../components/Ui.jsx';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 import './database.css';
 
 const PAGE_SIZES = [25, 50, 100, 250];
@@ -75,6 +76,7 @@ function DataTable({ columns, rows }) {
 }
 
 function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult }) {
+  const { t } = useI18n();
   const sqlColumns = sqlResult?.kind === 'resultset'
     ? (sqlResult.columns?.length ? sqlResult.columns : Object.keys(sqlResult.rows?.[0] || {}))
     : [];
@@ -84,7 +86,7 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult }) {
       <form className="db-sql" onSubmit={onRun}>
         <p className="muted db-sql-hint">{hint}</p>
         <label className="field">
-          <span>SQL-Befehl</span>
+          <span>SQL</span>
           <textarea
             className="mono db-sql-area"
             value={sql}
@@ -96,7 +98,7 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult }) {
         </label>
         <div className="db-sql-actions">
           <button type="submit" className="btn btn-primary" disabled={busy}>
-            {busy ? 'Läuft…' : 'Ausführen'}
+            {busy ? t('db.running') : t('db.run')}
           </button>
         </div>
       </form>
@@ -110,6 +112,7 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult }) {
 }
 
 export default function Database({ user }) {
+  const { t } = useI18n();
   const isOwner = user?.role === 'owner';
   const [meta, setMeta] = useState({ database: '', version: '' });
   const [tables, setTables] = useState([]);
@@ -243,7 +246,7 @@ export default function Database({ user }) {
         if (d.message) parts.push(d.message);
         setMsg(parts.join(' '));
       } else {
-        setMsg(d.truncated ? 'Ergebnis gekürzt (max. 500).' : `${(d.rows || []).length} Zeile(n).`);
+        setMsg(d.truncated ? t('db.truncated') : t('db.rows', { n: (d.rows || []).length }));
       }
     } catch (error) {
       setErr(error.message);
@@ -358,7 +361,7 @@ export default function Database({ user }) {
                 )}
               </nav>
             </div>
-            {busy && <span className="muted db-busy">Lädt…</span>}
+            {busy && <span className="muted db-busy">{t('db.loading')}</span>}
           </div>
 
           <div className="db-tabs" role="tablist">
@@ -368,7 +371,7 @@ export default function Database({ user }) {
               className={`db-tab${tab === 'overview' ? ' active' : ''}`}
               onClick={() => { setTab('overview'); setTable(null); }}
             >
-              Übersicht
+              {t('db.overview')}
             </button>
             <button
               type="button"
@@ -425,7 +428,7 @@ export default function Database({ user }) {
                         <th>Tabelle</th>
                         <th>Zeilen (ca.)</th>
                         <th>Engine</th>
-                        <th>Größe</th>
+                        <th>{t('db.size')}</th>
                         <th />
                       </tr>
                     </thead>
@@ -438,7 +441,7 @@ export default function Database({ user }) {
                           <td>{row.Größe}</td>
                           <td>
                             <button type="button" className="btn btn-sm" onClick={() => selectTable(row._name)}>
-                              Öffnen
+                              {t('db.open')}
                             </button>
                           </td>
                         </tr>
@@ -462,7 +465,7 @@ export default function Database({ user }) {
 
             {tab === 'structure' && table && (
               <DataTable
-                columns={['Feld', 'Typ', 'Null', 'Schlüssel', 'Standard', 'Extra']}
+                columns={[t('db.col.field'), t('db.col.type'), t('db.col.null'), t('db.col.key'), t('db.col.default'), t('db.col.extra')]}
                 rows={structureRows}
               />
             )}
@@ -486,7 +489,7 @@ export default function Database({ user }) {
                       {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
                     </select>
                   </label>
-                  <button type="button" className="btn btn-sm" disabled={page <= 0 || busy} onClick={() => setPage((p) => p - 1)}>Zurück</button>
+                  <button type="button" className="btn btn-sm" disabled={page <= 0 || busy} onClick={() => setPage((p) => p - 1)}>{t('common.back')}</button>
                   <span>{page + 1} / {pageCount}</span>
                   <button type="button" className="btn btn-sm" disabled={page + 1 >= pageCount || busy} onClick={() => setPage((p) => p + 1)}>Weiter</button>
                   <button
@@ -514,10 +517,10 @@ export default function Database({ user }) {
                     </select>
                   </label>
                   <label className="field grow">
-                    <span>Enthält</span>
+                    <span>{t('db.contains')}</span>
                     <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="Suchtext…" />
                   </label>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Suchen</button>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{t('db.search')}</button>
                 </form>
                 <DataTable columns={searchResult.columns} rows={searchResult.rows} />
               </>

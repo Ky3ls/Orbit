@@ -1,15 +1,18 @@
-/** Dauer-Presets — gespiegelt zu server/moderation.js (UI). */
+/** Dauer-Presets — gespiegelt zu server/moderation.js (UI). Labels via i18n. */
 export const BAN_DURATION_PRESETS = [
-  { id: '2h', label: '2 Stunden' },
-  { id: '8h', label: '8 Stunden' },
-  { id: '1d', label: '1 Tag' },
-  { id: '2d', label: '2 Tage' },
-  { id: '7d', label: '7 Tage' },
-  { id: '14d', label: '14 Tage' },
-  { id: '30d', label: '30 Tage' },
-  { id: 'perm', label: 'Permanent' },
+  { id: '2h', labelKey: 'ban.2h' },
+  { id: '8h', labelKey: 'ban.8h' },
+  { id: '1d', labelKey: 'ban.1d' },
+  { id: '2d', labelKey: 'ban.2d' },
+  { id: '7d', labelKey: 'ban.7d' },
+  { id: '14d', labelKey: 'ban.14d' },
+  { id: '30d', labelKey: 'ban.30d' },
+  { id: 'perm', labelKey: 'ban.perm' },
 ];
 
-export function banDurationLabel(id) {
-  return BAN_DURATION_PRESETS.find((p) => p.id === id)?.label || id || '—';
+/** @param {string} id @param {(k: string) => string} [t] */
+export function banDurationLabel(id, t) {
+  const preset = BAN_DURATION_PRESETS.find((p) => p.id === id);
+  if (!preset) return id || '—';
+  return t ? t(preset.labelKey) : preset.labelKey;
 }

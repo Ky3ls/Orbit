@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 import './orbitSelect.css';
 
 /**
@@ -10,10 +11,12 @@ function OrbitSelect({
   value,
   options = [],
   onChange,
-  placeholder = 'Auswählen…',
+  placeholder,
   disabled = false,
   className = '',
 }) {
+  const { t } = useI18n();
+  const ph = placeholder ?? t('select.placeholder');
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const listId = useId();
@@ -61,14 +64,14 @@ function OrbitSelect({
         onClick={toggle}
       >
         <span className={selected ? '' : 'osel-ph'}>
-          {selected?.label || placeholder}
+          {selected?.label || ph}
         </span>
         <i className="osel-caret" aria-hidden="true" />
       </button>
       {open ? (
         <ul id={listId} className="osel-menu" role="listbox">
           {options.length === 0 ? (
-            <li className="osel-empty">Keine Einträge</li>
+            <li className="osel-empty">{t('select.empty')}</li>
           ) : options.map((o) => {
             const active = String(o.value) === valueKey;
             return (

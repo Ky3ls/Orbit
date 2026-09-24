@@ -1,5 +1,6 @@
 import { Children, isValidElement, memo, useEffect, useId, useState } from 'react';
 import { getLang, toBcp47 } from '../i18n/core.js';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 import { ModuleShell } from '../workspace/Module.jsx';
 
 /** Orbit-Mark: Kern + gekreuzte Orbits + Satellit — skaliert scharf, Farbe via currentColor / --accent */
@@ -119,6 +120,7 @@ export function Toolbar({ children, className = '' }) {
  * showClose: Header-X zum Schließen (default true).
  */
 export function Modal({ title, onClose, children, wide, aside, showClose = true }) {
+  const { t } = useI18n();
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -143,8 +145,8 @@ export function Modal({ title, onClose, children, wide, aside, showClose = true 
                 className="modal-x"
                 onClick={onClose}
                 type="button"
-                aria-label="Schließen"
-                title="Schließen"
+                aria-label={t('common.close')}
+                title={t('common.close')}
               >
                 ×
               </button>

@@ -69,7 +69,7 @@ export default function Admins() {
   function togglePerm(id) {
     setForm((f) => {
       const has = f.permissions.includes(id);
-      const permissions = has ? f.permissions.filter((p) => p !== id) : [...f.permissions, id];
+      const permissions = has ? f.permissions.filter((p) => p !== id) : [...(f.permissions), id];
       return { ...f, role: 'custom', permissions };
     });
   }
@@ -127,12 +127,12 @@ export default function Admins() {
   return (
     <Page>
       <PageHeader
-        eyebrow="System"
+        eyebrow={t('team.eyebrow')}
         title={t('page.admins')}
-        description="Accounts, Rollen und granulare Rechte — angebunden an das Panel-Permission-System."
+        description={t('team.desc')}
         actions={(
           <button type="button" className="btn btn-primary" onClick={openCreate}>
-            + Neuer Benutzer
+            {t('team.newUser')}
           </button>
         )}
       />
@@ -142,13 +142,13 @@ export default function Admins() {
         <PanelCard className="tm-module">
           <div className="tm-module-head">
             <div>
-              <h3>Mitglieder</h3>
-              <p className="muted">Klicke einen Account zum Bearbeiten.</p>
+              <h3>{t('team.members')}</h3>
+              <p className="muted">{t('team.membersHint')}</p>
             </div>
             <Badge tone="info">{members.length}</Badge>
           </div>
           {members.length === 0 ? (
-            <Empty title="Keine Accounts" text="Lege den ersten Moderator oder Admin an." />
+            <Empty title={t('team.empty')} text={t('team.emptyText')} />
           ) : (
             <div className="tm-list">
               {members.map((user) => (
@@ -166,9 +166,9 @@ export default function Admins() {
                     </Badge>
                   </div>
                   <div className="tm-card-meta">
-                    <span>2FA {user.totp_enabled ? 'an' : 'aus'}</span>
-                    <span>Login {fmtFull(user.last_login)}</span>
-                    {user.customPermissions && <span>individuelle Rechte</span>}
+                    <span>{user.totp_enabled ? t('team.totpOn') : t('team.totpOff')}</span>
+                    <span>{t('team.login', { when: fmtFull(user.last_login) })}</span>
+                    {user.customPermissions && <span>{t('team.customPerms')}</span>}
                   </div>
                   {user.role !== 'owner' && (
                     <div className="tm-card-actions" onClick={(e) => e.stopPropagation()}>
@@ -180,7 +180,7 @@ export default function Admins() {
                           body: { disabled: !user.disabled },
                         }).then(load)}
                       >
-                        {user.disabled ? 'Aktivieren' : 'Sperren'}
+                        {user.disabled ? t('team.enable') : t('team.lock')}
                       </button>
                     </div>
                   )}
@@ -193,8 +193,8 @@ export default function Admins() {
         <PanelCard className="tm-module">
           <div className="tm-module-head">
             <div>
-              <h3>Rollen-Vorlagen</h3>
-              <p className="muted">Basisrechte — beim Anlegen/Editieren überschreibbar.</p>
+              <h3>{t('team.roleTpl')}</h3>
+              <p className="muted">{t('team.roleTplHint')}</p>
             </div>
           </div>
           <div className="tm-roles">
@@ -206,7 +206,7 @@ export default function Admins() {
                     <li key={p} className="mono">{p}</li>
                   ))}
                   {(catalog.templates?.[role] || []).length > 8 && (
-                    <li className="muted">+{(catalog.templates[role].length - 8)} weitere</li>
+                    <li className="muted">{t('team.more', { n: catalog.templates[role].length - 8 })}</li>
                   )}
                 </ul>
               </div>
@@ -217,26 +217,26 @@ export default function Admins() {
 
       {(createOpen || edit) && (
         <Modal
-          title={createOpen ? 'Neuer Benutzer' : `Bearbeiten: ${edit?.username}`}
+          title={createOpen ? t('team.createTitle') : t('team.editTitle', { name: edit?.username })}
           onClose={() => { setCreateOpen(false); setEdit(null); setErr(''); }}
           wide
           aside={(
-            <aside className="tm-identity-aside" aria-label="Identität">
-              <h4 className="tm-form-col-title">Identität</h4>
+            <aside className="tm-identity-aside" aria-label={t('team.identity')}>
+              <h4 className="tm-form-col-title">{t('team.identity')}</h4>
               {createOpen && (
                 <label className="field">
-                  <span>Benutzername</span>
+                  <span>{t('team.username')}</span>
                   <input
                     form="tm-user-form"
                     required
                     value={form.username}
                     onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    placeholder="z. B. max.mod"
+                    placeholder={t('team.usernamePh')}
                   />
                 </label>
               )}
               <label className="field">
-                <span>{createOpen ? 'Passwort' : 'Neues Passwort (optional)'}</span>
+                <span>{createOpen ? t('team.password') : t('team.newPassword')}</span>
                 <input
                   form="tm-user-form"
                   type="text"
@@ -244,37 +244,37 @@ export default function Admins() {
                   minLength={createOpen ? 6 : 0}
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder={createOpen ? 'mind. 6 Zeichen' : 'Leer = unverändert'}
+                  placeholder={createOpen ? t('team.pwPhCreate') : t('team.pwPhEdit')}
                 />
               </label>
               <label className="field">
-                <span>Cfx.re Benutzername</span>
+                <span>{t('team.cfx')}</span>
                 <input
                   form="tm-user-form"
                   value={form.cfxName || ''}
                   onChange={(e) => setForm({ ...form, cfxName: e.target.value })}
-                  placeholder="optional — für Cfx-Login"
+                  placeholder={t('team.cfxPh')}
                 />
               </label>
               <label className="field">
-                <span>Discord User-ID</span>
+                <span>{t('team.discord')}</span>
                 <input
                   form="tm-user-form"
                   value={form.discordId || ''}
                   onChange={(e) => setForm({ ...form, discordId: e.target.value })}
-                  placeholder="optional — Snowflake"
+                  placeholder={t('team.discordPh')}
                 />
               </label>
               <label className="field">
-                <span>Rolle</span>
+                <span>{t('team.role')}</span>
                 <select
                   form="tm-user-form"
                   value={form.role}
                   onChange={(e) => applyRoleTemplate(e.target.value)}
                 >
-                  <option value="moderator">Moderator</option>
-                  <option value="admin">Admin</option>
-                  <option value="custom">Individuell</option>
+                  <option value="moderator">{t('role.mod')}</option>
+                  <option value="admin">{t('role.admin')}</option>
+                  <option value="custom">{t('role.custom')}</option>
                 </select>
               </label>
             </aside>
@@ -283,9 +283,9 @@ export default function Admins() {
           <form id="tm-user-form" className="tm-form" onSubmit={createOpen ? create : saveEdit}>
             {err && <div className="err">{err}</div>}
             <div className="tm-perms">
-              <h4 className="tm-form-col-title">Berechtigungen</h4>
+              <h4 className="tm-form-col-title">{t('team.perms')}</h4>
               <p className="tm-perms-hint muted">
-                Vorlagen setzen die Haken; manuelle Änderung wechselt auf „Individuell“.
+                {t('team.permsHint')}
               </p>
               <div className="tm-perms-body">
                 {permGroups.map((g) => (
@@ -311,7 +311,7 @@ export default function Admins() {
 
             <div className="tm-form-actions row">
               <button type="submit" className="btn btn-primary" disabled={busy}>
-                {createOpen ? 'Anlegen' : 'Speichern'}
+                {createOpen ? t('common.create') : t('common.save')}
               </button>
             </div>
           </form>

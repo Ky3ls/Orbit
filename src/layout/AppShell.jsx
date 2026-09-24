@@ -4,17 +4,20 @@ import { api, sameJson } from '../api.js';
 import ServerControls from '../components/ServerControls.jsx';
 import { Mark } from '../components/Ui.jsx';
 import { NavIcon } from './icons.jsx';
-import { MODULES } from './modules.js';
+import { localizedModules } from './modules.js';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const MOBILE_TABS = [
-  { to: '/panel', end: true, label: 'Home', icon: 'home' },
-  { to: '/players', label: 'Spieler', icon: 'users' },
-  { to: '/resources', label: 'Scripts', icon: 'box' },
-  { to: '/monitoring', label: 'Monitor', icon: 'chart' },
-  { to: '/more', label: 'Menü', icon: 'more' },
+  { to: '/panel', end: true, labelKey: 'nav.home', icon: 'home' },
+  { to: '/players', labelKey: 'nav.players', icon: 'users' },
+  { to: '/resources', labelKey: 'nav.scripts', icon: 'box' },
+  { to: '/monitoring', labelKey: 'nav.monitoring', icon: 'chart' },
+  { to: '/more', labelKey: 'nav.menu', icon: 'more' },
 ];
 
 export default function AppShell({ user, onLogout }) {
+  const { t } = useI18n();
+  const navGroups = localizedModules(t);
   const [status, setStatus] = useState('offline');
   const [live, setLive] = useState({ clients: 0, hostname: 'Server', maxClients: 48 });
   const [controlEnabled, setControlEnabled] = useState(true);
@@ -75,12 +78,12 @@ export default function AppShell({ user, onLogout }) {
 
   return (
     <div className="ob-app">
-      <aside className="ob-aside" aria-label="Navigation">
+      <aside className="ob-aside" aria-label={t('shell.navAria')}>
         <NavLink to="/panel" className="ob-brand">
           <Mark />
           <span>Orbit</span>
         </NavLink>
-        {MODULES.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.id}>
             <span className="ob-nav-label">{group.label}</span>
             {group.items.map((item) => {
@@ -110,7 +113,7 @@ export default function AppShell({ user, onLogout }) {
             {canControl && (
               <div className="dock-power" ref={powerRef}>
                 <button type="button" className="btn btn-sm" onClick={() => setPowerOpen((v) => !v)}>
-                  Server
+                  {t('nav.server')}
                 </button>
                 {powerOpen && (
                   <div className="power-menu">
@@ -133,15 +136,15 @@ export default function AppShell({ user, onLogout }) {
             </button>
             {menuOpen && (
               <div className="profile-menu">
-                <Link to="/settings" className="pm-item" onClick={() => setMenuOpen(false)}>Einstellungen</Link>
-                <button type="button" className="pm-item pm-logout" onClick={() => { setMenuOpen(false); onLogout(); }}>Abmelden</button>
+                <Link to="/settings" className="pm-item" onClick={() => setMenuOpen(false)}>{t('common.settings')}</Link>
+                <button type="button" className="pm-item pm-logout" onClick={() => { setMenuOpen(false); onLogout(); }}>{t('common.logout')}</button>
               </div>
             )}
           </div>
         </header>
 
         {user.mustChange && (
-          <div className="ob-alert">Passwort unter <Link to="/settings">Einstellungen</Link> ändern.</div>
+          <div className="ob-alert">{t('shell.mustChangePrefix')}<Link to="/settings">{t('common.settings')}</Link>{t('shell.mustChangeSuffix')}</div>
         )}
 
         <main className="ob-content">
@@ -157,7 +160,7 @@ export default function AppShell({ user, onLogout }) {
         </main>
       </div>
 
-      <nav className="ob-tabbar" aria-label="Mobil">
+      <nav className="ob-tabbar" aria-label={t('shell.mobileAria')}>
         {MOBILE_TABS.map((tab) => (
           <NavLink
             key={tab.to}
@@ -166,7 +169,7 @@ export default function AppShell({ user, onLogout }) {
             className={({ isActive }) => `ob-tab${isActive ? ' active' : ''}`}
           >
             <NavIcon name={tab.icon} />
-            {tab.label}
+            {t(tab.labelKey)}
           </NavLink>
         ))}
       </nav>

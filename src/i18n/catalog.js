@@ -1,6 +1,8 @@
 /** Panel-Übersetzungen. Fehlende Keys fallen auf EN → DE zurück. */
+import { panelDe, panelEn } from './panelStrings.js';
 
 const de = {
+  ...panelDe,
   // Nav / modules
   'nav.ops': 'Betrieb',
   'nav.sys': 'System',
@@ -245,6 +247,7 @@ const de = {
 };
 
 const en = {
+  ...panelEn,
   'nav.ops': 'Operations',
   'nav.sys': 'System',
   'nav.extra': 'Extra',
@@ -491,10 +494,15 @@ const fr = extend({
   'nav.resources': 'Ressources',
   'nav.settings': 'Paramètres',
   'nav.more': 'Plus',
+  'nav.schedule': 'Automations',
+  'nav.admins': 'Équipe',
   'common.save': 'Enregistrer',
   'common.logout': 'Déconnexion',
   'common.loading': 'Chargement…',
   'common.settings': 'Paramètres',
+  'common.search': 'Rechercher',
+  'common.close': 'Fermer',
+  'common.refresh': 'Actualiser',
   'status.online': 'En ligne',
   'status.offline': 'Hors ligne',
   'settings.title': 'Paramètres',
@@ -504,6 +512,14 @@ const fr = extend({
   'login.title': 'Connexion',
   'login.submit': 'Se connecter',
   'page.players': 'Joueurs',
+  'page.resources': 'Ressources',
+  'page.schedule': 'Automations',
+  'console.title': 'Console',
+  'console.live': 'Console live',
+  'players.drops': 'Déconnexions',
+  'resources.searchPh': 'Rechercher dossier ou script…',
+  'sch.createTitle': 'Nouvelle automation',
+  'team.members': 'Membres',
 });
 
 const es = extend({
@@ -514,10 +530,15 @@ const es = extend({
   'nav.resources': 'Recursos',
   'nav.settings': 'Ajustes',
   'nav.more': 'Más',
+  'nav.schedule': 'Automatizaciones',
+  'nav.admins': 'Equipo',
   'common.save': 'Guardar',
   'common.logout': 'Cerrar sesión',
   'common.loading': 'Cargando…',
   'common.settings': 'Ajustes',
+  'common.search': 'Buscar',
+  'common.close': 'Cerrar',
+  'common.refresh': 'Actualizar',
   'status.online': 'En línea',
   'status.offline': 'Desconectado',
   'settings.title': 'Ajustes',
@@ -527,6 +548,14 @@ const es = extend({
   'login.title': 'Iniciar sesión',
   'login.submit': 'Entrar',
   'page.players': 'Jugadores',
+  'page.resources': 'Recursos',
+  'page.schedule': 'Automatizaciones',
+  'console.title': 'Consola',
+  'console.live': 'Consola en vivo',
+  'players.drops': 'Desconexiones',
+  'resources.searchPh': 'Buscar carpeta o script…',
+  'sch.createTitle': 'Nueva automatización',
+  'team.members': 'Miembros',
 });
 
 const pt = extend({
@@ -537,10 +566,15 @@ const pt = extend({
   'nav.resources': 'Recursos',
   'nav.settings': 'Definições',
   'nav.more': 'Mais',
+  'nav.schedule': 'Automações',
+  'nav.admins': 'Equipa',
   'common.save': 'Guardar',
   'common.logout': 'Terminar sessão',
   'common.loading': 'A carregar…',
   'common.settings': 'Definições',
+  'common.search': 'Pesquisar',
+  'common.close': 'Fechar',
+  'common.refresh': 'Atualizar',
   'status.online': 'Online',
   'status.offline': 'Offline',
   'settings.title': 'Definições',
@@ -550,6 +584,14 @@ const pt = extend({
   'login.title': 'Entrar',
   'login.submit': 'Entrar',
   'page.players': 'Jogadores',
+  'page.resources': 'Recursos',
+  'page.schedule': 'Automações',
+  'console.title': 'Consola',
+  'console.live': 'Consola ao vivo',
+  'players.drops': 'Desconexões',
+  'resources.searchPh': 'Pesquisar pasta ou script…',
+  'sch.createTitle': 'Nova automação',
+  'team.members': 'Membros',
 });
 
 const nl = extend({
@@ -560,10 +602,15 @@ const nl = extend({
   'nav.resources': 'Resources',
   'nav.settings': 'Instellingen',
   'nav.more': 'Meer',
+  'nav.schedule': 'Automatiseringen',
+  'nav.admins': 'Team',
   'common.save': 'Opslaan',
   'common.logout': 'Uitloggen',
   'common.loading': 'Laden…',
   'common.settings': 'Instellingen',
+  'common.search': 'Zoeken',
+  'common.close': 'Sluiten',
+  'common.refresh': 'Vernieuwen',
   'status.online': 'Online',
   'status.offline': 'Offline',
   'settings.title': 'Instellingen',
@@ -573,6 +620,14 @@ const nl = extend({
   'login.title': 'Inloggen',
   'login.submit': 'Inloggen',
   'page.players': 'Spelers',
+  'page.resources': 'Resources',
+  'page.schedule': 'Automatiseringen',
+  'console.title': 'Console',
+  'console.live': 'Live-console',
+  'players.drops': 'Player drops',
+  'resources.searchPh': 'Map of script zoeken…',
+  'sch.createTitle': 'Nieuwe automatisering',
+  'team.members': 'Leden',
 });
 
 export const CATALOG = { de, en, fr, es, pt, nl };

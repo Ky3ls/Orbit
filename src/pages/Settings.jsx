@@ -353,7 +353,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 <label className="field"><span>{t('settings.hostname')}</span><input value={form.hostname} onChange={(e) => set({ hostname: e.target.value })} /></label>
                 <label className="field"><span>{t('settings.project')}</span><input value={form.project} onChange={(e) => set({ project: e.target.value })} /></label>
                 <label className="field"><span>{t('settings.slots')}</span><input type="number" min={1} max={2048} value={form.maxClients} onChange={(e) => set({ maxClients: e.target.value })} /></label>
-                <label className="field"><span>{t('settings.tags')}</span><input value={form.tags || ''} onChange={(e) => set({ tags: e.target.value })} placeholder="roleplay, german, …" /></label>
+                <label className="field"><span>{t('settings.tags')}</span><input value={form.tags || ''} onChange={(e) => set({ tags: e.target.value })} placeholder={t('settings.tagsPh')} /></label>
                 <label className="field"><span>{t('settings.gameBuild')}</span>
                   <select value={form.gameBuild || ''} onChange={(e) => set({ gameBuild: e.target.value })}>
                     {GAME_BUILD_OPTIONS.map((o) => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
@@ -435,7 +435,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
             </ModuleCard>
             <div className="st-foot st-wide">
               <button className="btn btn-primary" type="submit">{t('settings.fx.save')}</button>
-              <button className="btn" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || 'RCON OK')).catch((e) => setErr(e.message))}>{t('settings.fx.rconTest')}</button>
+              <button className="btn" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || t('settings.rconOk'))).catch((e) => setErr(e.message))}>{t('settings.fx.rconTest')}</button>
             </div>
           </form>
         )}
@@ -448,7 +448,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 lead={t('settings.bans.lead')}
                 actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
               >
-                <Toggle checked={form.banChecking !== false} onChange={(v) => set({ banChecking: v })} onLabel="Prüfung an" offLabel="Prüfung aus" />
+                <Toggle checked={form.banChecking !== false} onChange={(v) => set({ banChecking: v })} onLabel={t('settings.bans.checkOnShort')} offLabel={t('settings.bans.checkOffShort')} />
                 <label className="field" style={{ marginTop: 12 }}>
                   <span>Ablehnungs-Hinweis</span>
                   <textarea rows={3} value={form.banRejectionMessage || ''} onChange={(e) => set({ banRejectionMessage: e.target.value })} />
@@ -480,7 +480,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                   options={BAN_DURATION_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
                 />
                 <button type="submit" className="btn btn-primary" disabled={tplBusy || tplReason.trim().length < 3}>
-                  {tplBusy ? '…' : 'Vorlage hinzufügen'}
+                  {tplBusy ? '…' : t('settings.tplAdd')}
                 </button>
               </form>
               {templates.length === 0 ? (
@@ -571,8 +571,8 @@ export default function Settings({ user, onUser, onSetupReset }) {
             <ModuleCard title="Bot">
               <Toggle checked={!!form.discordBotEnabled} onChange={(v) => set({ discordBotEnabled: v })} onLabel="Bot an" offLabel="Bot aus" />
               <p className="st-meta" style={{ marginTop: 8 }}>
-                Benötigt Intent <b>Server Members</b> im Discord Developer Portal (Allowlist Discord-Member/Rollen).
-                Status-Embed: im gewünschten Kanal <code>/status add</code> ausführen.
+                {t('settings.discord.intent')}
+                {' '}{t('settings.discord.statusEmbed')}
               </p>
               <label className="field" style={{ marginTop: 10 }}>
                 <span>Bot-Token</span>
@@ -610,12 +610,12 @@ export default function Settings({ user, onUser, onSetupReset }) {
         {section === 'game' && isAdmin && (
           <form className="st-stack" onSubmit={save}>
             <ModuleCard
-              title="Menü"
-              lead="Orbit Ingame-Menü (/orbit) — Einstellungen gehen an orbit_bridge."
+              title={t('settings.game.menuTitle')}
+              lead={t('settings.game.menuLead')}
               actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <div className="st-chips">
-                <Toggle checked={form.gameMenuEnabled !== false} onChange={(v) => set({ gameMenuEnabled: v })} onLabel="Menü an" offLabel="Menü aus" />
+                <Toggle checked={form.gameMenuEnabled !== false} onChange={(v) => set({ gameMenuEnabled: v })} onLabel={t('settings.game.menuOn')} offLabel={t('settings.game.menuOff')} />
                 <Toggle checked={!!form.gameMenuAlignRight} onChange={(v) => set({ gameMenuAlignRight: v })} onLabel="Rechts" offLabel="Links" />
               </div>
               <label className="field" style={{ marginTop: 12 }}>
@@ -630,7 +630,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       set({ gameMenuPageKey: e.key === ' ' ? 'Space' : e.key });
                     }
                   }}
-                  placeholder="Taste drücken…"
+                  placeholder={t('settings.game.keyPh')}
                 />
               </label>
             </ModuleCard>
@@ -685,7 +685,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
               <FieldRow>
                 {['players', 'bans', 'warns', 'hwids'].map((key) => (
                   <label key={key} className="field">
-                    <span>{key === 'players' ? 'Spieler' : key === 'bans' ? 'Bans' : key === 'warns' ? 'Warns' : 'HWIDs'}</span>
+                    <span>{key === 'players' ? t('settings.clean.players') : key === 'bans' ? t('settings.clean.bans') : key === 'warns' ? t('settings.clean.warns') : t('settings.clean.hwids')}</span>
                     <select
                       value={cleanForm[key]}
                       onChange={(e) => setCleanForm({ ...cleanForm, [key]: e.target.value })}
@@ -720,20 +720,20 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 Datenbank bereinigen
               </button>
             </ModuleCard>
-            <ModuleCard title="Allowlists widerrufen" lead="Einträge aus der Orbit-Allowlist entfernen.">
+            <ModuleCard title={t('settings.allowlist.revoke')} lead={t('settings.allowlist.revokeLead')}>
               <button
                 type="button"
                 className="btn"
                 disabled={sysBusy}
                 onClick={async () => {
-                  if (!window.confirm('Alle Allowlist-Einträge löschen?')) return;
+                  if (!window.confirm(t('settings.allowlist.revokeConfirm'))) return;
                   setSysBusy(true);
                   try {
                     const d = await api('/api/system/revoke-allowlists', {
                       method: 'POST',
                       body: { confirm: true, olderThanDays: 'all' },
                     });
-                    setMsg(`${d.removed} Allowlist-Einträge entfernt.`);
+                    setMsg(t('settings.allowlist.revoked', { n: d.removed }));
                   } catch (e) {
                     setErr(e.message);
                   }
@@ -837,10 +837,10 @@ export default function Settings({ user, onUser, onSetupReset }) {
                   <label className="field"><span>Aktuell</span><input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></label>
                   <label className="field"><span>Neu</span><input type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></label>
                 </div>
-                <button className="btn btn-primary" type="submit" style={{ marginTop: 12 }}>Passwort ändern</button>
+                <button className="btn btn-primary" type="submit" style={{ marginTop: 12 }}>{t('settings.account.changePw')}</button>
               </form>
             </ModuleCard>
-            <ModuleCard title="Cfx.re" lead="Login-Verknüpfung — erstellt keine neuen Admins.">
+            <ModuleCard title={t('settings.account.cfx')} lead={t('settings.account.cfxLead')}>
               {user.cfxName ? (
                 <div className="st-inline">
                   <b>{user.cfxName}</b>
@@ -880,14 +880,14 @@ export default function Settings({ user, onUser, onSetupReset }) {
 
         {section === 'danger' && isOwner && (
           <div className="st-stack">
-            <ModuleCard title="Neu einrichten" lead="Stoppt FX, löscht Server-Ordner, öffnet den Setup-Wizard.">
+            <ModuleCard title={t('settings.danger.reset')} lead={t('settings.danger.resetLead')}>
               <button
                 type="button"
                 className="btn btn-primary"
                 disabled={resetBusy}
                 onClick={async () => {
-                  if (!window.confirm('FX stoppen und ALLE Server-Ordner löschen, dann Setup starten?')) return;
-                  if (!window.confirm('Wirklich alles löschen und neu einrichten?')) return;
+                  if (!window.confirm(t('settings.danger.resetConfirm1'))) return;
+                  if (!window.confirm(t('settings.danger.resetConfirm2'))) return;
                   setResetBusy(true);
                   setErr('');
                   try {
@@ -895,16 +895,16 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       method: 'POST',
                       body: { confirm: true, wipe: true },
                     });
-                    setMsg(`Gelöscht: ${(res.deleted || []).length} Ordner — Setup startet…`);
+                    setMsg(t('settings.danger.resetMsg', { n: (res.deleted || []).length }));
                     onSetupReset?.({ redirect: '/setup', wipe: true });
                   } catch (e) {
-                    setErr(e.message || 'Löschen fehlgeschlagen');
+                    setErr(e.message || t('settings.danger.resetFail'));
                   } finally {
                     setResetBusy(false);
                   }
                 }}
               >
-                {resetBusy ? 'Lösche…' : 'Alles löschen & Setup starten'}
+                {resetBusy ? t('settings.danger.resetBusy') : t('settings.danger.resetBtn')}
               </button>
             </ModuleCard>
             <ModuleCard title="Orbit deinstallieren" lead="Panel, Dienst und Installation weg.">
@@ -913,9 +913,9 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 className="btn btn-danger"
                 disabled={resetBusy}
                 onClick={async () => {
-                  const phrase = window.prompt('Zum Bestätigen exakt eingeben: ORBIT LÖSCHEN');
+                  const phrase = window.prompt(t('settings.danger.uninstallPrompt'));
                   if (phrase == null) return;
-                  if (String(phrase).trim().toUpperCase() !== 'ORBIT LÖSCHEN') {
+                  if (String(phrase).trim().toUpperCase() !== t('settings.danger.uninstallPhrase')) {
                     setErr('Abgebrochen — Phrase falsch.');
                     return;
                   }
@@ -925,9 +925,9 @@ export default function Settings({ user, onUser, onSetupReset }) {
                   try {
                     const res = await api('/api/settings/uninstall', {
                       method: 'POST',
-                      body: { confirmPhrase: 'ORBIT LÖSCHEN' },
+                      body: { confirmPhrase: t('settings.danger.uninstallPhrase') },
                     });
-                    setMsg(res.message || 'Deinstallation läuft…');
+                    setMsg(res.message || t('settings.danger.uninstallMsg'));
                     window.setTimeout(() => { window.location.href = 'about:blank'; }, 2500);
                   } catch (e) {
                     setErr(e.message || 'Deinstallation fehlgeschlagen');

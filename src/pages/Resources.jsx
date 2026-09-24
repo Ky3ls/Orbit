@@ -7,10 +7,10 @@ function matchFilter(text, q) {
   return !q || text.toLowerCase().includes(q.toLowerCase());
 }
 
-function statusLabel(actual) {
-  if (actual === 'started') return 'läuft';
-  if (actual === 'stopped') return 'stopp';
-  if (actual === 'offline') return 'offline';
+function statusLabel(actual, t) {
+  if (actual === 'started') return t('resources.status.started');
+  if (actual === 'stopped') return t('resources.status.stopped');
+  if (actual === 'offline') return t('resources.status.offline');
   return actual || '—';
 }
 
@@ -113,25 +113,25 @@ export default function Resources() {
   return (
     <Page className="res-page ws-module-flush">
       <PageHeader
-        eyebrow="Betrieb"
+        eyebrow={t('resources.eyebrow')}
         title={t('page.resources')}
         description={
           online
-            ? `${totalRes} Scripts · ${filtered.length} Ordner · Live`
-            : 'Server offline — Status ohne Live-Abgleich'
+            ? t('resources.descOnline', { scripts: totalRes, folders: filtered.length })
+            : t('resources.descOffline')
         }
       />
 
       <div className="res-toolbar">
         <input
           className="search res-search"
-          placeholder="Ordner oder Script suchen…"
+          placeholder={t('resources.searchPh')}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          aria-label="Ressourcen suchen"
+          aria-label={t('resources.searchAria')}
         />
         {q.trim() ? (
-          <button type="button" className="res-search-clear" onClick={() => setQ('')} title="Suche leeren">
+          <button type="button" className="res-search-clear" onClick={() => setQ('')} title={t('resources.clearSearch')}>
             ✕
           </button>
         ) : null}
@@ -141,7 +141,7 @@ export default function Resources() {
 
       <div className="res-page-list">
         {filtered.length === 0 ? (
-          <p className="muted res-empty">Keine Ressourcen{q ? ` für „${q}"` : ''}.</p>
+          <p className="muted res-empty">{q ? t('resources.emptyQ', { q }) : t('resources.empty')}</p>
         ) : (
           filtered.map((group) => {
             const expanded = open.has(group.folder);
@@ -160,9 +160,9 @@ export default function Resources() {
                   <span className="res-group-title">
                     <span className="mono res-group-folder">{group.folder}</span>
                     <span className="res-group-meta">
-                      <span className="res-group-pill">{started}/{shown} läuft</span>
+                      <span className="res-group-pill">{t('resources.running', { started, shown })}</span>
                       {total !== shown ? (
-                        <span className="muted res-group-filter">{shown} von {total}</span>
+                        <span className="muted res-group-filter">{t('resources.of', { shown, total })}</span>
                       ) : null}
                     </span>
                   </span>
@@ -176,24 +176,24 @@ export default function Resources() {
                           <span className="mono res-row-name" title={res.name}>{res.name}</span>
                           <span className={`res-status${tone ? ` tone-${tone}` : ''}`}>
                             <i className="res-status-dot" aria-hidden="true" />
-                            {statusLabel(res.actual)}
+                            {statusLabel(res.actual, t)}
                           </span>
-                          <div className="res-row-actions" role="group" aria-label={`Aktionen ${res.name}`}>
+                          <div className="res-row-actions" role="group" aria-label={t('resources.actions', { name: res.name })}>
                             <button
                               className="res-act res-act-start"
                               type="button"
                               disabled={!canAct}
                               onClick={() => act(res.name, 'start')}
                             >
-                              Start
+                              {t('ctl.start')}
                             </button>
                             <button
                               className="res-act res-act-restart"
                               type="button"
                               disabled={!canAct}
                               onClick={() => act(res.name, 'restart')}
-                              title="Neustart"
-                              aria-label="Neustart"
+                              title={t('resources.restart')}
+                              aria-label={t('resources.restart')}
                             >
                               ↻
                             </button>
@@ -203,7 +203,7 @@ export default function Resources() {
                               disabled={!canAct}
                               onClick={() => act(res.name, 'stop')}
                             >
-                              Stop
+                              {t('ctl.stop')}
                             </button>
                           </div>
                         </div>

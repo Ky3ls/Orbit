@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 /**
  * Orbit Stepper — UX angelehnt an React Bits Stepper:
@@ -12,9 +13,9 @@ export default function Stepper({
   onNext,
   onBack,
   onComplete,
-  nextLabel = 'Weiter',
-  backLabel = 'Zurück',
-  completeLabel = 'Abschließen',
+  nextLabel,
+  backLabel,
+  completeLabel,
   busy = false,
   showNav = true,
   hideBack = false,
@@ -23,6 +24,10 @@ export default function Stepper({
   maxReached = 0,
   children,
 }) {
+  const { t } = useI18n();
+  const nextLbl = nextLabel ?? t('common.next');
+  const backLbl = backLabel ?? t('common.back');
+  const completeLbl = completeLabel ?? t('common.complete');
   const total = steps.length;
   const isFirst = step <= 0;
   const isLast = step >= total - 1;
@@ -60,7 +65,7 @@ export default function Stepper({
 
   return (
     <div className="orbit-stepper">
-      <ol className="orbit-stepper-track" aria-label="Einrichtungsschritte">
+      <ol className="orbit-stepper-track" aria-label={t('step.aria')}>
         {steps.map((item, index) => {
           const done = index < step;
           const active = index === step;
@@ -103,7 +108,7 @@ export default function Stepper({
         <div className="orbit-stepper-nav">
           {!hideBack && !isFirst && (
             <button className="btn" type="button" disabled={busy} onClick={handleBack}>
-              {backLabel}
+              {backLbl}
             </button>
           )}
           <div className="orbit-stepper-nav-spacer" />
@@ -115,7 +120,7 @@ export default function Stepper({
               disabled={!canNext || busy}
               onClick={handleNext}
             >
-              {busy && isLastAction ? 'Speichere…' : busy ? 'Wird aufgesetzt…' : isLastAction ? completeLabel : nextLabel}
+              {busy && isLastAction ? t('common.saving') : busy ? t('step.provisioning') : isLastAction ? completeLbl : nextLbl}
             </button>
           ) : null}
         </div>
