@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, sameJson } from '../api.js';
 import LiveConsole, { LIVE_CONSOLE_DEFAULT_H } from '../components/LiveConsole.jsx';
 import ServerControls, { statusLabel, statusTone } from '../components/ServerControls.jsx';
 import { Mark } from '../components/Ui.jsx';
@@ -41,25 +41,29 @@ export default function AppShell({ user, onLogout }) {
     if (document.hidden) return;
     api('/api/server/status')
       .then((d) => {
-        setStatus(d.status || (d.online ? 'online' : 'offline'));
-        setControlEnabled(d.controlEnabled !== false);
-        setLive({
+        const nextStatus = d.status || (d.online ? 'online' : 'offline');
+        const nextLive = {
           clients: d.clients ?? 0,
           hostname: d.hostname || 'Server',
           maxClients: d.maxClients ?? 48,
-        });
-        setFxMeta({
+        };
+        const nextFx = {
           fxControlMode: d.fxControlMode || 'systemd',
           fxCommandReady: !!d.fxCommandReady,
           online: !!d.online,
-        });
+        };
+        const nextControl = d.controlEnabled !== false;
+        setStatus((prev) => (prev === nextStatus ? prev : nextStatus));
+        setControlEnabled((prev) => (prev === nextControl ? prev : nextControl));
+        setLive((prev) => (sameJson(prev, nextLive) ? prev : nextLive));
+        setFxMeta((prev) => (sameJson(prev, nextFx) ? prev : nextFx));
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
     refreshStatus();
-    const id = setInterval(refreshStatus, 4000);
+    const id = setInterval(refreshStatus, 10_000);
     return () => clearInterval(id);
   }, [refreshStatus]);
 

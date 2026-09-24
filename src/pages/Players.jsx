@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, sameJson } from '../api.js';
 import { fmtFull, fmtPlaytime } from '../format.js';
 import { AreaChart, Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
 import OrbitSelect from '../components/OrbitSelect.jsx';
@@ -44,6 +44,13 @@ const SECTIONS = [
 ];
 
 const intAxis = (v) => `${Math.round(v)}`;
+const seriesPlayers = (d) => d.players;
+const seriesDrops = (d) => d.drops;
+
+function playerFingerprint(p) {
+  if (!p) return '';
+  return `${p.identifier}|${p.name}|${p.online ? 1 : 0}|${p.serverId || ''}|${p.ping ?? ''}|${p.banned ? 1 : 0}|${p.whitelisted ? 1 : 0}|${p.play_ms || 0}|${p.last_seen || 0}|${p.note || ''}`;
+}
 
 export default function Players({ user }) {
   const { openConsole } = useOutletContext() || {};
@@ -75,6 +82,10 @@ export default function Players({ user }) {
   const [busy, setBusy] = useState(false);
   const qRef = useRef(q);
   qRef.current = q;
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const dropsRef = useRef(drops);
+  dropsRef.current = drops;
 
   const canRevoke = user?.role === 'owner' || user?.role === 'admin'
     || (user?.permissions || []).includes('bans.revoke')
@@ -98,10 +109,12 @@ export default function Players({ user }) {
     });
     api(`/api/players?${params}`)
       .then((d) => {
+        if (sameJson(dataRef.current, d)) return;
         setData(d);
         setPick((cur) => {
           if (!cur) return null;
-          return (d.list || []).find((p) => p.identifier === cur.identifier) || cur;
+          const next = (d.list || []).find((p) => p.identifier === cur.identifier) || cur;
+          return playerFingerprint(next) === playerFingerprint(cur) ? cur : next;
         });
       })
       .catch((e) => { if (!silent) setErr(e.message); });
@@ -109,19 +122,28 @@ export default function Players({ user }) {
 
   function loadDrops(silent = false) {
     api('/api/drops?hours=72')
-      .then(setDrops)
+      .then((d) => {
+        if (sameJson(dropsRef.current, d)) return;
+        setDrops(d);
+      })
       .catch((e) => { if (!silent) setErr(e.message); });
   }
 
   function loadBans(silent = false) {
     api('/api/bans')
-      .then((d) => setBans(d.bans || []))
+      .then((d) => setBans((prev) => {
+        const next = d.bans || [];
+        return sameJson(prev, next) ? prev : next;
+      }))
       .catch((e) => { if (!silent) setErr(e.message); });
   }
 
   function loadWl(silent = false) {
     api('/api/whitelist')
-      .then((d) => setWlEntries(d.entries || []))
+      .then((d) => setWlEntries((prev) => {
+        const next = d.entries || [];
+        return sameJson(prev, next) ? prev : next;
+      }))
       .catch((e) => { if (!silent) setErr(e.message); });
   }
 
@@ -155,15 +177,27 @@ export default function Players({ user }) {
 
   useEffect(() => {
     loadPlayers();
-    const id = setInterval(() => loadPlayers(true), 5000);
+    const id = setInterval(() => loadPlayers(true), 12_000);
     return () => clearInterval(id);
   }, [filter]);
 
   useEffect(() => {
     loadDrops();
-    const id = setInterval(() => loadDrops(true), 30_000);
+    const id = setInterval(() => loadDrops(true), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  /* Suche: API erst nach Pause (Enter bleibt sofort) — nicht beim ersten Mount */
+  const qBoot = useRef(true);
+  useEffect(() => {
+    if (['banned', 'allowlist'].includes(filter)) return undefined;
+    if (qBoot.current) {
+      qBoot.current = false;
+      return undefined;
+    }
+    const id = setTimeout(() => loadPlayers(true), 280);
+    return () => clearTimeout(id);
+  }, [q]);
 
   useEffect(() => {
     if (filter === 'banned') loadBans();
@@ -358,7 +392,7 @@ export default function Players({ user }) {
           </div>
           <AreaChart
             data={playerSeries}
-            accessor={(d) => d.players}
+            accessor={seriesPlayers}
             color="#ff7a1a"
             yMax={maxClients}
             formatY={intAxis}
@@ -375,7 +409,7 @@ export default function Players({ user }) {
           </div>
           <AreaChart
             data={dropSeries}
-            accessor={(d) => d.drops}
+            accessor={seriesDrops}
             color="#e85d4a"
             formatY={intAxis}
             ariaLabel="Player Drops über Zeit"

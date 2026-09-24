@@ -1,18 +1,57 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fmtBytes } from '../format.js';
 import FxStatusStrip from '../components/FxStatusStrip.jsx';
 import { AreaChart, Gauge, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
 
 const pctAxis = (v) => `${Math.round(v)}%`;
 const intAxis = (v) => `${Math.round(v)}`;
+const getCpu = (d) => d.cpu;
+const getRam = (d) => d.ram;
+const getPlayers = (d) => d.players;
+
+function stateKey(s) {
+  if (!s) return '';
+  const h = s.host || {};
+  const series = s.series || [];
+  const last = series[series.length - 1];
+  return [
+    s.clients, s.maxClients, s.online, s.status,
+    h.cpu, h.ramPct, h.ramUsed, series.length,
+    last?.t, last?.cpu, last?.ram, last?.players,
+    s.fxCommandReady, s.processActive ?? s.unitActive,
+    (s.instances || []).map((i) => `${i.id}:${i.clients}:${i.online}`).join(','),
+  ].join('|');
+}
 
 export default function Monitoring() {
   const [state, setState] = useState(null);
+  const keyRef = useRef('');
+  const pending = useRef(null);
+  const raf = useRef(0);
 
   useEffect(() => {
     const es = new EventSource('/api/stream');
-    es.addEventListener('state', (e) => setState(JSON.parse(e.data)));
-    return () => es.close();
+    const apply = (raw) => {
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch { return; }
+      const key = stateKey(parsed);
+      if (key === keyRef.current) return;
+      keyRef.current = key;
+      setState(parsed);
+    };
+    es.addEventListener('state', (e) => {
+      pending.current = e.data;
+      if (raf.current) return;
+      raf.current = requestAnimationFrame(() => {
+        raf.current = 0;
+        if (pending.current != null) apply(pending.current);
+        pending.current = null;
+      });
+    });
+    return () => {
+      es.close();
+      if (raf.current) cancelAnimationFrame(raf.current);
+    };
   }, []);
 
   const host = state?.host || { cpu: 0, ramPct: 0, ramUsed: 0, ramTotal: 0 };
@@ -50,7 +89,7 @@ export default function Monitoring() {
             </div>
             <AreaChart
               data={series}
-              accessor={(d) => d.cpu}
+              accessor={getCpu}
               yMax={100}
               formatY={pctAxis}
               ariaLabel="CPU-Auslastung über Zeit"
@@ -63,7 +102,7 @@ export default function Monitoring() {
             </div>
             <AreaChart
               data={series}
-              accessor={(d) => d.ram}
+              accessor={getRam}
               color="#8eb6ff"
               yMax={100}
               formatY={pctAxis}
@@ -78,7 +117,7 @@ export default function Monitoring() {
           </div>
           <AreaChart
             data={series}
-            accessor={(d) => d.players}
+            accessor={getPlayers}
             color="#3dd68c"
             yMax={Math.max(maxClients, 1)}
             formatY={intAxis}

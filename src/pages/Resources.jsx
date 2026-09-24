@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api, sameJson } from '../api.js';
 import { Badge, Page, PageHeader } from '../components/Ui.jsx';
 
 function matchFilter(text, q) {
@@ -9,27 +9,41 @@ function matchFilter(text, q) {
 export default function Resources() {
   const [groups, setGroups] = useState([]);
   const [q, setQ] = useState('');
+  const [qLive, setQLive] = useState('');
   const [err, setErr] = useState('');
   const [online, setOnline] = useState(false);
   const [fxReady, setFxReady] = useState(false);
   const [open, setOpen] = useState(() => new Set());
+  const snapRef = useRef({ groups: [], online: false, fxReady: false });
 
   function load() {
     api('/api/resources').then((d) => {
-      setGroups(d.groups || []);
-      setOnline(d.online);
-      setFxReady(!!d.fxCommandReady);
+      const next = {
+        groups: d.groups || [],
+        online: d.online,
+        fxReady: !!d.fxCommandReady,
+      };
+      if (sameJson(snapRef.current, next)) return;
+      snapRef.current = next;
+      setGroups(next.groups);
+      setOnline(next.online);
+      setFxReady(next.fxReady);
     }).catch((e) => setErr(e.message));
   }
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 8000);
+    const id = setInterval(load, 15_000);
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const id = setTimeout(() => setQLive(q), 200);
+    return () => clearTimeout(id);
+  }, [q]);
+
   const filtered = useMemo(() => {
-    const needle = q.trim();
+    const needle = qLive.trim();
     return (groups || [])
       .map((g) => ({
         ...g,
@@ -38,17 +52,23 @@ export default function Resources() {
         ),
       }))
       .filter((g) => g.resources.length > 0);
-  }, [groups, q]);
+  }, [groups, qLive]);
 
   const folderKey = useMemo(() => filtered.map((g) => g.folder).join('\0'), [filtered]);
 
   useEffect(() => {
     setOpen((prev) => {
+      let changed = false;
       const next = new Set(prev);
-      for (const g of filtered) next.add(g.folder);
-      return next;
+      for (const folder of folderKey ? folderKey.split('\0') : []) {
+        if (folder && !next.has(folder)) {
+          next.add(folder);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
     });
-  }, [folderKey, filtered]);
+  }, [folderKey]);
 
   const totalRes = useMemo(
     () => filtered.reduce((n, g) => n + g.resources.length, 0),

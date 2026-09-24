@@ -204,6 +204,7 @@ export default function Admins() {
         <Modal
           title={createOpen ? 'Neuer Benutzer' : `Bearbeiten: ${edit?.username}`}
           onClose={() => { setCreateOpen(false); setEdit(null); setErr(''); }}
+          showClose={false}
           wide
           aside={(
             <aside className="tm-identity-aside" aria-label="Identität">

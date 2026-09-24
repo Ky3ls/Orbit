@@ -29,7 +29,7 @@ export default function LiveConsole({
   onHeight,
 }) {
   const active = variant === 'page' || variant === 'side' || variant === 'cockpit' || open;
-  const fx = useFxStatus(active ? 4000 : 30_000);
+  const fx = useFxStatus(active ? 8000 : 60_000);
   const [prefs] = useAppearance();
   const [targets, setTargets] = useState([]);
   const [targetId, setTargetId] = useState('');
@@ -43,6 +43,8 @@ export default function LiveConsole({
   const drag = useRef(null);
   const stick = useRef(true);
   const inputRef = useRef(null);
+  const consoleBuf = useRef([]);
+  const consoleRaf = useRef(0);
 
   useEffect(() => {
     if (!active) return;
@@ -59,11 +61,25 @@ export default function LiveConsole({
     if (!active) return undefined;
     const es = new EventSource('/api/stream');
     es.addEventListener('console', (e) => {
-      const incoming = JSON.parse(e.data);
-      setLines((prev) => mergeLines(prev, incoming));
+      let incoming;
+      try { incoming = JSON.parse(e.data); } catch { return; }
+      if (!Array.isArray(incoming) || !incoming.length) return;
+      consoleBuf.current.push(...incoming);
+      if (consoleRaf.current) return;
+      consoleRaf.current = requestAnimationFrame(() => {
+        consoleRaf.current = 0;
+        const batch = consoleBuf.current;
+        consoleBuf.current = [];
+        if (batch.length) setLines((prev) => mergeLines(prev, batch));
+      });
     });
     es.onerror = () => {};
-    return () => es.close();
+    return () => {
+      es.close();
+      if (consoleRaf.current) cancelAnimationFrame(consoleRaf.current);
+      consoleRaf.current = 0;
+      consoleBuf.current = [];
+    };
   }, [active]);
 
   const visible = useMemo(
