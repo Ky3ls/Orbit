@@ -66,8 +66,14 @@
   border: 1px solid rgba(var(--accent-rgb), 0.35);
   background: #0c0c0c;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-  max-height: 260px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
+  scrollbar-width: none;
+}
+.osel-menu::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 .osel-empty {
   padding: 12px;
