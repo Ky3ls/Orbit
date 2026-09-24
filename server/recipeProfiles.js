@@ -34,7 +34,7 @@ export const RECIPE_PACKS = {
       },
     ],
     cfgBlock: `
-# --- Orbit Profil: ESX Legacy ---
+# ESX Legacy
 setr esx:locale "de"
 setr inventory:framework "esx"
 setr sv_stateBagStrictMode true
@@ -54,7 +54,7 @@ add_ace resource.ox_lib command allow
       { url: 'https://github.com/qbcore-framework/qb-core.git', dest: '[qb]/qb-core', depth: 1 },
     ],
     cfgBlock: `
-# --- Orbit Profil: QBCore ---
+# QBCore
 setr qb_locale "de"
 setr sv_stateBagStrictMode true
 add_ace resource.qb-core command allow

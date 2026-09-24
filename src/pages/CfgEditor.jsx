@@ -107,6 +107,20 @@ export default function CfgEditor() {
     setMsg('');
   }
 
+  async function reloadAll() {
+    if (dirty && !window.confirm('Ungespeicherte Änderungen verwerfen?')) return;
+    setErr('');
+    setMsg('');
+    try {
+      const list = await loadList();
+      const stillThere = list.find((f) => f.rel === activeFile);
+      const next = stillThere?.rel || list.find((f) => f.primary)?.rel || list[0]?.rel || '';
+      await loadFile(next);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
   async function selectFile(rel) {
     if (rel === activeFile) return;
     if (dirty && !window.confirm('Ungespeicherte Änderungen verwerfen?')) return;
@@ -208,14 +222,6 @@ export default function CfgEditor() {
     <div className="cfg-side">
       <div className="cfg-side-head">
         <span className="cfg-side-title">CFG-Dateien</span>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          title="Erneut scannen"
-          onClick={() => loadList().catch((e) => setErr(e.message))}
-        >
-          Scan
-        </button>
       </div>
       <input
         className="cfg-side-filter"
@@ -277,7 +283,13 @@ export default function CfgEditor() {
             >
               Suche
             </button>
-            <button className="btn btn-sm" type="button" onClick={() => loadFile(activeFile)} disabled={loading}>
+            <button
+              className="btn btn-sm"
+              type="button"
+              title="Dateiliste neu scannen und aktuelle Datei neu laden"
+              onClick={() => reloadAll()}
+              disabled={loading}
+            >
               Neu laden
             </button>
           </div>

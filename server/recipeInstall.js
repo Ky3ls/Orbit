@@ -8,6 +8,7 @@ import { syncOrbitBridgeToDataPath } from './orbitBridgeSync.js';
 import { ensureOnce } from './cfgUpsert.js';
 import { ensureEsxAddonColumns, patchMysql8CompatInResources } from './mysqlCompat.js';
 import { applyCfxBaseCfg, installCfxServerData } from './cfxDefaults.js';
+import { sanitizeCfgMetaComments } from './cfgSanitize.js';
 
 const exec = promisify(execFile);
 
@@ -211,12 +212,13 @@ export async function importResourceSqlFiles(resourcesRoot, dsn, onLog = () => {
 }
 
 function mergeCfgProfile(cfg, profileBlock) {
-  // Marker in CFG ist „ESX Legacy“ etc., pack.profile nur „esx“ → immer generisch mergen
-  const ende = '# --- Ende Orbit Profil ---';
-  const block = `${profileBlock}\n${ende}`;
-  if (/# --- Orbit Profil:[\s\S]*?# --- Ende Orbit Profil ---/m.test(cfg)) {
-    return cfg.replace(/# --- Orbit Profil:[\s\S]*?# --- Ende Orbit Profil ---/m, block);
-  }
+  // Alte Meta-Marker und neue Abschnitts-Header ersetzen
+  const block = String(profileBlock || '').trim();
+  if (!block) return cfg;
+  const oldRe = /# --- Orbit Profil:[\s\S]*?# --- Ende Orbit Profil ---/m;
+  if (oldRe.test(cfg)) return cfg.replace(oldRe, block);
+  const newRe = /^# (?:ESX Legacy|QBCore)\s*\n(?:^(?:setr|add_ace|set|sets)\b[^\n]*\n?)*/m;
+  if (newRe.test(cfg)) return cfg.replace(newRe, `${block}\n`);
   return `${cfg.trim()}\n\n${block}\n`;
 }
 
@@ -346,6 +348,7 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
     cfg = ensureOnce(cfg, res);
   }
   cfg = ensureOnce(cfg, 'orbit');
+  cfg = sanitizeCfgMetaComments(cfg);
   fs.writeFileSync(cfgPath, cfg.trim() + '\n', 'utf8');
   onLog(`Profil „${pack.title}“ + CFX-Defaults + CFG angewendet.`);
   return results;

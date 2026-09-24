@@ -198,8 +198,9 @@ export function applyFrameworkAce(cfg, profile = '') {
  */
 export function applyCfxBaseCfg(cfg, profile = 'blank') {
   let out = String(cfg || '');
-  // Alten Block ersetzen
+  // Alten / neuen Block ersetzen
   out = out.replace(/# --- Orbit CFX Defaults ---[\s\S]*?# --- Ende CFX Defaults ---\n?/m, '');
+  out = out.replace(/^# Basis-Ressourcen\n(?:ensure [^\n]+\n)*/m, '');
   // Framework: mapmanager-ensure entfernen falls manuell gesetzt
   if (profile === 'esx' || profile === 'qb') {
     out = out.replace(/^\s*ensure\s+mapmanager\s*$/gmi, '');
@@ -207,7 +208,7 @@ export function applyCfxBaseCfg(cfg, profile = 'blank') {
   }
 
   const ensures = baseEnsuresFor(profile);
-  const baseBlock = `${['# --- Orbit CFX Defaults ---', ...ensures.map((r) => `ensure ${r}`), '# --- Ende CFX Defaults ---'].join('\n')}\n`;
+  const baseBlock = `${['# Basis-Ressourcen', ...ensures.map((r) => `ensure ${r}`)].join('\n')}\n`;
 
   // Nach endpoints / vor anderen ensures
   if (/^ensure\s+/m.test(out)) {

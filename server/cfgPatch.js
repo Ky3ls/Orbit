@@ -2,17 +2,25 @@
 
 const ONESYNC_LINE = /^\s*(?:##\s*)?set\s+onesync\s+/i;
 const ONESYNC_VALIDATOR = /^\s*##\s*\[txAdmin CFG validator\]:\s*onesync\s+/i;
+const ONESYNC_ORBIT_META = /^\s*##\s*\[Orbit\]:\s*onesync\s+/i;
+const ONESYNC_HINT = /^\s*#\s*OneSync:\s+/i;
 const GAME_BUILD_LINE = /^\s*(?:set\s+)?sv_enforceGameBuild\s+/i;
+
+function parseOnesyncToken(raw) {
+  const v = String(raw || '').toLowerCase();
+  if (v === 'off' || v === 'legacy' || v === 'on') return v;
+  return null;
+}
 
 export function parseOnesyncFromCfg(text) {
   const lines = String(text || '').split('\n');
   for (const line of lines) {
     const t = line.trim();
-    if (ONESYNC_VALIDATOR.test(t)) {
-      const m = t.match(/onesync\s+(\w+)/i);
+    if (ONESYNC_VALIDATOR.test(t) || ONESYNC_ORBIT_META.test(t) || ONESYNC_HINT.test(t)) {
+      const m = t.match(/onesync[:\s]+(\w+)/i) || t.match(/OneSync:\s*(\w+)/i);
       if (m) {
-        const v = m[1].toLowerCase();
-        if (v === 'off' || v === 'legacy' || v === 'on') return v;
+        const v = parseOnesyncToken(m[1]);
+        if (v) return v;
       }
     }
     const m = t.match(/^set\s+onesync\s+(on|legacy|off)/i);
@@ -33,9 +41,7 @@ export function parseGameBuildFromCfg(text) {
 function onesyncLines(mode) {
   const onesync = mode === 'off' ? 'off' : mode === 'legacy' ? 'legacy' : 'on';
   // Kein `set onesync` in cfg — internes ConVar, nur per FX-Launch +set
-  return [
-    `## [Orbit]: onesync ${onesync} (via FX-Launch +set)`,
-  ];
+  return [`# OneSync: ${onesync}`];
 }
 
 function upsertQuoted(lines, re, line) {
@@ -61,6 +67,8 @@ export function patchCfgServerOpts(text, opts) {
 
   if (opts.onesync !== undefined) {
     drop(ONESYNC_VALIDATOR);
+    drop(ONESYNC_ORBIT_META);
+    drop(ONESYNC_HINT);
     drop(ONESYNC_LINE);
     drop(/^##\s*set\s+onesync\s+off/i);
     const ins = onesyncLines(opts.onesync);
@@ -88,7 +96,11 @@ export function patchCfgServerOpts(text, opts) {
     drop(GAME_BUILD_LINE);
     const gb = String(opts.gameBuild || '').trim();
     if (gb && /^\d{4,5}$/.test(gb)) {
-      const idx = lines.findIndex((l) => ONESYNC_LINE.test(l.trim()) || ONESYNC_VALIDATOR.test(l.trim()));
+      const idx = lines.findIndex((l) => {
+        const t = l.trim();
+        return ONESYNC_LINE.test(t) || ONESYNC_VALIDATOR.test(t)
+          || ONESYNC_ORBIT_META.test(t) || ONESYNC_HINT.test(t);
+      });
       const at = idx >= 0 ? idx + 1 : lines.length;
       lines.splice(at, 0, `set sv_enforceGameBuild ${gb}`);
     }

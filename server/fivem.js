@@ -20,6 +20,7 @@ export function activeResourcesRoot() {
   return path.join(path.dirname(activeCfgPath), 'resources');
 }
 import { parseGameBuildFromCfg, parseOnesyncFromCfg } from './cfgPatch.js';
+import { sanitizeCfgMetaComments } from './cfgSanitize.js';
 
 export function parseCfgIntegrations(text) {
   let rconPassword = '';
@@ -202,7 +203,8 @@ export function readCfgFile(rel) {
 export function writeCfgFile(rel, text) {
   const full = resolveSafeCfgPath(rel || path.basename(activeCfgPath) || 'server.cfg');
   fs.mkdirSync(path.dirname(full), { recursive: true });
-  fs.writeFileSync(full, text, { encoding: 'utf8', mode: 0o644 });
+  const cleaned = sanitizeCfgMetaComments(text);
+  fs.writeFileSync(full, cleaned, { encoding: 'utf8', mode: 0o644 });
   return full;
 }
 
@@ -263,7 +265,7 @@ export function validateCfg(text, opts = {}) {
 
 export function writeCfg(text) {
   fs.mkdirSync(path.dirname(activeCfgPath), { recursive: true });
-  fs.writeFileSync(activeCfgPath, text, { encoding: 'utf8', mode: 0o644 });
+  fs.writeFileSync(activeCfgPath, sanitizeCfgMetaComments(text), { encoding: 'utf8', mode: 0o644 });
 }
 
 export function portOpen(host, port, timeout = 450) {
