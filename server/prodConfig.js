@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ORBIT_ARTIFACTS_ROOT, ORBIT_SERVERS_ROOT } from './config.js';
-import { upsertCfgSet } from './cfgUpsert.js';
+import { upsertCfgSet, upsertCfgSetr } from './cfgUpsert.js';
 
 export function applyProdSecretsToCfg(cfgPath, { licenseKey = '', mysqlConnection = '' }) {
   if (!fs.existsSync(cfgPath)) throw new Error(`server.cfg fehlt: ${cfgPath}`);
@@ -12,6 +12,8 @@ export function applyProdSecretsToCfg(cfgPath, { licenseKey = '', mysqlConnectio
   if (mysqlConnection) {
     cfg = upsertCfgSet(cfg, 'mysql_connection_string', mysqlConnection);
   }
+  // ox_lib Security: Strict Mode immer setzen (sonst Warnung beim Start)
+  cfg = upsertCfgSetr(cfg, 'sv_stateBagStrictMode', 'true');
   // Leere Platzhalter entfernen
   cfg = cfg.replace(/^\s*(?:set\s+)?sv_licenseKey\s+""\s*$/gmi, '');
   cfg = cfg.replace(/^\s*set\s+mysql_connection_string\s+""\s*$/gmi, '');

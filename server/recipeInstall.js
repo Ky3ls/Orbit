@@ -6,7 +6,7 @@ import mysql from 'mysql2/promise';
 import { RECIPE_PACKS, renderProfileCfgBlock } from './recipeProfiles.js';
 import { syncOrbitBridgeToDataPath } from './orbitBridgeSync.js';
 import { ensureOnce } from './cfgUpsert.js';
-import { patchMysql8CompatInResources } from './mysqlCompat.js';
+import { ensureEsxAddonColumns, patchMysql8CompatInResources } from './mysqlCompat.js';
 
 const exec = promisify(execFile);
 
@@ -209,15 +209,13 @@ export async function importResourceSqlFiles(resourcesRoot, dsn, onLog = () => {
   return { imported, failed };
 }
 
-function mergeCfgProfile(cfg, profileBlock, marker) {
-  const tag = `# --- Orbit Profil: ${marker} ---`;
-  if (cfg.includes(tag)) {
-    return cfg.replace(
-      new RegExp(`${tag}[\\s\\S]*?# --- Ende Orbit Profil ---`, 'm'),
-      `${profileBlock}\n# --- Ende Orbit Profil ---`,
-    );
+function mergeCfgProfile(cfg, profileBlock) {
+  // Marker in CFG ist „ESX Legacy“ etc., pack.profile nur „esx“ → immer generisch mergen
+  const ende = '# --- Ende Orbit Profil ---';
+  const block = `${profileBlock}\n${ende}`;
+  if (/# --- Orbit Profil:[\s\S]*?# --- Ende Orbit Profil ---/m.test(cfg)) {
+    return cfg.replace(/# --- Orbit Profil:[\s\S]*?# --- Ende Orbit Profil ---/m, block);
   }
-  const block = `${profileBlock}\n# --- Ende Orbit Profil ---`;
   return `${cfg.trim()}\n\n${block}\n`;
 }
 
@@ -296,6 +294,19 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
     }
   }
 
+  if (opts.mysqlConnection) {
+    try {
+      const conn = await mysql.createConnection(opts.mysqlConnection);
+      try {
+        await ensureEsxAddonColumns(conn, onLog);
+      } finally {
+        await conn.end();
+      }
+    } catch (err) {
+      onLog(`Addon-Spalten: ${String(err.message || err).slice(0, 120)}`);
+    }
+  }
+
   // Temp-Clones + Ownership aufräumen
   try {
     for (const name of fs.readdirSync(resources)) {
@@ -314,7 +325,7 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
   let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
   const profileBlock = renderProfileCfgBlock(pack);
   if (profileBlock) {
-    cfg = mergeCfgProfile(cfg, profileBlock, pack.profile || recipeId);
+    cfg = mergeCfgProfile(cfg, profileBlock);
   }
   // Ensures nur einmal (auch [core] / [esx_addons])
   for (const res of pack.ensures) {
