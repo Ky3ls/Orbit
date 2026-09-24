@@ -1,30 +1,58 @@
 #!/usr/bin/env bash
-# Live-Deploy nach tx2.ky3ls.space (/opt/tx2 auf Strato)
+# Live-Deploy: Build lokal, dann sicherer Code-Sync (kein Root --delete).
+# Standardziel: /opt/orbit auf diesem Host (oder ORBIT_INSTALL_DIR / SSH-Host).
+#
+# Lokal auf dem Panel-Host:
+#   bash scripts/deploy-live.sh
+#
+# Remote (optional):
+#   ORBIT_DEPLOY_HOST=user@host ORBIT_REMOTE_DIR=/opt/orbit bash scripts/deploy-live.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-HOST="${TX2_DEPLOY_HOST:-Strato}"
-REMOTE_DIR="${TX2_REMOTE_DIR:-/opt/tx2}"
-ARCHIVE="/tmp/tx2-deploy-$$.tgz"
+HOST="${ORBIT_DEPLOY_HOST:-${TX2_DEPLOY_HOST:-}}"
+REMOTE_DIR="${ORBIT_REMOTE_DIR:-${TX2_REMOTE_DIR:-/opt/orbit}}"
+USER_NAME="${ORBIT_USER:-orbit}"
 
 cd "$ROOT"
 npm run build
 
+if [[ -z "$HOST" ]]; then
+  # Gleicher Host: safe-sync (root nötig für chown/systemctl)
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    echo "Lokal als root ausführen: sudo bash $0"
+    exit 1
+  fi
+  bash "$ROOT/scripts/safe-sync-live.sh" "$ROOT"
+  if [[ ! -d "$REMOTE_DIR/node_modules" ]]; then
+    runuser -u "$USER_NAME" -- bash -c "cd '$REMOTE_DIR' && npm ci --omit=dev"
+  fi
+  systemctl restart orbit
+  sleep 1
+  systemctl is-active orbit
+  echo "Deploy OK → $REMOTE_DIR"
+  exit 0
+fi
+
+# Remote: nur Code-Archive, extrahiert in Temp, dann safe-sync auf dem Ziel
+ARCHIVE="/tmp/orbit-deploy-$$.tgz"
 tar -czf "$ARCHIVE" \
   package.json package-lock.json \
-  index.html vite.config.js \
-  src public \
-  dist server scripts docs resources
+  index.html vite.config.js README.md \
+  src public dist server scripts docs resources
 
-scp "$ARCHIVE" "$HOST:/tmp/tx2-deploy.tgz"
+scp "$ARCHIVE" "$HOST:/tmp/orbit-deploy.tgz"
 ssh "$HOST" "set -e
-  cd '$REMOTE_DIR'
-  tar -xzf /tmp/tx2-deploy.tgz
-  chown -R tx2:tx2 dist server scripts docs resources src public package.json package-lock.json index.html vite.config.js
-  runuser -u tx2 -- npm ci --omit=dev
-  systemctl restart tx2
+  TMP=\$(mktemp -d)
+  tar -xzf /tmp/orbit-deploy.tgz -C \"\$TMP\"
+  sudo ORBIT_INSTALL_DIR='$REMOTE_DIR' ORBIT_USER='$USER_NAME' \
+    bash \"\$TMP/scripts/safe-sync-live.sh\" \"\$TMP\"
+  if [[ ! -d '$REMOTE_DIR/node_modules' ]]; then
+    sudo runuser -u '$USER_NAME' -- bash -c \"cd '$REMOTE_DIR' && npm ci --omit=dev\"
+  fi
+  sudo systemctl restart orbit
   sleep 1
-  systemctl is-active tx2
-  rm -f /tmp/tx2-deploy.tgz
+  sudo systemctl is-active orbit
+  rm -rf \"\$TMP\" /tmp/orbit-deploy.tgz
 "
 rm -f "$ARCHIVE"
-echo "Deploy OK → https://tx2.ky3ls.space"
+echo "Deploy OK → $HOST:$REMOTE_DIR"

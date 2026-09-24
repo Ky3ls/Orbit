@@ -71,20 +71,40 @@ mkdir -p "$INSTALL_DIR" "$ARTIFACTS" "$SERVERS" "$DATA_DIR"
 
 resolve_source
 
-echo "==> Dateien → $INSTALL_DIR"
+echo "==> Dateien → $INSTALL_DIR (nur Code; kein Root-rsync --delete)"
 mkdir -p "$INSTALL_DIR"
-if have rsync; then
-  rsync -a --delete \
-    --exclude node_modules --exclude dist --exclude data \
-    --exclude artifacts --exclude servers --exclude .git \
-    "$SRC/" "$INSTALL_DIR/"
-else
-  tar -cf - \
-    --exclude=node_modules --exclude=dist --exclude=data \
-    --exclude=artifacts --exclude=servers --exclude=.git \
-    -C "$SRC" . | tar -xf - -C "$INSTALL_DIR"
-fi
-chown -R "$USER_NAME:$USER_NAME" "$INSTALL_DIR"
+# WICHTIG: Niemals rsync --delete auf den ganzen INSTALL_DIR-Tree.
+# Persistenz (data/artifacts/servers/alpine) und node_modules bleiben unberührt.
+# --delete nur innerhalb einzelner Code-Unterordner.
+copy_tree() {
+  local name="$1"
+  [[ -d "$SRC/$name" ]] || return 0
+  mkdir -p "$INSTALL_DIR/$name"
+  if have rsync; then
+    rsync -a --delete "$SRC/$name/" "$INSTALL_DIR/$name/"
+  else
+    # ohne rsync: Zielordner leeren (nur dieser Unterordner) und kopieren
+    find "$INSTALL_DIR/$name" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    cp -a "$SRC/$name/." "$INSTALL_DIR/$name/"
+  fi
+}
+copy_tree server
+copy_tree src
+copy_tree scripts
+copy_tree docs
+copy_tree public
+copy_tree resources
+for f in package.json package-lock.json index.html vite.config.js README.md .gitignore; do
+  [[ -f "$SRC/$f" ]] && cp -a "$SRC/$f" "$INSTALL_DIR/$f"
+done
+# dist kommt aus lokalem Build weiter unten — hier nicht vom Quell-Repo erzwingen
+chown -R "$USER_NAME:$USER_NAME" \
+  "$INSTALL_DIR/server" "$INSTALL_DIR/src" "$INSTALL_DIR/scripts" \
+  "$INSTALL_DIR/docs" "$INSTALL_DIR/public" "$INSTALL_DIR/resources" \
+  "$INSTALL_DIR/package.json" "$INSTALL_DIR/package-lock.json" \
+  "$INSTALL_DIR/index.html" "$INSTALL_DIR/vite.config.js" \
+  2>/dev/null || true
+chown "$USER_NAME:$USER_NAME" "$INSTALL_DIR" "$DATA_DIR" "$ARTIFACTS" "$SERVERS" 2>/dev/null || true
 
 cd "$INSTALL_DIR"
 echo "==> npm ci + build"

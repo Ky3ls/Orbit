@@ -52,6 +52,24 @@ Weitere Server später: **Einstellungen → Instanzen**.
 
 ## Update
 
+**Sicher (empfohlen):** nur Code syncen — `data/`, `artifacts/`, `servers/`, `alpine/` bleiben.
+
+```bash
+# Von einer Repo-Kopie (z. B. nach git pull + npm run build):
+sudo bash scripts/safe-sync-live.sh /pfad/zum/repo
+sudo systemctl restart orbit
+```
+
+Oder gebündelt:
+
+```bash
+sudo bash scripts/deploy-live.sh
+```
+
+**Nicht** `rsync --delete` auf ganz `/opt/orbit` ausführen — das löscht Panel-DB und FX-Daten.
+
+Alternativ im Installationsordner (wenn dort ein Git-Checkout liegt):
+
 ```bash
 cd /opt/orbit
 sudo -u orbit git pull
