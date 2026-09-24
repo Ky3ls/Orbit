@@ -46,7 +46,7 @@ Der Installer legt `/etc/sudoers.d/orbit` an (mkdir/chown/setfacl u. a.), damit 
 unter `/root/…` und `/home/…` nutzbar sind. Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram`.
 
 
-**Ingame:** `/orbit` oder `/tx` — Heal, Announce, Spielerliste, Kick.
+**Ingame:** `/orbit` oder `/tx` — NoClip, God, Teleport, Heal, Announce, Spieler-Aktionen (Goto/Bring/Freeze/Spectate/Kick/Warn/Ban), Fahrzeug-Tools.
 
 Weitere Server später: **Einstellungen → Instanzen**.
 

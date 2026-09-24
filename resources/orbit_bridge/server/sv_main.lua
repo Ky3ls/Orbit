@@ -57,6 +57,8 @@ function OrbitCan(src, perm)
   local a = ADMINS[tostring(src)]
   if not a then return false end
   if not perm then return true end
+  -- players.* Sammelrecht
+  if perm == 'players' and a.menu.players == true then return true end
   if a.menu[perm] == nil then return true end
   return a.menu[perm] == true
 end
