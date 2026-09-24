@@ -11,7 +11,7 @@ export default function Minecraft() {
       />
       <PanelCard>
         <h2 style={{ margin: '0 0 8px', fontFamily: 'var(--display)', fontSize: 22 }}>Gleicher Raum, nächster Server.</h2>
-        <p className="muted">Konsole, Spielerliste, Bans und Zeitpläne teilen sich schon die Rechte, das Audit und die Sitzungen. Der Minecraft-Prozess wird später nur lokal angebunden.</p>
+        <p className="muted">Konsole, Spielerliste, Bans und Automationen teilen sich schon die Rechte, das Audit und die Sitzungen. Der Minecraft-Prozess wird später nur lokal angebunden.</p>
       </PanelCard>
       <section className="o-metric-grid">
         {['Konsole', 'Whitelist', 'Backups', 'TPS'].map((item) => (
