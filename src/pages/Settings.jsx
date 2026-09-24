@@ -4,15 +4,18 @@ import { api } from '../api.js';
 import { fmtFull } from '../format.js';
 import SettingsHostPanel from '../components/SettingsHostPanel.jsx';
 import { Page, PageHeader } from '../components/Ui.jsx';
+import OrbitSelect from '../components/OrbitSelect.jsx';
 import { useAppearance } from '../hooks/useAppearance.js';
 import { ACCENT_PRESETS } from '../appearance.js';
 import { GAME_BUILD_OPTIONS, ONESYNC_OPTIONS } from './settingsOptions.js';
+import { BAN_DURATION_PRESETS, banDurationLabel } from './banPresets.js';
 
 const HOST_TABS = new Set(['servers', 'artifacts', 'prod']);
 
 const SECTIONS = [
   { id: 'appearance', label: 'Aussehen', hint: 'UI & Konsole', owner: false },
   { id: 'server', label: 'Game Server', hint: 'server.cfg', owner: false },
+  { id: 'moderation', label: 'Moderation', hint: 'Ban-Vorlagen', owner: false, admin: true },
   { id: 'host', label: 'Host', hint: 'Builds & Instanzen', owner: true },
   { id: 'fx', label: 'FX & Orbit', hint: 'Prozess & RCON', owner: true },
   { id: 'discord', label: 'Discord', hint: 'Webhook & Bot', owner: true },
@@ -78,13 +81,22 @@ export default function Settings({ user, onUser, onSetupReset }) {
   );
   const [err, setErr] = useState('');
   const [resetBusy, setResetBusy] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [tplReason, setTplReason] = useState('');
+  const [tplDuration, setTplDuration] = useState('2d');
+  const [tplBusy, setTplBusy] = useState(false);
   const hostTab = HOST_TABS.has(params.get('tab')) ? params.get('tab') : 'servers';
   const [prefs, setAppearance] = useAppearance();
 
   const isOwner = user?.role === 'owner';
+  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const nav = useMemo(
-    () => SECTIONS.filter((s) => !s.owner || isOwner),
-    [isOwner],
+    () => SECTIONS.filter((s) => {
+      if (s.owner && !isOwner) return false;
+      if (s.admin && !isAdmin) return false;
+      return true;
+    }),
+    [isOwner, isAdmin],
   );
 
   const sectionParam = params.get('section');
@@ -103,7 +115,48 @@ export default function Settings({ user, onUser, onSetupReset }) {
     api('/api/settings').then((d) => setForm(d.settings)).catch((e) => setErr(e.message));
     api('/api/sessions').then((d) => setSessions(d.sessions)).catch(() => {});
   }
+
+  function loadTemplates() {
+    api('/api/ban-templates')
+      .then((d) => setTemplates(d.templates || []))
+      .catch((e) => setErr(e.message));
+  }
+
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (section === 'moderation' && isAdmin) loadTemplates();
+  }, [section, isAdmin]);
+
+  async function addTemplate(e) {
+    e.preventDefault();
+    setTplBusy(true);
+    setErr('');
+    try {
+      await api('/api/ban-templates', {
+        method: 'POST',
+        body: { reason: tplReason, durationId: tplDuration },
+      });
+      setTplReason('');
+      setTplDuration('2d');
+      setMsg('Ban-Vorlage gespeichert.');
+      loadTemplates();
+    } catch (error) {
+      setErr(error.message);
+    }
+    setTplBusy(false);
+  }
+
+  async function removeTemplate(id) {
+    setTplBusy(true);
+    setErr('');
+    try {
+      await api(`/api/ban-templates/${id}`, { method: 'DELETE' });
+      loadTemplates();
+    } catch (error) {
+      setErr(error.message);
+    }
+    setTplBusy(false);
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -231,6 +284,57 @@ export default function Settings({ user, onUser, onSetupReset }) {
                   );
                 })}
               </div>
+            </ModuleCard>
+          </div>
+        )}
+
+        {section === 'moderation' && isAdmin && (
+          <div className="st-stack">
+            <ModuleCard
+              title="Ban-Vorlagen"
+              lead="Vorlagen erscheinen beim Sperren eines Spielers. Grund und Dauer werden vorausgefüllt."
+            >
+              <form className="st-fields st-fields-1" onSubmit={addTemplate}>
+                <label className="field">
+                  <span>Grund</span>
+                  <input
+                    value={tplReason}
+                    onChange={(e) => setTplReason(e.target.value)}
+                    placeholder="z. B. RDM / FailRP"
+                    required
+                    minLength={3}
+                  />
+                </label>
+                <OrbitSelect
+                  label="Dauer"
+                  value={tplDuration}
+                  onChange={setTplDuration}
+                  options={BAN_DURATION_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+                />
+                <div>
+                  <button type="submit" className="btn btn-primary" disabled={tplBusy || tplReason.trim().length < 3}>
+                    {tplBusy ? '…' : 'Vorlage hinzufügen'}
+                  </button>
+                </div>
+              </form>
+
+              {templates.length === 0 ? (
+                <p className="muted" style={{ marginTop: 16 }}>Noch keine Vorlagen — oben anlegen.</p>
+              ) : (
+                <ul className="st-tpl-list">
+                  {templates.map((t) => (
+                    <li key={t.id}>
+                      <div>
+                        <strong>{t.reason}</strong>
+                        <span className="muted">{banDurationLabel(t.duration_id)}</span>
+                      </div>
+                      <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(t.id)}>
+                        Löschen
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </ModuleCard>
           </div>
         )}

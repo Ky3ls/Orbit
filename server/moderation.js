@@ -150,6 +150,35 @@ export function listBanTemplates(db) {
   }
 }
 
+export function createBanTemplate(db, { reason, durationId = '2d', sort = 0 }) {
+  const r = String(reason || '').trim().slice(0, 280);
+  if (r.length < 3) throw new Error('Vorlagen-Grund mind. 3 Zeichen.');
+  const dur = String(durationId || '2d').slice(0, 16);
+  const info = db.prepare(`
+    INSERT INTO ban_templates (reason, duration_id, sort, created)
+    VALUES (?, ?, ?, ?)
+  `).run(r, dur, Number(sort) || 0, Date.now());
+  return db.prepare('SELECT * FROM ban_templates WHERE id = ?').get(info.lastInsertRowid);
+}
+
+export function updateBanTemplate(db, id, { reason, durationId, sort }) {
+  const row = db.prepare('SELECT * FROM ban_templates WHERE id = ?').get(Number(id));
+  if (!row) throw new Error('Vorlage nicht gefunden.');
+  const r = reason !== undefined ? String(reason).trim().slice(0, 280) : row.reason;
+  if (r.length < 3) throw new Error('Vorlagen-Grund mind. 3 Zeichen.');
+  const dur = durationId !== undefined ? String(durationId).slice(0, 16) : row.duration_id;
+  const s = sort !== undefined ? Number(sort) || 0 : row.sort;
+  db.prepare('UPDATE ban_templates SET reason = ?, duration_id = ?, sort = ? WHERE id = ?')
+    .run(r, dur, s, Number(id));
+  return db.prepare('SELECT * FROM ban_templates WHERE id = ?').get(Number(id));
+}
+
+export function deleteBanTemplate(db, id) {
+  const n = db.prepare('DELETE FROM ban_templates WHERE id = ?').run(Number(id)).changes;
+  if (!n) throw new Error('Vorlage nicht gefunden.');
+  return true;
+}
+
 export function ensureModerationSchema(db) {
   for (const sql of [
     'ALTER TABLE bans ADD COLUMN ids TEXT',

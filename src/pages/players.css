@@ -298,18 +298,98 @@
   color: var(--muted);
 }
 
-.pl-ban-row {
+.pl-ban {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 14px;
 }
-.pl-ban-row .grow { flex: 1; min-width: 140px; }
+.pl-ban-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pl-ban-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+}
+.pl-ban-field textarea,
+.pl-ban-field input {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pl-ban-field textarea {
+  min-height: 88px;
+  resize: vertical;
+  line-height: 1.45;
+}
+.pl-ban-field input {
+  height: 42px;
+  min-height: 42px;
+  -moz-appearance: textfield;
+}
+.pl-ban-field input::-webkit-outer-spin-button,
+.pl-ban-field input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pl-ban-field textarea:hover,
+.pl-ban-field input:hover {
+  border-color: rgba(var(--accent-rgb), 0.45);
+}
+.pl-ban-field textarea:focus,
+.pl-ban-field input:focus {
+  border-color: rgba(var(--accent-rgb), 0.75);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.14);
+}
+.pl-ban-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-items: end;
+}
+.pl-ban-row.custom {
+  grid-template-columns: minmax(0, 1.4fr) 88px minmax(110px, 0.9fr);
+}
+.pl-ban-duration { min-width: 0; }
+.pl-ban-amt { width: 100%; }
+.pl-ban-unit { min-width: 0; }
+.pl-ban-row .osel-trigger {
+  height: 42px;
+  min-height: 42px;
+  box-sizing: border-box;
+}
 .pl-ban-btn {
   background: linear-gradient(135deg, #e85d4a, #c43c3c) !important;
   border: 0 !important;
   color: #fff !important;
   font-weight: 800 !important;
+  margin-top: 2px;
+}
+.pl-ban-hint {
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.4;
+}
+@media (max-width: 560px) {
+  .pl-ban-row.custom {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pl-ban-duration { grid-column: 1 / -1; }
 }
 
 .pl-actions {

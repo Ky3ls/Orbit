@@ -3,6 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtFull, fmtPlaytime } from '../format.js';
 import { Badge, Empty, Modal, Page, PageHeader } from '../components/Ui.jsx';
+import OrbitSelect from '../components/OrbitSelect.jsx';
+import { BAN_DURATION_PRESETS, banDurationLabel } from './banPresets.js';
 import './players.css';
 
 const ID_LABELS = {
@@ -48,6 +50,7 @@ export default function Players() {
   const [durationId, setDurationId] = useState('2d');
   const [customAmt, setCustomAmt] = useState('');
   const [customUnit, setCustomUnit] = useState('days');
+  const [templateId, setTemplateId] = useState('');
   const [err, setErr] = useState('');
   const [sort, setSort] = useState('status');
   const [busy, setBusy] = useState(false);
@@ -68,6 +71,10 @@ export default function Players() {
     setPick(p);
     setTab('info');
     setReason('');
+    setTemplateId('');
+    setDurationId('2d');
+    setCustomAmt('');
+    setCustomUnit('days');
     setErr('');
     try {
       const d = await api(`/api/players/detail?id=${encodeURIComponent(p.identifier)}`);
@@ -77,6 +84,15 @@ export default function Players() {
       setDetail(null);
       setErr(e.message);
     }
+  }
+
+  function applyTemplate(id, opt) {
+    setTemplateId(id);
+    if (!id) return;
+    const reasonText = opt?.reason ?? (detail?.banTemplates || []).find((x) => String(x.id) === String(id))?.reason;
+    const dur = opt?.durationId ?? (detail?.banTemplates || []).find((x) => String(x.id) === String(id))?.duration_id;
+    if (reasonText) setReason(reasonText);
+    if (dur) setDurationId(dur);
   }
 
   useEffect(() => {
@@ -97,6 +113,27 @@ export default function Players() {
   const p = detail?.player || pick;
   const ids = p ? playerIds(p) : [];
   const presets = detail?.banPresets || [];
+  const durationOptions = useMemo(() => {
+    const list = (presets.length ? presets : BAN_DURATION_PRESETS).map((pr) => ({
+      value: pr.id,
+      label: pr.label,
+    }));
+    list.push({ value: 'custom', label: 'Benutzerdefiniert' });
+    return list;
+  }, [presets]);
+  const templateOptions = useMemo(() => {
+    const tpls = detail?.banTemplates || [];
+    return [
+      { value: '', label: 'Keine Vorlage', hint: 'Manuell ausfüllen' },
+      ...tpls.map((t) => ({
+        value: String(t.id),
+        label: t.reason,
+        hint: banDurationLabel(t.duration_id),
+        reason: t.reason,
+        durationId: t.duration_id,
+      })),
+    ];
+  }, [detail?.banTemplates]);
 
   async function saveNote() {
     if (!p) return;
@@ -339,39 +376,66 @@ export default function Players() {
 
               {tab === 'ban' && (
                 <div className="pl-panel pl-ban">
-                  <label className="field">
-                    <span>Grund</span>
-                    <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Regel, Kontext…" />
+                  <OrbitSelect
+                    label="Vorlage"
+                    value={templateId}
+                    onChange={(v, o) => applyTemplate(v, o)}
+                    options={templateOptions}
+                    placeholder="Vorlage wählen…"
+                  />
+                  <label className="pl-ban-field">
+                    <span className="pl-ban-label">Grund</span>
+                    <textarea
+                      rows={3}
+                      value={reason}
+                      onChange={(e) => { setReason(e.target.value); setTemplateId(''); }}
+                      placeholder="Regel, Kontext…"
+                    />
                   </label>
-                  <div className="pl-ban-row">
-                    <label className="field grow">
-                      <span>Dauer</span>
-                      <select value={durationId} onChange={(e) => setDurationId(e.target.value)}>
-                        {presets.map((pr) => <option key={pr.id} value={pr.id}>{pr.label}</option>)}
-                        <option value="custom">Benutzerdefiniert</option>
-                      </select>
-                    </label>
+                  <div className={`pl-ban-row${durationId === 'custom' ? ' custom' : ''}`}>
+                    <OrbitSelect
+                      className="pl-ban-duration"
+                      label="Dauer"
+                      value={durationId}
+                      onChange={(v) => { setDurationId(v); setTemplateId(''); }}
+                      options={durationOptions}
+                    />
                     {durationId === 'custom' && (
                       <>
-                        <label className="field" style={{ maxWidth: 100 }}>
-                          <span>Wert</span>
-                          <input type="number" min={1} value={customAmt} onChange={(e) => setCustomAmt(e.target.value)} />
+                        <label className="pl-ban-field pl-ban-amt">
+                          <span className="pl-ban-label">Wert</span>
+                          <input
+                            type="number"
+                            min={1}
+                            inputMode="numeric"
+                            placeholder="z. B. 3"
+                            value={customAmt}
+                            onChange={(e) => setCustomAmt(e.target.value)}
+                          />
                         </label>
-                        <label className="field" style={{ maxWidth: 120 }}>
-                          <span>Einheit</span>
-                          <select value={customUnit} onChange={(e) => setCustomUnit(e.target.value)}>
-                            <option value="hours">Stunden</option>
-                            <option value="days">Tage</option>
-                            <option value="weeks">Wochen</option>
-                          </select>
-                        </label>
+                        <OrbitSelect
+                          label="Einheit"
+                          value={customUnit}
+                          onChange={setCustomUnit}
+                          options={[
+                            { value: 'hours', label: 'Stunden' },
+                            { value: 'days', label: 'Tage' },
+                            { value: 'weeks', label: 'Wochen' },
+                          ]}
+                          className="pl-ban-unit"
+                        />
                       </>
                     )}
                   </div>
                   <button type="button" className="btn pl-ban-btn" disabled={busy} onClick={applyBan}>
                     Sperre setzen
                   </button>
-                  <p className="muted" style={{ fontSize: 12, margin: 0 }}>Auch offline — Online-Spieler werden gekickt.</p>
+                  <p className="muted pl-ban-hint">
+                    Auch offline — Online-Spieler werden gekickt.
+                    {(detail?.banTemplates || []).length === 0
+                      ? ' Vorlagen legst du unter Einstellungen → Moderation an.'
+                      : null}
+                  </p>
                 </div>
               )}
             </div>
