@@ -24,6 +24,7 @@ export default function Install({
   const [pin, setPin] = useState(urlPin || serverPin);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [discordId, setDiscordId] = useState('');
   const [accept, setAccept] = useState(false);
   const [err, setErr] = useState(CFX_HINTS[params.get('cfx')] || '');
   const [busy, setBusy] = useState(false);
@@ -72,7 +73,7 @@ export default function Install({
     try {
       const data = await api('/api/bootstrap/master', {
         method: 'POST',
-        body: { password, accept: true },
+        body: { password, accept: true, discordId },
       });
       onMasterDone?.(data);
     } catch (error) {
@@ -92,24 +93,35 @@ export default function Install({
               {(pendingCfx?.name || 'C').slice(0, 1).toUpperCase()}
             </div>
             <div>
-              <span className="eyebrow">Cfx.re verknüpft</span>
+              <span className="eyebrow">Cfx.re Account</span>
               <strong>{pendingCfx?.name || 'cfx_user'}</strong>
+              <div className="mono muted" style={{ fontSize: 12, marginTop: 2 }}>
+                {pendingCfx?.fivem || (pendingCfx?.id ? `fivem:${pendingCfx.id}` : '')}
+              </div>
             </div>
           </div>
-          <h1>Backup-Passwort</h1>
+          <h1>Master registrieren</h1>
           <p className="lede">
-            Falls Cfx.re nicht erreichbar ist, meldest du dich mit diesem Passwort an.
+            Backup-Passwort setzen und optional Discord-ID verknüpfen.
           </p>
           {err && <div className="err">{err}</div>}
           <label className="field">
-            <span>Passwort</span>
+            <span>Discord ID (optional)</span>
+            <input
+              inputMode="numeric"
+              value={discordId}
+              onChange={(e) => setDiscordId(e.target.value.replace(/\D/g, '').slice(0, 20))}
+              placeholder="z. B. 123456789012345678"
+            />
+          </label>
+          <label className="field">
+            <span>Backup-Passwort (6–128 Zeichen)</span>
             <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mind. 6 Zeichen" />
           </label>
           <label className="field">
-            <span>Passwort wiederholen</span>
+            <span>Passwort bestätigen</span>
             <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </label>
-          <p className="orb-hint">Mind. 6 Zeichen.</p>
           <label className="orb-tos">
             <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
             <span>
@@ -119,7 +131,7 @@ export default function Install({
             </span>
           </label>
           <button className="btn btn-primary" disabled={busy} type="submit">
-            {busy ? 'Lege an…' : 'Master-Account erstellen'}
+            {busy ? 'Lege an…' : 'Registrieren'}
           </button>
         </form>
       </div>

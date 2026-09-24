@@ -79,6 +79,18 @@ import { fetchRecommendedBuild, installArtifact } from './artifacts.js';
 import { handlePlatformApi, initPlatform } from './platformApi.js';
 import { handleIngamePublicApi } from './ingameApi.js';
 import { primaryId, normalizeIdentifiers, mergeIdLists, cleanupPlayerDuplicates } from './playerIdentity.js';
+import {
+  createBan,
+  createWarn,
+  playerHistory,
+  banDurationPresets,
+  resolveBanExpiry,
+  matchingOnlinePlayers,
+  mergePlayerIdentifiers,
+  listBanTemplates,
+  ensureModerationSchema,
+  isWhitelisted,
+} from './moderation.js';
 import { hotDeployOrbit, ensureIngameToken, syncOrbitSystemResource } from './orbitBridgeSync.js';
 import { parseDropFromLogLine, recordDrop } from './playerDrops.js';
 import { notifyServerEvent, notifyPlayerDrop } from './discord.js';
@@ -181,7 +193,7 @@ function masterBootstrapState(req) {
       needsMaster: true,
       phase: 'create',
       hasUsers: false,
-      pendingCfx: { name: pending.cfxName, id: pending.cfxId },
+      pendingCfx: { name: pending.cfxName, id: pending.cfxId, fivem: pending.cfxId ? `fivem:${pending.cfxId}` : '' },
     };
   }
   return { needsMaster: true, phase: 'pin', hasUsers: false, pendingCfx: null };
@@ -596,6 +608,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const password = typeof body.password === 'string' ? body.password : '';
     const accept = body.accept === true || body.accept === '1';
+    const discordId = String(body.discordId || body.discord_id || '').replace(/\D/g, '').slice(0, 20);
     if (!accept) return json(res, 400, { error: 'Bitte die Bedingungen akzeptieren.' });
     if (!passwordOk(password)) {
       return json(res, 400, { error: 'Backup-Passwort mind. 6 Zeichen.' });
@@ -611,9 +624,9 @@ async function handleApi(req, res, url) {
     if (takenCfx) return json(res, 409, { error: 'Dieses Cfx.re-Konto ist bereits verknüpft.' });
     const now = Date.now();
     const info = db.prepare(`
-      INSERT INTO users (username, password_hash, role, must_change, created, cfx_id, cfx_name)
-      VALUES (?, ?, 'owner', 0, ?, ?, ?)
-    `).run(username, await hashPassword(password), now, pending.cfxId, pending.cfxName);
+      INSERT INTO users (username, password_hash, role, must_change, created, cfx_id, cfx_name, discord_id)
+      VALUES (?, ?, 'owner', 0, ?, ?, ?, ?)
+    `).run(username, await hashPassword(password), now, pending.cfxId, pending.cfxName, discordId || null);
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
     clearPendingCfxClaim(db);
     clearBootstrapPin();
@@ -1654,26 +1667,104 @@ async function handleApi(req, res, url) {
     if (!hasPerm(me, 'players')) return json(res, 403, { error: 'Keine Berechtigung.' });
     const body = await readBody(req);
     const action = str(body.action, 16);
-    const reason = str(body.reason, 180);
+    const reason = str(body.reason, 280);
     if (!['kick', 'warn', 'message'].includes(action) || reason.length < 2) {
       return json(res, 400, { error: 'Aktion oder Grund ungültig.' });
     }
     const playerId = Number(body.id);
     const player = runtime.players.find((p) => p.id === playerId);
     if (!player) return json(res, 404, { error: 'Spieler ist nicht online.' });
-    const identifier = primaryId(player.identifiers);
+    const identifiers = normalizeIdentifiers(player.identifiers);
+    const identifier = primaryId(identifiers);
+    let actionId = null;
     if (action === 'warn' && identifier) {
-      db.prepare('INSERT INTO warns (identifier, name, reason, author, created) VALUES (?, ?, ?, ?, ?)')
-        .run(identifier, player.name, reason, me.username, Date.now());
+      const w = createWarn(db, { identifiers, name: player.name, reason, author: me.username });
+      actionId = w.id;
     }
     const settings = settingMap(db);
     if (!requireFxCommand(res, settings)) return;
-    queueCommand(action, { id: playerId, name: player.name, identifier, reason }, me.username, ip);
+    queueCommand(action, {
+      id: playerId, name: player.name, identifier, identifiers, reason,
+      author: me.username, actionId, message: reason,
+    }, me.username, ip);
     return json(res, 200, { ok: true, queued: true });
   }
 
+  if (method === 'GET' && pathname === '/api/players/detail') {
+    if (!hasPerm(me, 'players')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    ensureModerationSchema(db);
+    const identifier = str(url.searchParams.get('id') || '', 96);
+    if (!identifier) return json(res, 400, { error: 'Identifier fehlt.' });
+    let row = db.prepare('SELECT * FROM players WHERE identifier = ?').get(identifier);
+    if (!row) row = db.prepare('SELECT * FROM players WHERE ids LIKE ? LIMIT 1').get(`%${identifier}%`);
+    const live = (runtime.players || []).find((p) => {
+      const ids = normalizeIdentifiers(p.identifiers);
+      return ids.includes(identifier) || primaryId(ids) === identifier;
+    }) || null;
+    const ids = mergePlayerIdentifiers(row || { identifier, ids: '[]' }, live);
+    const hist = playerHistory(db, ids.length ? ids : [identifier]);
+    return json(res, 200, {
+      player: {
+        identifier: row?.identifier || identifier,
+        name: live?.name || row?.name || 'Unbekannt',
+        note: row?.note || '',
+        play_ms: row?.play_ms || 0,
+        first_seen: row?.first_seen || null,
+        last_seen: row?.last_seen || null,
+        identifiers: ids,
+        online: !!live,
+        serverId: live?.id ?? null,
+        ping: live?.ping ?? row?.ping ?? 0,
+        session_ms: live?.joinedAt ? Math.max(0, Date.now() - live.joinedAt) : 0,
+        whitelisted: isWhitelisted(db, ids.length ? ids : [identifier]),
+        bans: hist.bans.length,
+        warns: hist.warns.length,
+      },
+      history: hist,
+      banPresets: banDurationPresets(),
+      banTemplates: listBanTemplates(db),
+      fxCommandReady: fxConsoleReady(settingMap(db)),
+    });
+  }
+
+  if (method === 'POST' && pathname === '/api/players/note') {
+    if (!hasPerm(me, 'players')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    const body = await readBody(req);
+    const identifier = str(body.identifier, 96);
+    const note = str(body.note, 2000);
+    if (!identifier) return json(res, 400, { error: 'Identifier fehlt.' });
+    const changed = db.prepare('UPDATE players SET note = ? WHERE identifier = ?').run(note, identifier).changes;
+    if (!changed) {
+      db.prepare(`
+        INSERT INTO players (identifier, name, ping, ids, first_seen, last_seen, note, play_ms)
+        VALUES (?, ?, 0, ?, ?, ?, ?, 0)
+      `).run(identifier, str(body.name, 64) || identifier, JSON.stringify([identifier]), Date.now(), Date.now(), note);
+    }
+    audit(db, me.username, 'note', identifier, ip);
+    return json(res, 200, { ok: true });
+  }
+
+  if (method === 'POST' && pathname === '/api/players/whitelist') {
+    if (!hasPerm(me, 'whitelist') || me.role === 'moderator') return json(res, 403, { error: 'Keine Berechtigung.' });
+    const body = await readBody(req);
+    const identifier = str(body.identifier, 96);
+    const enable = body.enable !== false && body.enable !== 0 && body.enable !== '0';
+    if (!identifier) return json(res, 400, { error: 'Identifier fehlt.' });
+    if (enable) {
+      try {
+        db.prepare('INSERT INTO whitelist (identifier, note, author, created) VALUES (?, ?, ?, ?)')
+          .run(identifier, str(body.note, 160), me.username, Date.now());
+      } catch { /* */ }
+      audit(db, me.username, 'whitelist.add', identifier, ip);
+    } else {
+      db.prepare('DELETE FROM whitelist WHERE identifier = ?').run(identifier);
+      audit(db, me.username, 'whitelist.remove', identifier, ip);
+    }
+    return json(res, 200, { ok: true, whitelisted: enable });
+  }
+
   if (method === 'GET' && pathname === '/api/history') {
-    if (!hasPerm(me, 'history')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hasPerm(me, 'history') && !hasPerm(me, 'players')) return json(res, 403, { error: 'Keine Berechtigung.' });
     const q = str(url.searchParams.get('q') || '', 64).toLowerCase();
     let rows = db.prepare('SELECT identifier, name, ping, ids, first_seen, last_seen, note FROM players ORDER BY last_seen DESC LIMIT 300').all();
     if (q) rows = rows.filter((row) => `${row.name} ${row.identifier} ${row.note || ''}`.toLowerCase().includes(q));
@@ -1681,11 +1772,11 @@ async function handleApi(req, res, url) {
   }
 
   if (method === 'POST' && pathname === '/api/history/note') {
-    if (!hasPerm(me, 'history')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hasPerm(me, 'history') && !hasPerm(me, 'players')) return json(res, 403, { error: 'Keine Berechtigung.' });
     const body = await readBody(req);
     const identifier = str(body.identifier, 80);
     const note = str(body.note, 240);
-    if (!/^[\w:.\-@]{3,80}$/.test(identifier)) return json(res, 400, { error: 'Identifier ungültig.' });
+    if (!identifier) return json(res, 400, { error: 'Identifier ungültig.' });
     const changed = db.prepare('UPDATE players SET note = ? WHERE identifier = ?').run(note, identifier).changes;
     if (!changed) return json(res, 404, { error: 'Spieler unbekannt.' });
     audit(db, me.username, 'note', identifier, ip);
@@ -1694,26 +1785,37 @@ async function handleApi(req, res, url) {
 
   if (method === 'GET' && pathname === '/api/bans') {
     if (!hasPerm(me, 'bans')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    ensureModerationSchema(db);
     const rows = db.prepare('SELECT * FROM bans ORDER BY id DESC LIMIT 400').all();
-    return json(res, 200, { bans: rows });
+    return json(res, 200, { bans: rows, presets: banDurationPresets(), templates: listBanTemplates(db) });
   }
 
   if (method === 'POST' && pathname === '/api/bans') {
     if (!hasPerm(me, 'bans')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    ensureModerationSchema(db);
     const body = await readBody(req);
-    const identifier = str(body.identifier, 80);
+    const reason = str(body.reason, 280);
+    if (reason.length < 3) return json(res, 400, { error: 'Grund zu kurz.' });
+    let identifiers = normalizeIdentifiers(body.identifiers || []);
+    if (!identifiers.length && body.identifier) identifiers = normalizeIdentifiers([body.identifier]);
+    if (!identifiers.length) return json(res, 400, { error: 'Identifier fehlt.' });
     const name = str(body.name, 64);
-    const reason = str(body.reason, 180);
-    const hours = Number(body.hours);
-    if (!/^[\w:.\-@]{3,80}$/.test(identifier) || reason.length < 3) return json(res, 400, { error: 'Ban-Daten ungültig.' });
-    if (![0, 2, 24, 168, 720].includes(hours)) return json(res, 400, { error: 'Dauer ungültig.' });
-    const expires = hours === 0 ? null : Date.now() + hours * 3600_000;
-    db.prepare('INSERT INTO bans (identifier, name, reason, author, expires, created, revoked) VALUES (?, ?, ?, ?, ?, ?, 0)')
-      .run(identifier, name, reason, me.username, expires, Date.now());
+    const expires = body.hours !== undefined && [0, 2, 24, 168, 720].includes(Number(body.hours))
+      ? (Number(body.hours) === 0 ? null : Date.now() + Number(body.hours) * 3600_000)
+      : resolveBanExpiry(body.durationId || body.duration, body.amount, body.unit);
+    const ban = createBan(db, { identifiers, name, reason, author: me.username, expires });
+    const online = matchingOnlinePlayers(runtime.players, identifiers);
     const settings = settingMap(db);
-    if (!requireFxCommand(res, settings)) return;
-    queueCommand('ban', { identifier, name, reason, hours }, me.username, ip);
-    return json(res, 200, { ok: true });
+    if (fxConsoleReady(settings)) {
+      for (const p of online) {
+        queueCommand('ban', { id: p.id, identifiers, identifier: ban.identifier, reason }, me.username, ip);
+      }
+      if (!online.length && body.id) {
+        queueCommand('ban', { id: Number(body.id), identifiers, identifier: ban.identifier, reason }, me.username, ip);
+      }
+    }
+    audit(db, me.username, 'ban', `${ban.identifier} #${ban.id}`, ip);
+    return json(res, 200, { ok: true, ban, kicked: online.map((p) => p.id) });
   }
 
   const revoke = pathname.match(/^\/api\/bans\/(\d+)\/revoke$/);

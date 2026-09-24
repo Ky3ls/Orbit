@@ -12,6 +12,7 @@ import {
 } from './ingamePerms.js';
 import { createSession, cookieHeader, COOKIE, SESSION_MS } from './auth.js';
 import { normalizeIdentifiers, primaryId, upsertLivePlayer } from './playerIdentity.js';
+import { checkPlayerJoin, ensureModerationSchema } from './moderation.js';
 
 function str(v, max) {
   return String(v ?? '').slice(0, max);
@@ -71,6 +72,23 @@ export async function handleIngamePublicApi(ctx) {
     return true;
   }
 
+  /** txAdmin-Style Ban/Whitelist-Check beim Connect */
+  if (method === 'POST' && pathname === '/api/ingame/check-join') {
+    const body = await readBody(req);
+    if (!tokenOk(settings, body.token || req.headers['x-orbit-token'] || req.headers['x-orbit-ingame'])) {
+      json(res, 401, { error: 'Unauthorized' });
+      return true;
+    }
+    try { ensureModerationSchema(db); } catch { /* */ }
+    const result = checkPlayerJoin(db, settings, {
+      playerIds: body.playerIds,
+      playerHwids: body.playerHwids,
+      playerName: body.playerName,
+    });
+    json(res, 200, result);
+    return true;
+  }
+
   /**
    * Live-Playerlist vom FX-Resource (wie txAdmin FxPlayerlist):
    * event=full | playerJoining | playerDropped — Quelle ist GetPlayers(), nicht players.json / DB.
@@ -103,16 +121,26 @@ export async function handleIngamePublicApi(ctx) {
       const row = normalize(body.player || body);
       if (row) {
         list = list.filter((p) => Number(p.id) !== row.id);
-        list.push({ id: row.id, name: row.name, ping: row.ping, identifiers: row.identifiers });
+        list.push({
+          id: row.id, name: row.name, ping: row.ping, identifiers: row.identifiers, joinedAt: now,
+        });
         if (row.identifiers.length) upsertLivePlayer(db, row, now);
       }
     } else {
       const raw = Array.isArray(body.players) ? body.players : [];
+      const prev = new Map((runtime.players || []).map((p) => [Number(p.id), p]));
       list = [];
       for (const p of raw) {
         const row = normalize(p);
         if (!row) continue;
-        list.push({ id: row.id, name: row.name, ping: row.ping, identifiers: row.identifiers });
+        const old = prev.get(row.id);
+        list.push({
+          id: row.id,
+          name: row.name,
+          ping: row.ping,
+          identifiers: row.identifiers,
+          joinedAt: old?.joinedAt || now,
+        });
         if (row.identifiers.length) upsertLivePlayer(db, row, now);
       }
     }

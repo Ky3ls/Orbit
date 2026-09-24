@@ -31,6 +31,19 @@ RegisterNetEvent('orbit:announce', function(msg)
   chat(msg or '')
 end)
 
+RegisterNetEvent('orbit:dm', function(author, message)
+  chat(('DM von %s: %s'):format(tostring(author or 'Admin'), tostring(message or '')))
+end)
+
+RegisterNetEvent('orbit:showWarning', function(payload)
+  local author = type(payload) == 'table' and payload.author or 'Admin'
+  local reason = type(payload) == 'table' and payload.reason or tostring(payload or '')
+  chat(('WARNUNG von %s: %s'):format(tostring(author), tostring(reason)))
+  BeginTextCommandThefeedPost('STRING')
+  AddTextComponentSubstringPlayerName(('~o~Orbit Warnung~s~\nVon: %s\n%s'):format(author, reason))
+  EndTextCommandThefeedPostTicker(false, true)
+end)
+
 RegisterNetEvent('orbit:heal', function()
   local ped = PlayerPedId()
   SetEntityHealth(ped, GetEntityMaxHealth(ped))

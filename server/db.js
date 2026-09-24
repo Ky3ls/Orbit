@@ -126,6 +126,8 @@ export function getDb() {
     'ALTER TABLE users ADD COLUMN cfx_name TEXT',
     'ALTER TABLE users ADD COLUMN prefs TEXT',
     'ALTER TABLE users ADD COLUMN ingame_license TEXT',
+    'ALTER TABLE users ADD COLUMN discord_id TEXT',
+    'ALTER TABLE bans ADD COLUMN ids TEXT',
     'ALTER TABLE players ADD COLUMN play_ms INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE resources ADD COLUMN folder TEXT',
   ]) {
@@ -133,6 +135,15 @@ export function getDb() {
       if (!String(err.message).includes('duplicate column')) throw err;
     }
   }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ban_templates (
+      id INTEGER PRIMARY KEY,
+      reason TEXT NOT NULL,
+      duration_id TEXT NOT NULL DEFAULT '2d',
+      sort INTEGER NOT NULL DEFAULT 0,
+      created INTEGER NOT NULL
+    );
+  `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS ingame_web_tickets (
       token_hash TEXT PRIMARY KEY,
