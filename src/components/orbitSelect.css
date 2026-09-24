@@ -70,7 +70,6 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scroll-behavior: smooth;
   contain: layout paint;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
