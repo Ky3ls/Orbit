@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { markFxConsoleEof, resetFxConsoleLog } from './fxLogTail.js';
 import { orbitControlMode } from './fxLaunch.js';
 import {
   restartFxProcess,
@@ -8,6 +9,7 @@ import {
   stopFxProcess,
   supervisorRunning,
 } from './fxSupervisor.js';
+import { clearConsole } from './state.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -46,6 +48,15 @@ export async function controlFx(action, settings, logLine, opts = {}) {
     if (action === 'start') return startFxProcess(settings, logLine, instOpts);
     if (action === 'stop') return stopFxProcess(settings, logLine, instOpts);
     return restartFxProcess(settings, logLine, instOpts);
+  }
+  // systemd: Konsole bei Start/Restart leeren (Orbit-Pfad macht das in startFxProcess)
+  if (action === 'start' || action === 'restart') {
+    clearConsole();
+    const dataPath = settings?.fxDataPath || '';
+    if (dataPath) {
+      resetFxConsoleLog(dataPath);
+      markFxConsoleEof(dataPath);
+    }
   }
   await execFileAsync('systemctl', [action, FX_UNIT], {
     timeout: 120_000,

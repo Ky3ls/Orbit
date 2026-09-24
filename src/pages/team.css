@@ -288,3 +288,10 @@
     max-height: min(40dvh, 320px);
   }
 }
+
+.tm-perm.sensitive span {
+  color: #f07178;
+}
+.tm-perm.sensitive code {
+  color: color-mix(in srgb, #f07178 70%, var(--muted));
+}

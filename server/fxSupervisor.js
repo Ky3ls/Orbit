@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { orbitControlMode, resolveFxLaunch } from './fxLaunch.js';
-import { appendOrbitFxLog, markFxConsoleEof } from './fxLogTail.js';
+import { emitFxConsoleLine, markFxConsoleEof, resetFxConsoleLog } from './fxLogTail.js';
+import { clearConsole } from './state.js';
 
 const MAX_BACKOFF_SEC = 120;
 /** Nach so vielen Sekunden stabil → Crash-Zähler zurücksetzen */
@@ -20,6 +21,8 @@ function emptyInst() {
     manualStop: false,
     startedAt: 0,
     restartTimer: null,
+    bootTimer: null,
+    bootResourceFail: false,
   };
 }
 
@@ -86,21 +89,38 @@ function settingsKey(settings) {
   return `${settings.fxServerRoot || ''}|${settings.fxDataPath || ''}`;
 }
 
-function attachStreams(proc, logLine, key, dataPath) {
+function attachStreams(proc, logLine, key, dataPath, settings) {
   const prefix = `[FX:${key}] `;
-  // Nur in Datei schreiben — Panel liest per pollFxConsole (kein Doppel-Dump, live nach Restart)
+  const quiet = settings?.quietMode === '1' || settings?.quietMode === true;
+  // Quiet: Live-Konsole + Logdatei weiter; kein Mirror auf process.stdout (systemd/Terminal)
   const onData = (chunk) => {
     const text = String(chunk);
     for (const line of text.split(/\r?\n/)) {
       const trimmed = line.trimEnd();
       if (!trimmed) continue;
       const out = `${prefix}${trimmed.slice(0, 480)}`;
-      if (dataPath) appendOrbitFxLog(dataPath, out);
+      if (dataPath) emitFxConsoleLine(dataPath, out, logLine);
       else logLine('info', out);
+      if (!quiet) {
+        try {
+          process.stdout.write(`${out}\n`);
+        } catch { /* */ }
+      }
     }
   };
   proc.stdout?.on('data', onData);
   proc.stderr?.on('data', onData);
+
+  // Boot-Monitor: „failed to start in time“ → Fail-Flag
+  const onBootHint = (chunk) => {
+    const t = String(chunk);
+    if (/failed to start in time/i.test(t) || /Couldn't start resource/i.test(t)) {
+      const inst = getInst(key);
+      inst.bootResourceFail = true;
+    }
+  };
+  proc.stdout?.on('data', onBootHint);
+  proc.stderr?.on('data', onBootHint);
 }
 
 /**
@@ -115,6 +135,12 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   const key = resolveInstanceKey(settings, opts.instanceId);
   const inst = getInst(key);
   const port = Number(settings?.fivemPort) || 30120;
+  const launch = resolveFxLaunch(settings, { db: opts.db });
+
+  // Sofort leeren — Live-Konsole zeigt danach nur Start-/Stop-vor-Start-Logs
+  clearConsole();
+  resetFxConsoleLog(launch.dataPath);
+  markFxConsoleEof(launch.dataPath);
 
   // Wenn noch etwas läuft / Port belegt → zuerst stoppen (kein EADDRINUSE)
   const { unitActive, FX_UNIT } = await import('./control.js');
@@ -148,9 +174,6 @@ export async function startFxProcess(settings, logLine, opts = {}) {
       throw new Error(`${FX_UNIT} läuft noch — manuell stoppen.`);
     }
   }
-
-  const launch = resolveFxLaunch(settings, { db: opts.db });
-  markFxConsoleEof(launch.dataPath);
   // System-Resource vor Start syncen
   try {
     const { getDb, auditLogger } = await import('./db.js');
@@ -175,7 +198,15 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   }
   inst.phase = 'starting';
   inst.lastSettings = { ...settings };
+  inst.bootResourceFail = false;
+  if (inst.bootTimer) {
+    clearTimeout(inst.bootTimer);
+    inst.bootTimer = null;
+  }
   logLine('info', `[FX:${key}] Start in ${launch.dataPath}`);
+  if (settings.quietMode === '1') {
+    logLine('info', `[FX:${key}] Quiet Mode — FX-Ausgabe nur in Live-Konsole, nicht im Terminal.`);
+  }
 
   const proc = spawn(launch.command, launch.args, {
     cwd: launch.dataPath,
@@ -184,7 +215,7 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     detached: false,
   });
   inst.child = proc;
-  attachStreams(proc, logLine, key, launch.dataPath);
+  attachStreams(proc, logLine, key, launch.dataPath, settings);
 
   proc.on('error', (err) => {
     logLine('bad', `[FX:${key}] ${err.message}`);
@@ -199,6 +230,10 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     logLine(crashed ? 'warn' : 'info', `[FX:${key}] beendet (${msg}).`);
     inst.child = null;
     inst.phase = 'idle';
+    if (inst.bootTimer) {
+      clearTimeout(inst.bootTimer);
+      inst.bootTimer = null;
+    }
 
     if (inst.manualStop) {
       inst.manualStop = false;
@@ -239,7 +274,54 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     });
   });
 
+  // Resource Starting Tolerance — Boot-Monitor (Probe muss online werden)
+  const tolSec = Math.max(30, Number(settings.resourceStartingTolerance) || 90);
+  scheduleBootMonitor(inst, key, logLine, settings, tolSec);
+
   return { ok: true, pid: proc.pid, instanceId: key };
+}
+
+/**
+ * Wartet bis FiveM-HTTP online; bei Timeout oder Resource-Fail → Kill + Restart.
+ */
+function scheduleBootMonitor(inst, key, logLine, settings, tolSec) {
+  if (inst.bootTimer) clearTimeout(inst.bootTimer);
+  const port = Number(settings.fivemPort) || 30120;
+  const host = settings.fivemHost || '127.0.0.1';
+  const deadline = Date.now() + tolSec * 1000;
+  logLine('info', `[FX:${key}] Boot-Monitor ${tolSec}s (Resource Starting Tolerance).`);
+
+  const tick = async () => {
+    const cur = getInst(key);
+    if (cur.manualStop || !cur.child || cur.child.exitCode !== null) return;
+    if (cur.bootResourceFail) {
+      logLine('bad', `[FX:${key}] Resource startete nicht rechtzeitig — Neustart.`);
+      cur.manualStop = false;
+      try { cur.child.kill('SIGTERM'); } catch { /* */ }
+      return;
+    }
+    try {
+      const { probeFiveM } = await import('./fivem.js');
+      const probe = await probeFiveM(host, port);
+      if (probe.online) {
+        logLine('ok', `[FX:${key}] Boot OK (Endpunkt online, Toleranz ${tolSec}s).`);
+        cur.bootTimer = null;
+        return;
+      }
+    } catch { /* */ }
+    if (Date.now() >= deadline) {
+      logLine('bad', `[FX:${key}] Boot-Timeout nach ${tolSec}s — Server wird neu gestartet.`);
+      cur.manualStop = false;
+      try {
+        if (cur.child && cur.child.exitCode === null) cur.child.kill('SIGTERM');
+      } catch { /* */ }
+      // exit-Handler triggert Crash-Restart
+      cur.bootTimer = null;
+      return;
+    }
+    cur.bootTimer = setTimeout(tick, 3000);
+  };
+  inst.bootTimer = setTimeout(tick, 4000);
 }
 
 /**
@@ -311,9 +393,14 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
   inst.phase = 'stopping';
   inst.manualStop = true;
   inst.restartAttempt = 0;
+  inst.bootResourceFail = false;
   if (inst.restartTimer) {
     clearTimeout(inst.restartTimer);
     inst.restartTimer = null;
+  }
+  if (inst.bootTimer) {
+    clearTimeout(inst.bootTimer);
+    inst.bootTimer = null;
   }
   logLine('info', `[FX:${key}] Stop…`);
   const proc = inst.child;

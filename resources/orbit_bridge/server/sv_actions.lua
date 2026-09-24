@@ -1,5 +1,16 @@
 --[[ Orbit server actions — Menü-Aktionen ]]
 
+local function gameOpts(src)
+  local a = ADMINS[tostring(src)]
+  return (a and a.game) or {}
+end
+
+local function displayAuthor(src, author)
+  local g = gameOpts(src)
+  if g.hideAdminInPunishments or g.hideAdminInMessages then return 'Admin' end
+  return author or 'Admin'
+end
+
 local function panelAction(src, action, extra, cb)
   if not OrbitIsAdmin(src) then if cb then cb(false) end return end
   local admin = ADMINS[tostring(src)]
@@ -45,8 +56,12 @@ RegisterNetEvent('orbit:adminAnnounce', function(msg)
   if not OrbitCan(src, 'announce') then return end
   msg = tostring(msg or '')
   if msg == '' then return end
+  local g = gameOpts(src)
   panelAction(src, 'announce', { message = msg }, function()
-    TriggerClientEvent('orbit:announce', -1, msg)
+    TriggerClientEvent('orbit:announce', -1, msg, {
+      hide = g.hideAnnouncementNotif == true,
+      hideAdmin = g.hideAdminInMessages == true,
+    })
   end)
 end)
 
@@ -81,8 +96,6 @@ RegisterNetEvent('orbit:freezePlayer', function(targetId)
   if not OrbitCan(src, 'freeze') then return end
   targetId = tonumber(targetId)
   if not targetId or GetPlayerName(targetId) == nil then return end
-  -- toggle via client state is simplistic: always freeze then unfreeze via second call
-  -- store toggle
   FREEZE = FREEZE or {}
   local key = tostring(targetId)
   FREEZE[key] = not FREEZE[key]
@@ -107,8 +120,14 @@ RegisterNetEvent('orbit:warnPlayer', function(targetId, reason)
   if not targetId then return end
   reason = tostring(reason or 'Warnung')
   local author = (ADMINS[tostring(src)] or {}).name or 'Admin'
+  local g = gameOpts(src)
   panelAction(src, 'warn', { playerId = targetId, reason = reason }, function()
-    TriggerClientEvent('orbit:showWarning', targetId, { author = author, reason = reason })
+    TriggerClientEvent('orbit:showWarning', targetId, {
+      author = displayAuthor(src, author),
+      reason = reason,
+      hide = g.hideWarnNotif == true,
+      hideAdmin = g.hideAdminInPunishments == true,
+    })
   end)
 end)
 
@@ -120,8 +139,12 @@ RegisterNetEvent('orbit:messagePlayer', function(targetId, message)
   message = tostring(message or '')
   if message == '' then return end
   local author = (ADMINS[tostring(src)] or {}).name or 'Admin'
+  local g = gameOpts(src)
   panelAction(src, 'message', { playerId = targetId, message = message }, function()
-    TriggerClientEvent('orbit:dm', targetId, author, message)
+    TriggerClientEvent('orbit:dm', targetId, displayAuthor(src, author), message, {
+      hide = g.hideDmNotif == true,
+      hideAdmin = g.hideAdminInMessages == true,
+    })
   end)
 end)
 
@@ -156,5 +179,25 @@ RegisterNetEvent('orbit:trollPlayer', function(targetId, kind)
     TriggerClientEvent('orbit:drunk', targetId)
   elseif kind == 'fire' then
     TriggerClientEvent('orbit:setOnFire', targetId)
+  end
+end)
+
+-- NoClip Ptfx-Sync an Nearby (Client spielt lokal selbst)
+RegisterNetEvent('orbit:reqPtfx', function(nearbyPlayers)
+  local src = source
+  if not OrbitIsAdmin(src) then return end
+  if not OrbitCan(src, 'noclip') then return end
+  if GetConvarBool('orbit_menuPtfxDisable', false) or GetConvarBool('orbit-menuPtfxDisable', false) then
+    return
+  end
+  if type(nearbyPlayers) ~= 'table' then return end
+  local n = 0
+  for _, v in ipairs(nearbyPlayers) do
+    local tid = tonumber(v)
+    if tid and tid ~= src and GetPlayerName(tid) then
+      TriggerClientEvent('orbit:showPtfx', tid, src)
+      n = n + 1
+      if n >= 32 then break end -- Bound für Spam-Schutz
+    end
   end
 end)

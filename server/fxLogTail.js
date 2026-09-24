@@ -22,6 +22,27 @@ export function appendOrbitFxLog(dataPath, line) {
   fs.appendFileSync(orbitLogFile(dataPath), `${line}\n`, 'utf8');
 }
 
+/**
+ * Live: Datei + Panel-Konsole gleichzeitig, Offset vorschieben (kein Doppel-Dump per poll).
+ * @param {string} dataPath
+ * @param {string} line
+ * @param {(level: string, text: string) => void} [logLine]
+ */
+export function emitFxConsoleLine(dataPath, line, logLine) {
+  const trimmed = String(line || '').trimEnd();
+  if (!trimmed) return;
+  if (dataPath) {
+    appendOrbitFxLog(dataPath, trimmed);
+    const file = orbitLogFile(dataPath);
+    try {
+      consoleOffsets.set(file, fs.statSync(file).size);
+    } catch { /* */ }
+  }
+  if (!logLine) return;
+  const lv = /(error|failed|fatal)/i.test(trimmed) ? 'bad' : /(warn|warning)/i.test(trimmed) ? 'warn' : 'info';
+  logLine(lv, trimmed.slice(0, 500));
+}
+
 /** Offset auf Dateiende — danach nur noch neue Zeilen (kein Dump). */
 export function markFxConsoleEof(dataPath) {
   if (!dataPath) return;
@@ -31,6 +52,17 @@ export function markFxConsoleEof(dataPath) {
   } catch {
     consoleOffsets.set(file, 0);
   }
+}
+
+/** Log-Datei leeren (bei Server-Start). */
+export function resetFxConsoleLog(dataPath) {
+  if (!dataPath) return;
+  const file = orbitLogFile(dataPath);
+  try {
+    fs.mkdirSync(orbitLogDir(dataPath), { recursive: true });
+    fs.writeFileSync(file, '', 'utf8');
+    consoleOffsets.set(file, 0);
+  } catch { /* */ }
 }
 
 /**

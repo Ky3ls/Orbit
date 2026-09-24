@@ -44,8 +44,13 @@ function OrbitAuth(src, cb)
       cb(false, (resp and resp.reason) or 'Kein Panel-Admin')
       return
     end
-    ADMINS[tostring(src)] = { name = resp.name, menu = resp.permissions or {}, role = resp.role }
-    cb(true, resp.name, resp.permissions)
+    ADMINS[tostring(src)] = {
+      name = resp.name,
+      menu = resp.permissions or {},
+      role = resp.role,
+      game = resp.game or {},
+    }
+    cb(true, resp.name, resp.permissions, resp.game)
   end)
 end
 
@@ -171,7 +176,7 @@ end)
 
 RegisterNetEvent('orbit:requestMenu', function()
   local src = source
-  OrbitAuth(src, function(ok, info, perms)
+  OrbitAuth(src, function(ok, info, perms, game)
     if not ok then
       TriggerClientEvent('chat:addMessage', src, { args = { 'Orbit', tostring(info) } })
       return
@@ -180,6 +185,7 @@ RegisterNetEvent('orbit:requestMenu', function()
       name = info,
       perms = perms or {},
       players = OrbitPlayerList(),
+      game = game or {},
     })
   end)
 end)

@@ -101,6 +101,23 @@
 .lc-chip:hover:not(:disabled) { color: #fff; border-color: rgba(var(--accent-rgb), 0.35); }
 .lc-chip:disabled { opacity: 0.4; cursor: not-allowed; }
 .lc-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.lc-actions .lc-auto {
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  min-width: 0;
+  padding: 7px 11px;
+}
+.lc-actions .lc-auto.on {
+  color: #fff;
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.22);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.12);
+}
+.lc-actions .lc-auto:not(.on):hover {
+  border-color: rgba(var(--accent-rgb), 0.35);
+  color: var(--accent);
+}
 .lc-term {
   flex: 1 1 0;
   min-height: 0;

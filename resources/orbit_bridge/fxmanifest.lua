@@ -4,7 +4,7 @@ game 'gta5'
 name 'orbit'
 author 'Orbit'
 description 'Orbit Monitor — Playerlist, Ban/WL-Check, Admin (system_resources)'
-version '4.0.0'
+version '4.1.0'
 ui_label 'Orbit'
 
 ui_page 'html/index.html'
@@ -23,5 +23,14 @@ server_scripts {
 }
 
 client_scripts {
+    'client/shared.lua',
+    'client/cl_instructional.lua',
+    -- txAdmin freecam vendor (gleiche Reihenfolge wie monitor)
+    'client/freecam/utils.lua',
+    'client/freecam/config.lua',
+    'client/freecam/main.lua',
+    'client/freecam/camera.lua',
+    'client/cl_ptfx.lua', -- vor noclip (Ptfx-API)
+    'client/cl_noclip.lua',
     'client/cl_main.lua',
 }

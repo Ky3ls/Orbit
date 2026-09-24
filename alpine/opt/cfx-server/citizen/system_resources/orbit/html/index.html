@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="menu.css" />
+</head>
+<body>
+  <div id="app" class="hidden">
+    <header class="hdr">
+      <div class="brand" aria-hidden="true">
+        <div class="mark">
+          <svg viewBox="0 0 32 32" fill="none" width="28" height="28">
+            <ellipse class="mk-ring" cx="16" cy="16" rx="13" ry="5.6" transform="rotate(-32 16 16)" stroke-width="2.35"/>
+            <ellipse class="mk-ring mk-ring-dim" cx="16" cy="16" rx="5.6" ry="13" transform="rotate(-32 16 16)" stroke-width="1.7"/>
+            <circle class="mk-core" cx="16" cy="16" r="4.85"/>
+            <circle class="mk-sat" cx="27" cy="9.1" r="2.75"/>
+          </svg>
+        </div>
+        <div class="brand-txt">
+          <strong>ORBIT</strong>
+          <span id="who">Admin</span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button type="button" data-tab="main" class="active">Main</button>
+      <button type="button" data-tab="players">Spieler</button>
+      <button type="button" data-tab="vehicle">Fahrzeug</button>
+    </nav>
+
+    <div class="scroll">
+      <section id="tab-main" class="tab">
+        <div class="menu" id="mainMenu"></div>
+      </section>
+
+      <section id="tab-players" class="tab hidden">
+        <div class="plist-head">
+          <span>Online</span>
+          <button type="button" class="linkish" data-act="refreshPlayers" data-perm="players">Aktualisieren</button>
+        </div>
+        <input id="playerFilter" class="search" placeholder="Name oder ID…" autocomplete="off" />
+        <ul id="plist"></ul>
+      </section>
+
+      <section id="tab-vehicle" class="tab hidden">
+        <div class="menu" id="vehMenu"></div>
+        <p class="hint">Im Fahrzeug sitzen, dann Enter.</p>
+      </section>
+    </div>
+
+    <footer class="ftr">
+      <span>↑↓</span><span>←→</span><span>Enter</span><span>Tab</span><span>Esc</span>
+    </footer>
+  </div>
+
+  <!-- Spieler-Modal (zentriert, eigene Schicht) -->
+  <div id="playerModal" class="pm-root hidden" aria-hidden="true">
+    <div class="pm-card" role="dialog" aria-modal="true" aria-labelledby="pmTitle">
+      <header class="pm-hdr">
+        <h1 id="pmTitle"><span id="pmIdBadge">[#]</span> <span id="pmName">—</span></h1>
+        <button type="button" class="pm-x" id="pmClose" aria-label="Schließen">×</button>
+      </header>
+      <div class="pm-body">
+        <aside class="pm-nav" role="tablist">
+          <button type="button" class="pm-nav-btn active" data-pm="actions">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 1.2 9.6 5.8 14.4 6.2 10.8 9.4 12 14.2 8 11.8 4 14.2 5.2 9.4 1.6 6.2 6.4 5.8Z"/></svg>
+            Aktionen
+          </button>
+          <button type="button" class="pm-nav-btn" data-pm="info">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="5.2" r="2.4" fill="currentColor"/><path fill="currentColor" d="M3.2 13.2c.4-2.4 2.2-3.6 4.8-3.6s4.4 1.2 4.8 3.6H3.2Z"/></svg>
+            Infos
+          </button>
+          <button type="button" class="pm-nav-btn" data-pm="ban">
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path stroke="currentColor" stroke-width="1.6" d="M4.2 11.8 11.8 4.2"/></svg>
+            Sperre
+          </button>
+        </aside>
+        <div class="pm-pane">
+          <div id="pm-pane-actions" class="pm-view">
+            <h2>Spieleraktionen</h2>
+            <div class="pm-group">
+              <h3>Moderation</h3>
+              <div class="pm-actions" id="pmMod"></div>
+            </div>
+            <div class="pm-group">
+              <h3>Interaktion</h3>
+              <div class="pm-actions" id="pmInt"></div>
+            </div>
+            <div class="pm-group">
+              <h3>Spaß</h3>
+              <div class="pm-actions" id="pmTroll"></div>
+            </div>
+            <label class="field">Grund / Nachricht
+              <input id="pmReason" placeholder="Optional…" autocomplete="off" />
+            </label>
+          </div>
+          <div id="pm-pane-info" class="pm-view hidden">
+            <h2>Spielerinfos</h2>
+            <dl class="pm-dl" id="pmInfo"></dl>
+          </div>
+          <div id="pm-pane-ban" class="pm-view hidden">
+            <h2>Sperre</h2>
+            <p class="hint">Ban für 2 Tage mit optionalem Grund.</p>
+            <button type="button" class="pm-ban-btn" data-pact="ban" data-perm="ban">Ban · 2 Tage</button>
+            <label class="field">Grund
+              <input id="pmBanReason" placeholder="Verstoß…" autocomplete="off" />
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kurz-Prompt (Ankündigung / Coords) -->
+  <div id="prompt" class="prompt hidden" aria-hidden="true">
+    <div class="prompt-card">
+      <h2 id="promptTitle">Eingabe</h2>
+      <input id="promptInput" autocomplete="off" />
+      <div class="prompt-actions">
+        <button type="button" class="ghost" id="promptCancel">Abbruch</button>
+        <button type="button" class="primary" id="promptOk">OK · Enter</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="menu.js"></script>
+</body>
+</html>
