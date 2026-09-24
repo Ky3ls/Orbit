@@ -149,7 +149,7 @@ export default function App() {
           <Route path="audit" element={setupOk ? <Audit /> : <Navigate to="/setup" replace />} />
           <Route path="admins" element={setupOk ? <Admins /> : <Navigate to="/setup" replace />} />
           <Route path="ingame" element={setupOk ? <Ingame user={session.user} /> : <Navigate to="/setup" replace />} />
-          <Route path="platform" element={<Navigate to="/settings?tab=servers" replace />} />
+          <Route path="platform" element={<Navigate to="/settings?section=host&tab=servers" replace />} />
           <Route path="database" element={setupOk ? <Database user={session.user} /> : <Navigate to="/setup" replace />} />
           <Route path="more" element={setupOk ? <More /> : <Navigate to="/setup" replace />} />
           <Route path="setup" element={setupOk ? <Navigate to="/panel" replace /> : <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={() => { setSession({ ...session, setup: true }); window.location.assign('/panel'); }} />} />
