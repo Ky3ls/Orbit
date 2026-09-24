@@ -538,6 +538,9 @@ html[data-theme="light"] .ws-more-backdrop {
   gap: 12px 14px;
   align-items: start;
 }
+.ws-more-cols-1 { grid-template-columns: 1fr; }
+.ws-more-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ws-more-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ws-more-col {
   min-width: 0;
 }

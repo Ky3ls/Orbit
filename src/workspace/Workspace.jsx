@@ -14,6 +14,15 @@ const DOCK_LEFT = [
   { to: '/resources', label: 'Scripts', icon: 'box' },
 ];
 
+/** Bereits in der unteren Toolbar — nicht nochmal unter „Mehr“. */
+const DOCK_PATHS = new Set([
+  '/panel',
+  '/players',
+  '/resources',
+  '/console',
+  ...DOCK_LEFT.map((i) => i.to),
+]);
+
 const RAIL_PRIMARY = new Set(['/panel', '/players', '/resources', '/monitoring', '/console']);
 
 function RailLink({ to, end, icon, label, active, onClick, asButton, pressed, pri }) {
@@ -45,45 +54,37 @@ function RailLink({ to, end, icon, label, active, onClick, asButton, pressed, pr
   );
 }
 
-function MoreSheet({ open, onClose, user, canConsole, consoleOpen, setConsoleOpen, onCockpit }) {
+function MoreSheet({ open, onClose, user, hideDockDuplicates }) {
   if (!open) return null;
+
+  const columns = MODULES.map((group) => {
+    const items = group.items.filter((item) => {
+      if (item.owner && user.role !== 'owner') return false;
+      if (hideDockDuplicates && DOCK_PATHS.has(item.to)) return false;
+      return true;
+    });
+    const extra = [];
+    if (group.id === 'ops') {
+      extra.push({ to: '/ingame', label: 'Ingame', icon: 'cfg' });
+    }
+    return { ...group, items: [...items, ...extra] };
+  }).filter((g) => g.items.length > 0);
+
   return (
     <div className="ws-more-sheet" role="dialog" aria-label="Module">
       <button type="button" className="ws-more-backdrop" aria-label="Schließen" onClick={onClose} />
       <div className="ws-more-panel">
-        <div className="ws-more-grid">
-          {MODULES.map((group) => (
+        <div className={`ws-more-grid ws-more-cols-${Math.min(columns.length, 3)}`}>
+          {columns.map((group) => (
             <section key={group.id} className="ws-more-col">
               <h3>{group.label}</h3>
               <div className="ws-more-list">
-                {group.items.map((item) => {
-                  if (item.owner && user.role !== 'owner') return null;
-                  if (item.consoleRoute && canConsole && !onCockpit) {
-                    return (
-                      <button
-                        key={item.to}
-                        type="button"
-                        className={`ws-more-link${consoleOpen ? ' active' : ''}`}
-                        onClick={() => { setConsoleOpen((v) => !v); onClose(); }}
-                      >
-                        <NavIcon name={item.icon} />
-                        {item.label}
-                      </button>
-                    );
-                  }
-                  return (
-                    <NavLink key={item.to} to={item.to} end={item.end} className="ws-more-link" onClick={onClose}>
-                      <NavIcon name={item.icon} />
-                      {item.label}
-                    </NavLink>
-                  );
-                })}
-                {group.id === 'ops' && (
-                  <NavLink to="/ingame" className="ws-more-link" onClick={onClose}>
-                    <NavIcon name="cfg" />
-                    Ingame
+                {group.items.map((item) => (
+                  <NavLink key={item.to} to={item.to} end={item.end} className="ws-more-link" onClick={onClose}>
+                    <NavIcon name={item.icon} />
+                    {item.label}
                   </NavLink>
-                )}
+                ))}
               </div>
             </section>
           ))}
@@ -520,10 +521,7 @@ export default function Workspace({ user, onLogout }) {
         open={moreOpen}
         onClose={() => setMoreOpen(false)}
         user={user}
-        canConsole={canConsole}
-        consoleOpen={consoleOpen}
-        setConsoleOpen={setConsoleOpen}
-        onCockpit={onCockpit}
+        hideDockDuplicates={isDock}
       />
     </div>
   );
