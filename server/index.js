@@ -2557,7 +2557,7 @@ const boot = (async () => {
     if (supervisorConsoleReady(s)) {
       hotDeployOrbit(db, (cmd) => sendSupervisorCommand(s, cmd), s.fxServerRoot, s.fxDataPath, auditLogger(db, 'orbit.deploy'));
     }
-  2560|    // Nach Domain-Setup: FX erst jetzt starten (Live-Konsole bleibt verbunden)
+    // Nach Domain-Setup: FX erst jetzt starten (Live-Konsole bleibt verbunden)
     if (s.pendingFxAutostart === '1') {
       setSetting(db, 'pendingFxAutostart', '0');
       const active = getActiveOrbitServer(db);
