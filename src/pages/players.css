@@ -1,0 +1,48 @@
+/* Spieler — vereinigte Online/Offline-Liste */
+
+.pl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.pl-filters {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.pl-filter {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pl-filter:hover { color: var(--text); }
+.pl-filter.active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.4);
+}
+.pl-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: auto;
+  background: var(--card);
+}
+.pl-table { margin: 0; }
+.pl-row-online td:first-child {
+  box-shadow: inset 3px 0 0 var(--ok);
+}
+.pl-toolbar .search.grow {
+  flex: 1;
+  min-width: 160px;
+}

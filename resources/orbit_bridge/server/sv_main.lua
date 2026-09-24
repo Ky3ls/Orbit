@@ -61,13 +61,32 @@ end
 function OrbitPlayerList()
   local list = {}
   for _, id in ipairs(GetPlayers()) do
+    local src = tonumber(id)
+    local ids = GetPlayerIdentifiers(id) or {}
     list[#list + 1] = {
-      id = tonumber(id),
+      id = src,
       name = GetPlayerName(id) or ('#' .. id),
+      ping = GetPlayerPing(id) or 0,
+      identifiers = ids,
     }
   end
   return list
 end
+
+--- Panel-Sync: echte Identifier (players.json liefert oft Ghosts ohne IDs)
+CreateThread(function()
+  Wait(4000)
+  while true do
+    if ORBIT_TOKEN ~= '' and ORBIT_TOKEN ~= 'removed' then
+      local list = OrbitPlayerList()
+      OrbitHttp('POST', '/api/ingame/players-sync', {
+        token = ORBIT_TOKEN,
+        players = list,
+      }, nil, function() end)
+    end
+    Wait(4000)
+  end
+end)
 
 RegisterNetEvent('orbit:checkAdmin', function()
   local src = source

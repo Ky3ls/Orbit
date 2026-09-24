@@ -1552,25 +1552,75 @@ async function handleApi(req, res, url) {
   if (method === 'GET' && pathname === '/api/players') {
     if (!hasPerm(me, 'players')) return json(res, 403, { error: 'Keine Berechtigung.' });
     const q = str(url.searchParams.get('q') || '', 64).toLowerCase();
-    const mode = str(url.searchParams.get('mode') || 'online', 16);
-    if (mode === 'history' || mode === 'all') {
-      let rows = db.prepare('SELECT identifier, name, ping, ids, first_seen, last_seen, note, play_ms FROM players ORDER BY last_seen DESC LIMIT 400').all();
-      if (q) rows = rows.filter((row) => `${row.name} ${row.identifier} ${row.note || ''}`.toLowerCase().includes(q));
-      const settings = settingMap(db);
-      return json(res, 200, {
-        online: runtime.online,
-        players: runtime.players,
-        history: rows,
-        stats: playerStats(),
-        fxCommandReady: fxConsoleReady(settings),
-        fxControlMode: orbitControlMode(settings),
-      });
-    }
+    const filter = str(url.searchParams.get('filter') || 'all', 16); // all|online|offline
     const settings = settingMap(db);
+
+    let rows = db.prepare(
+      'SELECT identifier, name, ping, ids, first_seen, last_seen, note, play_ms FROM players ORDER BY last_seen DESC LIMIT 800',
+    ).all();
+
+    const onlineById = new Map();
+    for (const p of runtime.players || []) {
+      for (const id of p.identifiers || []) onlineById.set(id, p);
+      const prim = primaryId(p.identifiers);
+      if (prim) onlineById.set(prim, p);
+    }
+
+    // Online-Spieler, die noch nicht in DB sind, einmischen
+    const seen = new Set(rows.map((r) => r.identifier));
+    for (const p of runtime.players || []) {
+      const identifier = primaryId(p.identifiers);
+      if (!identifier || seen.has(identifier)) continue;
+      rows.unshift({
+        identifier,
+        name: p.name,
+        ping: p.ping,
+        ids: JSON.stringify(p.identifiers || []),
+        first_seen: Date.now(),
+        last_seen: Date.now(),
+        note: '',
+        play_ms: 0,
+      });
+      seen.add(identifier);
+    }
+
+    let merged = rows.map((row) => {
+      let ids = [];
+      try { ids = JSON.parse(row.ids || '[]'); } catch { ids = []; }
+      const live = onlineById.get(row.identifier)
+        || ids.map((id) => onlineById.get(id)).find(Boolean)
+        || null;
+      return {
+        ...row,
+        online: !!live,
+        serverId: live?.id ?? null,
+        ping: live?.ping ?? row.ping,
+        name: live?.name || row.name,
+      };
+    });
+
+    if (q) {
+      merged = merged.filter((row) => `${row.name} ${row.identifier} ${row.note || ''}`.toLowerCase().includes(q));
+    }
+    if (filter === 'online') merged = merged.filter((r) => r.online);
+    if (filter === 'offline') merged = merged.filter((r) => !r.online);
+
+    // Online zuerst, dann zuletzt gesehen
+    merged.sort((a, b) => {
+      if (a.online !== b.online) return a.online ? -1 : 1;
+      return (b.last_seen || 0) - (a.last_seen || 0);
+    });
+
     return json(res, 200, {
       online: runtime.online,
       players: runtime.players,
-      stats: playerStats(),
+      history: merged,
+      list: merged,
+      stats: {
+        ...playerStats(),
+        online: (runtime.players || []).length,
+        offline: Math.max(0, playerStats().total - (runtime.players || []).length),
+      },
       fxCommandReady: fxConsoleReady(settings),
       fxControlMode: orbitControlMode(settings),
     });
