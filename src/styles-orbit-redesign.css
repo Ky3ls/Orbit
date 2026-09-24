@@ -366,5 +366,6 @@ input:focus, select:focus, textarea:focus {
   color: var(--muted);
 }
 
-.chart { filter: drop-shadow(0 0 12px rgba(46, 230, 197, 0.15)); }
+/* drop-shadow am Chart-SVG war teuer bei häufigen Poll-Updates */
+.chart { filter: none; }
 .mon-chart-card.o-card { overflow: visible; }

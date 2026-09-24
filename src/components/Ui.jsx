@@ -1,4 +1,4 @@
-import { Children, isValidElement, useEffect, useId, useState } from 'react';
+import { Children, isValidElement, memo, useEffect, useId, useState } from 'react';
 import { ModuleShell } from '../workspace/Module.jsx';
 
 export function Mark() {
@@ -94,7 +94,11 @@ export function Toolbar({ children, className = '' }) {
   return <div className={`o-toolbar ${className}`.trim()}>{children}</div>;
 }
 
-export function Modal({ title, onClose, children, wide, aside }) {
+/**
+ * @param {{ title: string, onClose: () => void, children: import('react').ReactNode, wide?: boolean, aside?: import('react').ReactNode, showClose?: boolean }} props
+ * showClose: Header-Button „Schließen“ (default true). Bei Formularen mit Footer-„Abbrechen“ auf false setzen.
+ */
+export function Modal({ title, onClose, children, wide, aside, showClose = true }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -114,7 +118,9 @@ export function Modal({ title, onClose, children, wide, aside }) {
         >
           <div className="spread">
             <h3 id="modal-title">{title}</h3>
-            <button className="btn btn-ghost btn-sm" onClick={onClose} type="button">Schließen</button>
+            {showClose ? (
+              <button className="btn btn-ghost btn-sm" onClick={onClose} type="button">Schließen</button>
+            ) : <span />}
           </div>
           {children}
         </div>
@@ -141,7 +147,7 @@ function niceYTicks(scaleMax, fixed) {
 }
 
 /** Monitor-Chart mit Y-Skala, Grid und Zeitachse (Labels außerhalb SVG → kein Stretch). */
-export function AreaChart({
+export const AreaChart = memo(function AreaChart({
   data,
   color = '#ff7a1a',
   accessor = (d) => d.v,
@@ -224,9 +230,9 @@ export function AreaChart({
       </div>
     </div>
   );
-}
+});
 
-export function Gauge({ label, value, suffix = '%', tone = '#ff7a1a' }) {
+export const Gauge = memo(function Gauge({ label, value, suffix = '%', tone = '#ff7a1a' }) {
   const pct = Math.max(0, Math.min(100, value || 0));
   const r = 52;
   const c = 2 * Math.PI * r;
@@ -247,9 +253,9 @@ export function Gauge({ label, value, suffix = '%', tone = '#ff7a1a' }) {
       <span className="muted">{label}</span>
     </div>
   );
-}
+});
 
-export function useNow(ms = 1000) {
+export function useNow(ms = 30_000) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), ms);

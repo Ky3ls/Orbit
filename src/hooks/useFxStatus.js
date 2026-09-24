@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { useEffect, useRef, useState } from 'react';
+import { api, sameJson } from '../api.js';
 
 const EMPTY = {
   online: false,
@@ -11,8 +11,9 @@ const EMPTY = {
 };
 
 /** Pollt /api/server/status für FX-Metadaten (leichtgewichtig). */
-export function useFxStatus(intervalMs = 5000) {
+export function useFxStatus(intervalMs = 8000) {
   const [fx, setFx] = useState(EMPTY);
+  const prev = useRef(EMPTY);
 
   useEffect(() => {
     let stop = false;
@@ -21,7 +22,7 @@ export function useFxStatus(intervalMs = 5000) {
       api('/api/server/status')
         .then((d) => {
           if (stop) return;
-          setFx({
+          const next = {
             online: !!d.online,
             fxControlMode: d.fxControlMode || 'systemd',
             fxCommandReady: !!d.fxCommandReady,
@@ -30,7 +31,10 @@ export function useFxStatus(intervalMs = 5000) {
             controlEnabled: !!d.controlEnabled,
             status: d.status || 'offline',
             supervisorPhase: d.supervisorPhase,
-          });
+          };
+          if (sameJson(prev.current, next)) return;
+          prev.current = next;
+          setFx(next);
         })
         .catch(() => {});
     };

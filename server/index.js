@@ -1522,13 +1522,19 @@ async function handleApi(req, res, url) {
     };
     send('console', runtime.console.slice(-200));
     send('state', snapshot());
+    let stateAge = 0;
     timer = setInterval(() => {
       const fresh = runtime.console.filter((line) => line.id > cursor);
       if (fresh.length) {
         cursor = fresh[fresh.length - 1].id;
         send('console', fresh);
       }
-      send('state', snapshot());
+      // State inkl. Series nur alle 2s — Charts brauchen keine 500ms-Flood
+      stateAge += 500;
+      if (stateAge >= 2000) {
+        stateAge = 0;
+        send('state', snapshot());
+      }
     }, 500);
     req.on('close', () => clearInterval(timer));
     return;

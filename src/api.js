@@ -31,3 +31,14 @@ export function mergeLines(prev, incoming) {
   for (const line of incoming) map.set(line.id, line);
   return [...map.values()].sort((a, b) => a.id - b.id).slice(-400);
 }
+
+/** Schneller Gleichheitscheck für Poll-Antworten — vermeidet nutzlose setState. */
+export function sameJson(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return a === b;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}

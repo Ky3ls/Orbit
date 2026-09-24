@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, sameJson } from '../api.js';
 import { fmtUptime } from '../format.js';
 import { fxModeShort } from '../fxMeta.js';
 import LiveConsole from '../components/LiveConsole.jsx';
@@ -42,10 +42,15 @@ export default function Cockpit() {
     let stop = false;
     const tick = () => {
       if (document.hidden) return;
-      api('/api/overview').then((d) => { if (!stop) setData(d); }).catch(() => {});
+      api('/api/overview')
+        .then((d) => {
+          if (stop) return;
+          setData((prev) => (sameJson(prev, d) ? prev : d));
+        })
+        .catch(() => {});
     };
     tick();
-    const id = setInterval(tick, 4000);
+    const id = setInterval(tick, 10_000);
     return () => { stop = true; clearInterval(id); };
   }, []);
 
