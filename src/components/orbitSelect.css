@@ -64,7 +64,7 @@
   list-style: none;
   border-radius: 12px;
   border: 1px solid rgba(var(--accent-rgb), 0.35);
-  background: #0c0c0c;
+  background: var(--bg-2);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   max-height: min(280px, 46vh);
   overflow-x: hidden;
