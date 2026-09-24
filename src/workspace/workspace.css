@@ -394,21 +394,12 @@ body.orbit-ws {
 }
 .ws-res-row:hover { background: var(--accent-dim); }
 
-.res-page-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.res-group-head.open,
-.res-group-head:hover {
-  border-color: rgba(var(--accent-rgb), 0.4) !important;
-}
 .res-group-body.ws-res-list {
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
-  margin-top: 4px;
-  background: rgba(0, 0, 0, 0.22);
+  margin-top: 0;
+  background: transparent;
 }
 
 /* Mobile */

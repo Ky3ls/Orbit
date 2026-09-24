@@ -1,9 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, sameJson } from '../api.js';
-import { Badge, Page, PageHeader } from '../components/Ui.jsx';
+import { Page, PageHeader } from '../components/Ui.jsx';
 
 function matchFilter(text, q) {
   return !q || text.toLowerCase().includes(q.toLowerCase());
+}
+
+function statusLabel(actual) {
+  if (actual === 'started') return 'läuft';
+  if (actual === 'stopped') return 'stopp';
+  if (actual === 'offline') return 'offline';
+  return actual || '—';
+}
+
+function statusTone(actual) {
+  if (actual === 'started') return 'ok';
+  if (actual === 'stopped') return 'bad';
+  if (actual === 'offline') return 'warn';
+  return '';
 }
 
 export default function Resources() {
@@ -92,6 +106,8 @@ export default function Resources() {
     } catch (error) { setErr(error.message); }
   }
 
+  const canAct = fxReady && online;
+
   return (
     <Page className="res-page ws-module-flush">
       <PageHeader
@@ -99,19 +115,27 @@ export default function Resources() {
         title="Ressourcen"
         description={
           online
-            ? `${totalRes} Scripts in ${filtered.length} Ordnern · Live von info.json`
-            : 'Server offline — Ressourcen-Status ist „offline“ (kein Live-Abgleich)'
+            ? `${totalRes} Scripts · ${filtered.length} Ordner · Live`
+            : 'Server offline — Status ohne Live-Abgleich'
         }
-        actions={(
-          <input
-            className="search"
-            placeholder="Ordner oder Script…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        )}
       />
-      {err && <div className="err" style={{ margin: 16 }}>{err}</div>}
+
+      <div className="res-toolbar">
+        <input
+          className="search res-search"
+          placeholder="Ordner oder Script suchen…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Ressourcen suchen"
+        />
+        {q.trim() ? (
+          <button type="button" className="res-search-clear" onClick={() => setQ('')} title="Suche leeren">
+            ✕
+          </button>
+        ) : null}
+      </div>
+
+      {err && <div className="err res-err">{err}</div>}
 
       <div className="res-page-list">
         {filtered.length === 0 ? (
@@ -120,40 +144,69 @@ export default function Resources() {
           filtered.map((group) => {
             const expanded = open.has(group.folder);
             const started = group.resources.filter((r) => r.actual === 'started').length;
+            const shown = group.resources.length;
+            const total = group.count ?? shown;
             return (
-              <section key={group.folder} className="res-group">
+              <section key={group.folder} className={`res-group${expanded ? ' is-open' : ''}`}>
                 <button
                   type="button"
                   className={`res-group-head${expanded ? ' open' : ''}`}
                   onClick={() => toggle(group.folder)}
                   aria-expanded={expanded}
                 >
+                  <span className="res-group-chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
                   <span className="res-group-title">
                     <span className="mono res-group-folder">{group.folder}</span>
-                    <span className="muted res-group-meta">
-                      {started}/{group.resources.length} gestartet
-                      {group.count !== group.resources.length ? ` · ${group.resources.length} angezeigt` : ''}
+                    <span className="res-group-meta">
+                      <span className="res-group-pill">{started}/{shown} läuft</span>
+                      {total !== shown ? (
+                        <span className="muted res-group-filter">{shown} von {total}</span>
+                      ) : null}
                     </span>
                   </span>
-                  <span className="res-group-chevron" aria-hidden="true">{expanded ? '−' : '+'}</span>
                 </button>
                 {expanded && (
                   <div className="res-group-body ws-res-list">
-                    {group.resources.map((res) => (
-                      <div key={res.name} className="ws-res-row res-row">
-                        <span className="mono res-row-name">{res.name}</span>
-                        <Badge
-                          tone={res.actual === 'started' ? 'ok' : res.actual === 'stopped' ? 'bad' : res.actual === 'offline' ? 'warn' : ''}
-                        >
-                          {res.actual === 'offline' ? 'offline' : res.actual}
-                        </Badge>
-                        <div className="res-row-actions">
-                          <button className="res-act" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'start')}>Start</button>
-                          <button className="res-act res-act-icon" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'restart')} title="Restart" aria-label="Restart">↻</button>
-                          <button className="res-act" type="button" disabled={!fxReady || !online} onClick={() => act(res.name, 'stop')}>Stop</button>
+                    {group.resources.map((res) => {
+                      const tone = statusTone(res.actual);
+                      return (
+                        <div key={res.name} className="ws-res-row res-row">
+                          <span className="mono res-row-name" title={res.name}>{res.name}</span>
+                          <span className={`res-status${tone ? ` tone-${tone}` : ''}`}>
+                            <i className="res-status-dot" aria-hidden="true" />
+                            {statusLabel(res.actual)}
+                          </span>
+                          <div className="res-row-actions" role="group" aria-label={`Aktionen ${res.name}`}>
+                            <button
+                              className="res-act res-act-start"
+                              type="button"
+                              disabled={!canAct}
+                              onClick={() => act(res.name, 'start')}
+                            >
+                              Start
+                            </button>
+                            <button
+                              className="res-act res-act-restart"
+                              type="button"
+                              disabled={!canAct}
+                              onClick={() => act(res.name, 'restart')}
+                              title="Neustart"
+                              aria-label="Neustart"
+                            >
+                              ↻
+                            </button>
+                            <button
+                              className="res-act res-act-stop"
+                              type="button"
+                              disabled={!canAct}
+                              onClick={() => act(res.name, 'stop')}
+                            >
+                              Stop
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </section>
