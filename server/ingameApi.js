@@ -183,7 +183,10 @@ export async function handleIngamePublicApi(ctx) {
     const body = await readBody(req);
     const ticket = str(body.ticket, 128);
     const user = consumeWebEmbedTicket(db, ticket);
-    if (!user) json(res, 401, { error: 'Ticket ungültig oder abgelaufen.' });
+    if (!user) {
+      json(res, 401, { error: 'Ticket ungültig oder abgelaufen.' });
+      return true;
+    }
     const sessionToken = createSession(db, user, req);
     audit(db, user.username, 'ingame.embed.login', '', ip);
     json(res, 200, { ok: true, user: { username: user.username, role: user.role } }, [
