@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ensureOnce } from './cfgUpsert.js';
 import { FX_SERVER_ROOT } from './config.js';
+import { applyOrbitPermissionsToCfg } from './cfgPermissions.js';
 
 const exec = promisify(execFile);
 
@@ -195,31 +196,11 @@ export async function installCfxServerData(dataPath, onLog = () => {}, { profile
   return { ok: true };
 }
 
-/** ACE damit Frameworks add_principal / add_ace ausführen dürfen + Admin-Commands. */
+/** ACE-Block liegt am Ende via cfgPermissions — hier nur noch Legacy-No-op für Aufrufer. */
 export function applyFrameworkAce(cfg, profile = '') {
-  let out = String(cfg || '');
-  const lines = [];
-  if (profile === 'esx' || /ensure\s+\[core\]/i.test(out) || /es_extended/i.test(out)) {
-    lines.push('add_ace resource.es_extended command allow');
-    lines.push('add_ace resource.es_extended command.quit allow');
-    lines.push('add_principal group.admin group.user');
-    lines.push('add_ace group.admin command allow');
-    lines.push('add_ace group.admin command.quit deny');
-  }
-  if (profile === 'qb' || /qb-core/i.test(out)) {
-    lines.push('add_ace resource.qb-core command allow');
-    lines.push('add_principal group.admin group.user');
-    lines.push('add_ace group.admin command allow');
-    lines.push('add_ace group.admin command.quit deny');
-  }
-  if (/ox_lib|ensure\s+ox_lib/i.test(out) || profile === 'esx') {
-    lines.push('add_ace resource.ox_lib command allow');
-  }
-  for (const line of lines) {
-    const re = new RegExp(`^\\s*${line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'mi');
-    if (!re.test(out)) out = `${line}\n${out.trimStart()}`;
-  }
-  return out;
+  // Streuende Framework-ACEs am Dateianfang nicht mehr — Permissions-Block am Ende.
+  void profile;
+  return String(cfg || '');
 }
 
 /**
@@ -247,5 +228,6 @@ export function applyCfxBaseCfg(cfg, profile = 'blank') {
     out = `${out.trimEnd()}\n\n${baseBlock}\n`;
   }
   out = applyFrameworkAce(out, profile);
+  out = applyOrbitPermissionsToCfg(out, { profile });
   return out;
 }
