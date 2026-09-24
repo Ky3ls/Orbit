@@ -231,10 +231,8 @@
 .tm-perm {
   display: grid;
   grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
   column-gap: 8px;
-  row-gap: 2px;
-  align-items: start;
+  align-items: center;
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid transparent;
@@ -247,18 +245,12 @@
 }
 
 .tm-perm input {
-  grid-row: 1 / span 2;
-  margin-top: 3px;
+  margin: 0;
 }
 
 .tm-perm span {
   font-size: 13px;
   font-weight: 600;
-}
-
-.tm-perm code {
-  font-size: 10px;
-  color: var(--muted);
 }
 
 .tm-form-actions {
@@ -291,7 +283,4 @@
 
 .tm-perm.sensitive span {
   color: #f07178;
-}
-.tm-perm.sensitive code {
-  color: color-mix(in srgb, #f07178 70%, var(--muted));
 }

@@ -14,6 +14,18 @@ const EMPTY_FORM = {
   discordId: '',
 };
 
+function permLabel(t, id, fallback) {
+  const key = `perm.${id}`;
+  const label = t(key);
+  return label === key ? (fallback || id) : label;
+}
+
+function groupLabel(t, id, fallback) {
+  const key = `perm.group.${id}`;
+  const label = t(key);
+  return label === key ? (fallback || id) : label;
+}
+
 export default function Admins() {
   const { t } = useI18n();
   const [users, setUsers] = useState([]);
@@ -203,7 +215,7 @@ export default function Admins() {
                 <strong>{roleLabel(role)}</strong>
                 <ul>
                   {(catalog.templates?.[role] || []).slice(0, 8).map((p) => (
-                    <li key={p} className="mono">{p}</li>
+                    <li key={p} title={p}>{permLabel(t, p)}</li>
                   ))}
                   {(catalog.templates?.[role] || []).length > 8 && (
                     <li className="muted">{t('team.more', { n: catalog.templates[role].length - 8 })}</li>
@@ -290,17 +302,20 @@ export default function Admins() {
               <div className="tm-perms-body">
                 {permGroups.map((g) => (
                   <fieldset key={g.id} className="tm-perm-group">
-                    <legend>{g.label}</legend>
+                    <legend>{groupLabel(t, g.id, g.label)}</legend>
                     <div className="tm-perm-grid">
                       {g.permissions.map((perm) => (
-                        <label key={perm.id} className={`tm-perm${perm.sensitive ? ' sensitive' : ''}`}>
+                        <label
+                          key={perm.id}
+                          className={`tm-perm${perm.sensitive ? ' sensitive' : ''}`}
+                          title={perm.id}
+                        >
                           <input
                             type="checkbox"
                             checked={form.permissions.includes(perm.id)}
                             onChange={() => togglePerm(perm.id)}
                           />
-                          <span>{perm.label}</span>
-                          <code>{perm.id}</code>
+                          <span>{permLabel(t, perm.id, perm.label)}</span>
                         </label>
                       ))}
                     </div>
