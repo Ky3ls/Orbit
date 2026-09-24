@@ -117,7 +117,11 @@ export function publicSettingsPayload(settings, { isOwner = false } = {}) {
     // Meta / Orbit
     ipAllowlist: isOwner ? (settings.ipAllowlist || '') : '',
     rconConfigured: Boolean(settings.rconPassword),
-    rconPort: settings.rconPort || '',
+    // 0 / leer = optional (Laufzeit nutzt dann fivemPort)
+    rconPort: (() => {
+      const n = Number(settings.rconPort);
+      return Number.isInteger(n) && n >= 1 && n <= 65535 ? String(n) : '';
+    })(),
     orbitServerName: settings.orbitServerName || '',
     orbitServerSlug: settings.orbitServerSlug || '',
     serverLabel: settings.serverLabel || settings.hostname || '',
