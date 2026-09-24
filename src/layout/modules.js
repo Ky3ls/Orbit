@@ -10,7 +10,7 @@ export const MODULES = [
       { to: '/resources', label: 'Ressourcen', short: 'Scripts', icon: 'box' },
       { to: '/monitoring', label: 'Monitoring', icon: 'chart' },
       { to: '/cfg', label: 'CFG', icon: 'cfg' },
-      { to: '/schedule', label: 'Zeitpläne', icon: 'clock' },
+      { to: '/schedule', label: 'Automationen', icon: 'clock' },
     ],
   },
   {

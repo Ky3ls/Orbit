@@ -34,7 +34,7 @@ export const PERMISSION_GROUPS = [
     label: 'Server',
     permissions: [
       { id: 'resources', label: 'Ressourcen' },
-      { id: 'schedule', label: 'Zeitpläne' },
+      { id: 'schedule', label: 'Automationen' },
       { id: 'cfg', label: 'server.cfg bearbeiten' },
     ],
   },
