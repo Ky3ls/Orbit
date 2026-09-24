@@ -208,32 +208,6 @@ html[data-theme="light"] .btn-primary {
   border-bottom-color: var(--line);
 }
 
-.ws-rail-live {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px 8px;
-  flex-shrink: 0;
-}
-.ws-rail-live .ws-status {
-  font-size: 11px;
-  padding: 0;
-}
-.ws[data-sidebar="collapsed"] .ws-rail-live {
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 0 6px;
-}
-.ws[data-sidebar="collapsed"] .ws-rail-live .ws-status:first-child {
-  font-size: 0;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  padding: 0;
-  background: currentColor;
-}
-
 .ws[data-nav="sidebar"] .ws-module-bar {
   background: transparent;
 }
@@ -712,7 +686,6 @@ html[data-theme="light"] .ws-more-backdrop {
   }
   .ws[data-nav="sidebar"] .ws-rail-top,
   .ws[data-nav="sidebar"] .ws-rail-foot,
-  .ws[data-nav="sidebar"] .ws-rail-live,
   .ws[data-nav="sidebar"] .ws-rail-collapse,
   .ws[data-nav="sidebar"] .ws-rail-group-label {
     display: none;

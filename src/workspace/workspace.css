@@ -117,16 +117,6 @@ body.orbit-ws {
 }
 .ws-drop-item:hover { background: var(--accent-dim); color: var(--text); }
 
-.ws-status {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  padding: 4px 0;
-}
-.ws-tone-online { color: var(--ok); }
-.ws-tone-offline { color: var(--bad); }
-.ws-tone-starting { color: var(--warn); }
-
 .ws-btn-ghost {
   padding: 6px 12px;
   border-radius: 8px;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
-import ServerControls, { statusLabel, statusTone } from '../components/ServerControls.jsx';
+import ServerControls from '../components/ServerControls.jsx';
 import { Mark } from '../components/Ui.jsx';
 import { NavIcon } from './icons.jsx';
 import { MODULES } from './modules.js';
@@ -30,7 +30,6 @@ export default function AppShell({ user, onLogout }) {
   const loc = useLocation();
   const isOwner = user.role === 'owner';
   const canControl = user.role === 'owner' || user.role === 'admin';
-  const tone = statusTone(status);
 
   const refreshStatus = useCallback(() => {
     if (document.hidden) return;
@@ -105,11 +104,6 @@ export default function AppShell({ user, onLogout }) {
       <div className="ob-main">
         <header className="ob-header">
           <div className="ob-status-row">
-            <span className={`ob-chip tone-${tone}`}>
-              <span className="dot" aria-hidden="true" />
-              {statusLabel(status)}
-            </span>
-            <span className="ob-chip">{live.clients} / {live.maxClients}</span>
             <span className="ob-chip mono">{live.hostname}</span>
           </div>
           <div className="ob-header-actions" ref={menuRef}>
