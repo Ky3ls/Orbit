@@ -13,7 +13,7 @@ export const RECIPE_PACKS = {
     title: 'ESX Legacy (Profil)',
     profile: 'esx',
     // FiveM startet Ressourcen in [core]/ und [esx_addons]/ per Ordner-ensure
-    // sessionmanager/hardcap/chat = Citizen-Systemressourcen (nicht unter resources/)
+    // CFX-Defaults (mapmanager/chat/…) via cfxDefaults.js
     ensures: ['oxmysql', 'ox_lib', '[core]', '[esx_addons]'],
     zips: [
       { name: 'oxmysql', url: 'https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip', dest: '[standalone]/oxmysql' },
@@ -38,6 +38,9 @@ export const RECIPE_PACKS = {
 setr esx:locale "de"
 setr inventory:framework "esx"
 setr sv_stateBagStrictMode true
+add_ace resource.es_extended command allow
+add_ace resource.es_extended command.quit allow
+add_ace resource.ox_lib command allow
 `,
   },
   qb: {
@@ -54,6 +57,7 @@ setr sv_stateBagStrictMode true
 # --- Orbit Profil: QBCore ---
 setr qb_locale "de"
 setr sv_stateBagStrictMode true
+add_ace resource.qb-core command allow
 `,
   },
 };

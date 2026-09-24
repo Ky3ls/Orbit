@@ -7,6 +7,7 @@ import { RECIPE_PACKS, renderProfileCfgBlock } from './recipeProfiles.js';
 import { syncOrbitBridgeToDataPath } from './orbitBridgeSync.js';
 import { ensureOnce } from './cfgUpsert.js';
 import { ensureEsxAddonColumns, patchMysql8CompatInResources } from './mysqlCompat.js';
+import { applyCfxBaseCfg, installCfxServerData } from './cfxDefaults.js';
 
 const exec = promisify(execFile);
 
@@ -235,7 +236,19 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
     zips: [],
     ensures: pack.ensures,
     sql: null,
+    cfxDefaults: null,
   };
+
+  // txAdmin-Style: cfx-server-data (mapmanager, spawnmanager, baseevents, …)
+  try {
+    results.cfxDefaults = await installCfxServerData(dataPath, onLog, {
+      profile: pack.profile || recipeId,
+      fxRoot: opts.fxServerRoot,
+    });
+  } catch (err) {
+    onLog(`cfx-server-data: ${err.message}`);
+    results.cfxDefaults = { ok: false, error: err.message };
+  }
 
   for (const job of pack.zips || []) {
     const dest = path.join(resources, job.dest);
@@ -323,6 +336,7 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
 
   const cfgPath = path.join(dataPath, 'server.cfg');
   let cfg = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath, 'utf8') : '';
+  cfg = applyCfxBaseCfg(cfg, pack.profile || recipeId);
   const profileBlock = renderProfileCfgBlock(pack);
   if (profileBlock) {
     cfg = mergeCfgProfile(cfg, profileBlock);
@@ -333,6 +347,6 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
   }
   cfg = ensureOnce(cfg, 'orbit');
   fs.writeFileSync(cfgPath, cfg.trim() + '\n', 'utf8');
-  onLog(`Profil „${pack.title}“ + CFG-Vorlage angewendet.`);
+  onLog(`Profil „${pack.title}“ + CFX-Defaults + CFG angewendet.`);
   return results;
 }

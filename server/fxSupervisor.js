@@ -68,9 +68,18 @@ export function supervisorRunning(instanceKey) {
 }
 
 export function supervisorConsoleReady(settings) {
-  const key = resolveInstanceKey(settings);
-  const inst = getInst(key);
-  return inst.phase === 'running' && inst.child?.stdin && !inst.child.stdin.destroyed;
+  const tryKey = (key) => {
+    const inst = getInst(key);
+    return !!(inst.phase === 'running' && inst.child?.stdin && !inst.child.stdin.destroyed);
+  };
+  if (settings) {
+    if (tryKey(resolveInstanceKey(settings))) return true;
+  }
+  // Fallback: irgendeine laufende Instanz (verhindert „Konsole offline“ bei Key-Mismatch)
+  for (const [key] of instances) {
+    if (tryKey(key)) return true;
+  }
+  return false;
 }
 
 function settingsKey(settings) {
@@ -379,11 +388,23 @@ export async function restartFxProcess(settings, logLine, opts = {}) {
 export function sendSupervisorCommand(settings, command) {
   const line = String(command || '').trim();
   if (!line) throw new Error('Leerer Konsolenbefehl.');
-  const key = resolveInstanceKey(settings);
-  const inst = getInst(key);
-  if (inst.phase !== 'running' || !inst.child?.stdin || inst.child.stdin.destroyed) {
-    throw new Error(`FXServer-Konsole nicht verbunden (Instanz ${key}).`);
-  }
-  inst.child.stdin.write(`${line}\n`);
+  const pick = () => {
+    if (settings) {
+      const key = resolveInstanceKey(settings);
+      const inst = getInst(key);
+      if (inst.phase === 'running' && inst.child?.stdin && !inst.child.stdin.destroyed) {
+        return { key, inst };
+      }
+    }
+    for (const [key, inst] of instances) {
+      if (inst.phase === 'running' && inst.child?.stdin && !inst.child.stdin.destroyed) {
+        return { key, inst };
+      }
+    }
+    return null;
+  };
+  const hit = pick();
+  if (!hit) throw new Error('FXServer-Konsole nicht verbunden.');
+  hit.inst.child.stdin.write(`${line}\n`);
   return '';
 }

@@ -165,14 +165,16 @@ export async function probeFiveM(host, port) {
     fetchJson(`${base}/dynamic.json`, 900),
     fetchJson(`${base}/players.json`, 900),
   ]);
-  const list = Array.isArray(players) ? players : [];
+  const list = (Array.isArray(players) ? players : [])
+    // Ghosts ohne Identifier (z. B. Name „Player“, leere IDs) ausblenden
+    .filter((p) => Array.isArray(p.identifiers) && p.identifiers.length > 0);
   return {
     online: true,
     players: list.map((p) => ({
       id: p.id,
       name: String(p.name || 'Unbekannt').slice(0, 64),
       ping: Number(p.ping) || 0,
-      identifiers: Array.isArray(p.identifiers) ? p.identifiers.map((x) => String(x).slice(0, 80)).slice(0, 12) : [],
+      identifiers: p.identifiers.map((x) => String(x).slice(0, 80)).slice(0, 12),
     })),
     resources: Array.isArray(info?.resources) ? info.resources.map((r) => String(r).slice(0, 64)) : [],
     hostname: String(dynamic?.hostname || info?.vars?.sv_projectName || '').slice(0, 120),
