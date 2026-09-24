@@ -12,7 +12,6 @@ const promptEl = document.getElementById('prompt');
 const promptTitle = document.getElementById('promptTitle');
 const promptInput = document.getElementById('promptInput');
 const mainMenu = document.getElementById('mainMenu');
-const vehMenu = document.getElementById('vehMenu');
 
 let perms = {};
 let players = [];
@@ -66,7 +65,7 @@ const selectors = {
   },
   veh: {
     idx: 0,
-    label: 'Aktion',
+    label: 'Fahrzeug',
     ico: 'veh',
     options: [
       { id: 'repair', label: 'Reparieren', act: 'vehRepair', perm: 'vehicle' },
@@ -105,7 +104,7 @@ const MENU_I18N = {
     mode: 'Modus', noclip: 'NoClip', god: 'Godmode', superjump: 'Superjump',
     tp: 'Teleport', wp: 'Wegpunkt', back: 'Zurück', coords: 'Koordinaten…',
     heal: 'Heilung', self: 'Selbst', all: 'Alle',
-    veh: 'Aktion', repair: 'Reparieren', boost: 'Boost', flip: 'Aufrichten', del: 'Löschen',
+    veh: 'Fahrzeug', repair: 'Reparieren', boost: 'Boost', flip: 'Aufrichten', del: 'Löschen',
     announce: 'Ankündigung', area: 'Area bereinigen', ids: 'Spieler-IDs',
     drunk: 'Betrunken', fire: 'Feuer',
     announceTitle: 'Ankündigung', announcePh: 'Nachricht an alle…',
@@ -115,7 +114,7 @@ const MENU_I18N = {
     mode: 'Mode', noclip: 'NoClip', god: 'Godmode', superjump: 'Superjump',
     tp: 'Teleport', wp: 'Waypoint', back: 'Back', coords: 'Coordinates…',
     heal: 'Heal', self: 'Self', all: 'All',
-    veh: 'Action', repair: 'Repair', boost: 'Boost', flip: 'Flip', del: 'Delete',
+    veh: 'Vehicle', repair: 'Repair', boost: 'Boost', flip: 'Flip', del: 'Delete',
     announce: 'Announce', area: 'Clear area', ids: 'Player IDs',
     drunk: 'Drunk', fire: 'Fire',
     announceTitle: 'Announcement', announcePh: 'Message to everyone…',
@@ -149,6 +148,8 @@ function applyMenuLang(lang) {
   MAIN_ACTIONS[0].label = mt('announce');
   MAIN_ACTIONS[1].label = mt('area');
   MAIN_ACTIONS[2].label = mt('ids');
+  const tabPlayers = document.querySelector('.tabs button[data-tab="players"]');
+  if (tabPlayers) tabPlayers.textContent = menuLang === 'de' ? 'Spieler' : 'Players';
   if (PACT_TROLL[0]) PACT_TROLL[0].label = mt('drunk');
   if (PACT_TROLL[1]) PACT_TROLL[1].label = mt('fire');
 }
@@ -261,10 +262,13 @@ function buildMenus() {
   mainMenu.appendChild(buildCycleRow('mode'));
   mainMenu.appendChild(buildCycleRow('tp'));
   mainMenu.appendChild(buildCycleRow('heal'));
+  mainMenu.appendChild(buildCycleRow('veh'));
   MAIN_ACTIONS.forEach((a) => mainMenu.appendChild(buildActionRow(a)));
+}
 
-  vehMenu.innerHTML = '';
-  vehMenu.appendChild(buildCycleRow('veh'));
+function syncMenuCursor() {
+  const wantMouse = activeTabId() === 'players' || isModalOpen() || isPromptOpen();
+  post('setCursor', { enabled: wantMouse });
 }
 
 function paintAllSelectors() {
@@ -287,6 +291,7 @@ function openPrompt(kind, title, placeholder, initial = '') {
   promptInput.value = initial || '';
   promptEl.classList.remove('hidden');
   promptEl.setAttribute('aria-hidden', 'false');
+  syncMenuCursor();
   requestAnimationFrame(() => {
     promptInput.focus();
     promptInput.select();
@@ -298,6 +303,7 @@ function closePrompt() {
   promptEl.classList.add('hidden');
   promptEl.setAttribute('aria-hidden', 'true');
   promptInput.blur();
+  syncMenuCursor();
 }
 
 function submitPrompt() {
@@ -505,11 +511,6 @@ function switchTab(dir) {
   let i = tabs.findIndex((t) => t.classList.contains('active'));
   i = (i + dir + tabs.length) % tabs.length;
   tabs[i].click();
-  requestAnimationFrame(() => {
-    const items = focusables();
-    const firstContent = items.findIndex((el) => !el.closest('.tabs'));
-    setKbFocus(firstContent >= 0 ? firstContent : 0, { domFocus: false });
-  });
 }
 
 function setPmTab(name) {
@@ -558,6 +559,7 @@ function openPlayer(p) {
   playerModal.classList.remove('hidden');
   playerModal.setAttribute('aria-hidden', 'false');
   applyPerms();
+  syncMenuCursor();
   requestAnimationFrame(() => setKbFocus(0, { domFocus: false }));
 }
 
@@ -565,6 +567,7 @@ function closePlayer() {
   selectedPlayer = null;
   playerModal.classList.add('hidden');
   playerModal.setAttribute('aria-hidden', 'true');
+  syncMenuCursor();
 }
 
 document.querySelectorAll('.tabs button').forEach((btn) => {
@@ -572,8 +575,14 @@ document.querySelectorAll('.tabs button').forEach((btn) => {
     document.querySelectorAll('.tabs button').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.tab').forEach((t) => t.classList.add('hidden'));
-    document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+    const pane = document.getElementById(`tab-${btn.dataset.tab}`);
+    if (pane) pane.classList.remove('hidden');
     if (btn.dataset.tab !== 'players') closePlayer();
+    else syncMenuCursor();
+    requestAnimationFrame(() => {
+      const items = focusables();
+      setKbFocus(0, { domFocus: false });
+    });
   };
 });
 
@@ -619,6 +628,7 @@ window.addEventListener('message', (e) => {
     renderPlayers(d.players || []);
     closePlayer();
     closePrompt();
+    syncMenuCursor();
     requestAnimationFrame(() => {
       const items = focusables();
       const first = items.findIndex((el) => el.dataset && el.dataset.selector === 'mode');
@@ -630,6 +640,7 @@ window.addEventListener('message', (e) => {
     closePlayer();
     closePrompt();
     clearKbFocus();
+    post('setCursor', { enabled: false });
   }
   if (d.action === 'players') renderPlayers(d.list || []);
   if (d.action === 'toggles' && d.toggles) {
