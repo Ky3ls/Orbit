@@ -34,7 +34,7 @@ export default function Ingame({ user }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setStatus('System-Resource orbit — Menü wie txAdmin, Orbit-Design.');
+    setStatus('System-Resource orbit — Admin-Menü.');
   }, []);
 
   async function hotDeploy() {
@@ -42,7 +42,7 @@ export default function Ingame({ user }) {
     setBusy(true);
     try {
       const d = await api('/api/ingame/hot-deploy', { method: 'POST', body: {} });
-      setStatus(d.note || 'orbit aktualisiert — im Spiel /orbit oder /tx');
+      setStatus(d.note || 'orbit aktualisiert — im Spiel /orbit');
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -55,14 +55,14 @@ export default function Ingame({ user }) {
       <PageHeader
         eyebrow="Ingame"
         title="Orbit Menü"
-        description="Admin-Menü als System-Resource — Features angelehnt an txAdmin, Optik Orbit (orange/dunkel)."
+        description="Eigenes Admin-Menü als System-Resource — Orbit-Design, Orbit-Befehle."
       />
       {err && <div className="err">{err}</div>}
 
       <PanelCard>
         <p className="muted" style={{ marginTop: 0 }}>
-          Öffnen: <b>/orbit</b> · <b>/tx</b> · <b>/txadmin</b> · <b>/orbitmenu</b>
-          {' '}(Keybind unter FiveM → Tastaturbelegung)
+          Öffnen: <b>/orbit</b> · <b>/orbitmenu</b>
+          {' '}(Keybind unter FiveM → Tastaturbelegung → Orbit Admin-Menü)
         </p>
         <p className="muted" style={{ fontSize: 13 }}>
           Zugang nur für Panel-Admins mit verknüpfter License/Cfx. Rechte kommen aus der Team-Rolle.

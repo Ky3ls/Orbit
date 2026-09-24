@@ -1,4 +1,4 @@
---[[ Orbit server actions — Menü-Aktionen wie txAdmin ]]
+--[[ Orbit server actions — Menü-Aktionen ]]
 
 local function panelAction(src, action, extra, cb)
   if not OrbitIsAdmin(src) then if cb then cb(false) end return end
@@ -25,7 +25,7 @@ RegisterNetEvent('orbit:adminHealAll', function()
   local src = source
   if not OrbitCan(src, 'healAll') then return end
   TriggerClientEvent('orbit:heal', -1)
-  TriggerEvent('txAdmin:events:playerHealed', { target = -1, author = (ADMINS[tostring(src)] or {}).name })
+  TriggerEvent('orbit:events:playerHealed', { target = -1, author = (ADMINS[tostring(src)] or {}).name })
 end)
 
 RegisterNetEvent('orbit:healPlayer', function(targetId)
@@ -34,7 +34,7 @@ RegisterNetEvent('orbit:healPlayer', function(targetId)
   targetId = tonumber(targetId)
   if not targetId or GetPlayerName(targetId) == nil then return end
   TriggerClientEvent('orbit:heal', targetId)
-  TriggerEvent('txAdmin:events:playerHealed', {
+  TriggerEvent('orbit:events:playerHealed', {
     target = targetId,
     author = (ADMINS[tostring(src)] or {}).name,
   })
