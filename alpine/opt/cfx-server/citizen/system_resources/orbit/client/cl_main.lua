@@ -168,6 +168,7 @@ end)
 RegisterNetEvent('orbit:openMenu', function(payload)
   if menuOpen then return end
   menuOpen = true
+  local game = payload and payload.game or {}
   -- Fokus ohne Maus-Cursor; Spiel-Input behalten (Laufen/Fahren)
   SetNuiFocus(true, false)
   SetNuiFocusKeepInput(true)
@@ -176,6 +177,9 @@ RegisterNetEvent('orbit:openMenu', function(payload)
     name = payload and payload.name or '',
     perms = payload and payload.perms or {},
     players = payload and payload.players or {},
+    game = game,
+    alignRight = game.alignRight == true,
+    pageKey = game.pageKey or 'Tab',
   })
   notifyToggles()
 end)
@@ -184,21 +188,32 @@ RegisterNetEvent('orbit:playerList', function(list)
   SendNUIMessage({ action = 'players', list = list or {} })
 end)
 
-RegisterNetEvent('orbit:announce', function(msg)
-  chat(msg or '')
-  BeginTextCommandThefeedPost('STRING')
-  AddTextComponentSubstringPlayerName(('~o~Orbit~s~\n%s'):format(tostring(msg or '')))
-  EndTextCommandThefeedPostTicker(false, true)
+RegisterNetEvent('orbit:announce', function(msg, meta)
+  local hide = type(meta) == 'table' and meta.hide
+  if not hide then
+    chat(msg or '')
+    BeginTextCommandThefeedPost('STRING')
+    AddTextComponentSubstringPlayerName(('~o~Orbit~s~\n%s'):format(tostring(msg or '')))
+    EndTextCommandThefeedPostTicker(false, true)
+  end
 end)
 
-RegisterNetEvent('orbit:dm', function(author, message)
-  chat(('DM von %s: %s'):format(tostring(author or 'Admin'), tostring(message or '')))
+RegisterNetEvent('orbit:dm', function(author, message, meta)
+  local hideName = type(meta) == 'table' and meta.hideAdmin
+  local hideNotif = type(meta) == 'table' and meta.hide
+  if hideNotif then return end
+  local who = hideName and 'Admin' or tostring(author or 'Admin')
+  chat(('DM von %s: %s'):format(who, tostring(message or '')))
 end)
 
 RegisterNetEvent('orbit:showWarning', function(payload)
   local author = type(payload) == 'table' and payload.author or 'Admin'
   local reason = type(payload) == 'table' and payload.reason or tostring(payload or '')
-  chat(('WARNUNG von %s: %s'):format(tostring(author), tostring(reason)))
+  local hideName = type(payload) == 'table' and payload.hideAdmin
+  local hideNotif = type(payload) == 'table' and payload.hide
+  if hideNotif then return end
+  local who = hideName and 'Admin' or tostring(author)
+  chat(('WARNUNG von %s: %s'):format(who, tostring(reason)))
 end)
 
 RegisterNetEvent('orbit:heal', function()
@@ -409,7 +424,7 @@ CreateThread(function()
       DisableControlAction(0, 263, true)
       DisableControlAction(0, 264, true)
       -- Pfeiltasten dem NUI überlassen
-      DisableControlAction(0, 22, true)  -- Jump (Space → Menü-Enter)
+      DisableControlAction(0, 22, true)  -- Jump (Space) — Menü nutzt Space nicht als Enter
       DisableControlAction(0, 23, true)  -- Enter vehicle
       DisableControlAction(0, 75, true)  -- Exit vehicle
       DisableControlAction(0, 172, true)

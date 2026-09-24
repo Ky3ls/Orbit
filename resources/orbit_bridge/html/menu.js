@@ -435,7 +435,7 @@ function focusables() {
     list.push(document.getElementById('pmClose'));
     return list.filter(Boolean);
   }
-  document.querySelectorAll('.tabs button').forEach((el) => list.push(el));
+  // Tabs nur per Tab-Taste — Pfeile bleiben in der sichtbaren Liste (sonst Fokus „verschwindet“)
   const tab = document.getElementById(`tab-${activeTabId()}`);
   if (tab) {
     tab.querySelectorAll('.row:not(.is-disabled), input:not([disabled]), #plist li[data-pid], button:not([disabled])').forEach((el) => {
@@ -461,7 +461,7 @@ function setKbFocus(idx, opts = {}) {
   } else if (document.activeElement && isTypingTarget(document.activeElement) && document.activeElement !== el) {
     document.activeElement.blur();
   }
-  el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
 }
 
 function moveFocus(delta) {
@@ -643,7 +643,7 @@ document.addEventListener('keydown', (e) => {
 
   const typing = isTypingTarget(document.activeElement);
 
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' || (e.key === 'Backspace' && !typing)) {
     e.preventDefault();
     if (isPromptOpen()) {
       closePrompt();
@@ -703,7 +703,8 @@ document.addEventListener('keydown', (e) => {
     if (!cycleFocused(-1)) moveFocus(-1);
     return;
   }
-  if (e.key === 'Enter' || e.key === ' ') {
+  // Leertaste absichtlich NICHT wie Enter
+  if (e.key === 'Enter') {
     e.preventDefault();
     activateFocused();
   }
