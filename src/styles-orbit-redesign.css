@@ -310,17 +310,17 @@ input:focus, select:focus, textarea:focus {
 .more-card span { font-size: 12px; color: var(--muted); line-height: 1.35; }
 
 /* —— Resources —— */
-.res-group { margin-bottom: 12px; }
+.res-group { margin-bottom: 6px; }
 .res-group-head {
   width: 100%;
-  border-radius: 14px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: rgba(0, 0, 0, 0.3);
-  padding: 14px 16px;
+  padding: 7px 12px;
 }
 .res-group-head.open {
-  border-color: rgba(46, 230, 197, 0.35);
-  background: rgba(46, 230, 197, 0.05);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.08);
 }
 .nx-res-grid {
   display: grid;

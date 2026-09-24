@@ -804,64 +804,167 @@ button,
 
 /* —— Ressourcen nach Ordner ([core], [esx_addons], …) —— */
 .res-page {
-  gap: 10px;
+  gap: 8px;
+}
+.res-page-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 16px;
+}
+.res-empty {
+  padding: 16px 8px;
+  font-size: 13px;
 }
 .res-group {
   display: flex;
   flex-direction: column;
   gap: 0;
+  margin-bottom: 0;
 }
 .res-group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   width: 100%;
   margin: 0;
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(12, 12, 16, 0.65);
+  padding: 7px 10px 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.12), rgba(12, 12, 16, 0.72) 42%);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 .res-group-head:hover,
 .res-group-head.open {
-  border-color: rgba(var(--accent-rgb), 0.4);
-  background: rgba(var(--accent-rgb), 0.08);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.18), rgba(12, 12, 16, 0.78) 48%);
 }
 .res-group-title {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
   min-width: 0;
 }
+.res-group-folder,
 .res-group-title .mono {
-  font-size: 15px;
+  font-size: 12.5px;
   font-weight: 650;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
+  color: #fff;
 }
 .res-group-meta {
-  font-size: 12px;
+  font-size: 11px;
+  letter-spacing: 0.01em;
 }
 .res-group-chevron {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 18px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 14px;
   line-height: 1;
+  color: var(--muted);
 }
 .res-group-body {
-  margin-top: 8px;
-  border-radius: 14px;
+  margin-top: 4px;
+  border-radius: 8px;
+}
+
+/* Kompakte Ressourcen-Zeilen */
+.res-page .res-row,
+.res-page .ws-res-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px 10px;
+  align-items: center;
+  min-height: 0;
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+.res-page .ws-res-row:last-child {
+  border-bottom: 0;
+}
+.res-page .ws-res-row:hover {
+  background: rgba(var(--accent-rgb), 0.07);
+}
+.res-row-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.res-page .res-row .badge {
+  margin-left: 0;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+.res-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+}
+.res-act {
+  appearance: none;
+  margin: 0;
+  padding: 3px 8px;
+  min-height: 24px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.1s ease, background 0.1s ease, color 0.1s ease;
+}
+.res-act:hover:not(:disabled) {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.12);
+  color: #fff;
+}
+.res-act:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.res-act-icon {
+  padding: 3px 7px;
+  min-width: 24px;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .res-page .res-row,
+  .res-page .ws-res-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 4px 8px;
+    padding: 6px 10px;
+  }
+  .res-row-name { grid-column: 1 / -1; }
+  .res-row-actions { justify-self: end; }
 }
 
 .db-tables {
