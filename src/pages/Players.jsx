@@ -113,27 +113,28 @@ export default function Players() {
   const p = detail?.player || pick;
   const ids = p ? playerIds(p) : [];
   const presets = detail?.banPresets || [];
-  const durationOptions = useMemo(() => {
+  const durationList = useMemo(() => {
     const list = (presets.length ? presets : BAN_DURATION_PRESETS).map((pr) => ({
-      value: pr.id,
+      id: pr.id,
       label: pr.label,
     }));
-    list.push({ value: 'custom', label: 'Benutzerdefiniert' });
+    list.push({ id: 'custom', label: 'Benutzerdefiniert' });
     return list;
   }, [presets]);
-  const templateOptions = useMemo(() => {
+  const templateList = useMemo(() => {
     const tpls = detail?.banTemplates || [];
-    return [
-      { value: '', label: 'Keine Vorlage', hint: 'Manuell ausfüllen' },
-      ...tpls.map((t) => ({
-        value: String(t.id),
-        label: t.reason,
-        hint: banDurationLabel(t.duration_id),
-        reason: t.reason,
-        durationId: t.duration_id,
-      })),
-    ];
+    return tpls.map((t) => ({
+      id: String(t.id),
+      label: t.reason,
+      hint: banDurationLabel(t.duration_id),
+      reason: t.reason,
+      durationId: t.duration_id,
+    }));
   }, [detail?.banTemplates]);
+  const durationLabel = useMemo(
+    () => durationList.find((d) => d.id === durationId)?.label || banDurationLabel(durationId),
+    [durationList, durationId],
+  );
 
   async function saveNote() {
     if (!p) return;
@@ -272,7 +273,63 @@ export default function Players() {
       )}
 
       {pick && p && (
-        <Modal title="Spieler" onClose={() => { setPick(null); setDetail(null); setErr(''); }} wide>
+        <Modal
+          title="Spieler"
+          onClose={() => { setPick(null); setDetail(null); setErr(''); }}
+          wide
+          aside={tab === 'ban' ? (
+            <aside className="pl-ban-aside" aria-label="Ban-Auswahl">
+              <div className="pl-ban-aside-block">
+                <h4 className="pl-ban-aside-title">Vorlagen</h4>
+                <div className="pl-ban-aside-list" role="listbox" aria-label="Ban-Vorlagen">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={!templateId}
+                    className={`pl-ban-aside-item${!templateId ? ' active' : ''}`}
+                    onClick={() => applyTemplate('')}
+                  >
+                    <span className="pl-ban-aside-item-label">Keine Vorlage</span>
+                    <span className="pl-ban-aside-item-hint">Manuell ausfüllen</span>
+                  </button>
+                  {templateList.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="option"
+                      aria-selected={templateId === t.id}
+                      className={`pl-ban-aside-item${templateId === t.id ? ' active' : ''}`}
+                      onClick={() => applyTemplate(t.id, t)}
+                    >
+                      <span className="pl-ban-aside-item-label">{t.label}</span>
+                      {t.hint && <span className="pl-ban-aside-item-hint">{t.hint}</span>}
+                    </button>
+                  ))}
+                  {templateList.length === 0 && (
+                    <p className="pl-ban-aside-empty">Keine Vorlagen hinterlegt</p>
+                  )}
+                </div>
+              </div>
+              <div className="pl-ban-aside-block">
+                <h4 className="pl-ban-aside-title">Dauer</h4>
+                <div className="pl-ban-aside-list" role="listbox" aria-label="Ban-Dauer">
+                  {durationList.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      role="option"
+                      aria-selected={durationId === d.id}
+                      className={`pl-ban-aside-item${durationId === d.id ? ' active' : ''}`}
+                      onClick={() => { setDurationId(d.id); setTemplateId(''); }}
+                    >
+                      <span className="pl-ban-aside-item-label">{d.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          ) : null}
+        >
           <div className="pl-sheet">
             <header className="pl-hero">
               <div className="pl-hero-mark" aria-hidden="true">{initial}</div>
@@ -376,13 +433,15 @@ export default function Players() {
 
               {tab === 'ban' && (
                 <div className="pl-panel pl-ban">
-                  <OrbitSelect
-                    label="Vorlage"
-                    value={templateId}
-                    onChange={(v, o) => applyTemplate(v, o)}
-                    options={templateOptions}
-                    placeholder="Vorlage wählen…"
-                  />
+                  <div className="pl-ban-summary" aria-live="polite">
+                    <span className="pl-ban-label">Auswahl</span>
+                    <strong>{durationLabel}</strong>
+                    {templateId ? (
+                      <em>{templateList.find((t) => t.id === templateId)?.label || 'Vorlage'}</em>
+                    ) : (
+                      <em>Keine Vorlage</em>
+                    )}
+                  </div>
                   <label className="pl-ban-field">
                     <span className="pl-ban-label">Grund</span>
                     <textarea
@@ -392,41 +451,32 @@ export default function Players() {
                       placeholder="Regel, Kontext…"
                     />
                   </label>
-                  <div className={`pl-ban-row${durationId === 'custom' ? ' custom' : ''}`}>
-                    <OrbitSelect
-                      className="pl-ban-duration"
-                      label="Dauer"
-                      value={durationId}
-                      onChange={(v) => { setDurationId(v); setTemplateId(''); }}
-                      options={durationOptions}
-                    />
-                    {durationId === 'custom' && (
-                      <>
-                        <label className="pl-ban-field pl-ban-amt">
-                          <span className="pl-ban-label">Wert</span>
-                          <input
-                            type="number"
-                            min={1}
-                            inputMode="numeric"
-                            placeholder="z. B. 3"
-                            value={customAmt}
-                            onChange={(e) => setCustomAmt(e.target.value)}
-                          />
-                        </label>
-                        <OrbitSelect
-                          label="Einheit"
-                          value={customUnit}
-                          onChange={setCustomUnit}
-                          options={[
-                            { value: 'hours', label: 'Stunden' },
-                            { value: 'days', label: 'Tage' },
-                            { value: 'weeks', label: 'Wochen' },
-                          ]}
-                          className="pl-ban-unit"
+                  {durationId === 'custom' && (
+                    <div className="pl-ban-row custom">
+                      <label className="pl-ban-field pl-ban-amt">
+                        <span className="pl-ban-label">Wert</span>
+                        <input
+                          type="number"
+                          min={1}
+                          inputMode="numeric"
+                          placeholder="z. B. 3"
+                          value={customAmt}
+                          onChange={(e) => setCustomAmt(e.target.value)}
                         />
-                      </>
-                    )}
-                  </div>
+                      </label>
+                      <OrbitSelect
+                        label="Einheit"
+                        value={customUnit}
+                        onChange={setCustomUnit}
+                        options={[
+                          { value: 'hours', label: 'Stunden' },
+                          { value: 'days', label: 'Tage' },
+                          { value: 'weeks', label: 'Wochen' },
+                        ]}
+                        className="pl-ban-unit"
+                      />
+                    </div>
+                  )}
                   <button type="button" className="btn pl-ban-btn" disabled={busy} onClick={applyBan}>
                     Sperre setzen
                   </button>

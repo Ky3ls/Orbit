@@ -94,7 +94,7 @@ export function Toolbar({ children, className = '' }) {
   return <div className={`o-toolbar ${className}`.trim()}>{children}</div>;
 }
 
-export function Modal({ title, onClose, children, wide }) {
+export function Modal({ title, onClose, children, wide, aside }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -103,17 +103,22 @@ export function Modal({ title, onClose, children, wide }) {
   return (
     <div className="modal-back" onMouseDown={onClose} role="presentation">
       <div
-        className={`modal${wide ? ' palette' : ''}`}
+        className={`modal-cluster${aside ? ' with-aside' : ''}`}
         onMouseDown={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
       >
-        <div className="spread">
-          <h3 id="modal-title">{title}</h3>
-          <button className="btn btn-ghost btn-sm" onClick={onClose} type="button">Schließen</button>
+        <div
+          className={`modal${wide ? ' palette' : ''}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+        >
+          <div className="spread">
+            <h3 id="modal-title">{title}</h3>
+            <button className="btn btn-ghost btn-sm" onClick={onClose} type="button">Schließen</button>
+          </div>
+          {children}
         </div>
-        {children}
+        {aside}
       </div>
     </div>
   );

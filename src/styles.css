@@ -1844,6 +1844,16 @@ td .badge { margin-left: 8px; }
   backdrop-filter: blur(6px);
   padding: 20px;
 }
+.modal-cluster {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  max-width: min(100%, calc(100vw - 40px));
+  max-height: calc(100dvh - 40px);
+}
+.modal-cluster.with-aside {
+  width: min(980px, 100%);
+}
 .modal {
   width: min(440px, 100%);
   padding: 18px;
@@ -1851,6 +1861,13 @@ td .badge { margin-left: 8px; }
   border: 1px solid var(--line);
   background: rgba(12,12,16,0.96);
   box-shadow: var(--shadow);
+  min-width: 0;
+  max-height: inherit;
+  overflow: auto;
+}
+.modal-cluster.with-aside .modal.palette {
+  flex: 1 1 auto;
+  width: min(720px, 100%);
 }
 .modal.palette { width: min(720px, 100%); }
 .feed { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow: auto; }
