@@ -22,7 +22,9 @@ export async function drainCommandQueue(db, settings, logLine) {
   try {
     const out = await executeQueueItem(settings, row.kind, payload, logLine);
     db.prepare("UPDATE queue SET status = 'done' WHERE id = ?").run(row.id);
-    logLine('ok', `FX ✓ ${row.kind} (${row.author})${out ? `: ${String(out).slice(0, 120)}` : ''}`);
+    if (!(row.author === 'system' && row.kind === 'console')) {
+      logLine('ok', `FX ✓ ${row.kind} (${row.author})${out ? `: ${String(out).slice(0, 120)}` : ''}`);
+    }
     return { processed: 1, ok: true };
   } catch (err) {
     db.prepare("UPDATE queue SET status = 'failed' WHERE id = ?").run(row.id);
