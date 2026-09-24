@@ -55,9 +55,33 @@ export function syncChatFromArtifact(dataPath, fxRoot = FX_SERVER_ROOT, onLog = 
     onLog('chat: bereits in resources/[system]');
     return { ok: true, skipped: true };
   }
-  const root = String(fxRoot || FX_SERVER_ROOT).replace(/\/$/, '');
-  const src = path.join(root, 'alpine/opt/cfx-server/citizen/system_resources/chat');
-  if (!fs.existsSync(path.join(src, 'fxmanifest.lua'))) {
+
+  const candidates = [];
+  const root = String(fxRoot || FX_SERVER_ROOT || '').replace(/\/$/, '');
+  if (root) {
+    candidates.push(path.join(root, 'alpine/opt/cfx-server/citizen/system_resources/chat'));
+  }
+  try {
+    const artRoot = process.env.ORBIT_ARTIFACTS_ROOT || '/opt/orbit/artifacts';
+    if (fs.existsSync(artRoot)) {
+      const builds = fs.readdirSync(artRoot)
+        .filter((n) => n.startsWith('build-'))
+        .sort()
+        .reverse();
+      for (const b of builds) {
+        candidates.push(path.join(artRoot, b, 'alpine/opt/cfx-server/citizen/system_resources/chat'));
+      }
+    }
+  } catch { /* */ }
+
+  let src = '';
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, 'fxmanifest.lua'))) {
+      src = c;
+      break;
+    }
+  }
+  if (!src) {
     onLog('chat: Artifact system_resources/chat fehlt');
     return { ok: false };
   }
