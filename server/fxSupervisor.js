@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 import { orbitControlMode, resolveFxLaunch } from './fxLaunch.js';
 import { emitFxConsoleLine, markFxConsoleEof, resetFxConsoleLog } from './fxLogTail.js';
 import { clearConsole } from './state.js';
@@ -179,11 +180,16 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     const { getDb, auditLogger } = await import('./db.js');
     const { syncOrbitSystemResource, ensureIngameToken } = await import('./orbitBridgeSync.js');
     const { syncChatFromArtifact } = await import('./cfxDefaults.js');
+    const { syncOrbitPermissionsFile, loadMasterIdentity } = await import('./cfgPermissions.js');
     const database = opts.db || getDb();
     ensureIngameToken(database);
     syncOrbitSystemResource(launch.fxRoot, launch.dataPath, auditLogger(database, 'orbit.sync'));
     if (launch.dataPath) {
       syncChatFromArtifact(launch.dataPath, launch.fxRoot, (m) => logLine('info', `[FX:${key}] ${m}`));
+      const cfgName = String(settings.fxCfgPath || 'server.cfg').replace(/^\/+/, '') || 'server.cfg';
+      const cfgFile = path.join(launch.dataPath, cfgName);
+      const synced = syncOrbitPermissionsFile(cfgFile, { db: database, master: loadMasterIdentity(database) });
+      if (synced.changed) logLine('info', `[FX:${key}] Orbit Permissions in ${cfgName} aktualisiert (Dateiende).`);
     }
     // Launch-Args mit Token nachreichen falls resolve ohne db lief
     if (!opts.db) {

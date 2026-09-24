@@ -147,11 +147,28 @@ import { resolveConsoleSettings } from './consoleSettings.js';
 import { fxCommandReady } from './rcon.js';
 import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
 import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail.js';
+import { syncOrbitPermissionsFile, applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
 import { logLine, runtime, pushSeries, setLogHook, snapshot, onConsoleWake } from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
 const db = getDb();
+
+/** Permissions-Block am Ende der aktiven server.cfg (Master-Principals nur wenn verknüpft). */
+function syncActiveCfgPermissions() {
+  try {
+    const settings = settingMap(db);
+    const dataPath = String(settings.fxDataPath || '').trim();
+    if (!dataPath) return { changed: false };
+    const cfgName = String(settings.fxCfgPath || 'server.cfg').replace(/^\/+/, '') || 'server.cfg';
+    return syncOrbitPermissionsFile(path.join(dataPath, cfgName), {
+      db,
+      master: loadMasterIdentity(db),
+    });
+  } catch {
+    return { changed: false };
+  }
+}
 
 const buckets = new Map();
 function hit(key, limit, windowMs) {
@@ -261,7 +278,7 @@ function persistFivemCfgFromSettings(settings) {
     tags: settings.tags || '',
     locale: settings.locale || 'de-DE',
   });
-  writeCfg(next);
+  writeCfg(applyOrbitPermissionsToCfg(next, { master: loadMasterIdentity(db) }));
 }
 
 function redirect(res, location, extraHeaders = []) {
@@ -704,6 +721,7 @@ async function handleApi(req, res, url) {
     const token = createSession(db, user, req);
     audit(db, username, 'master.create', pending.cfxId, ip);
     logLine('ok', `Master-Account ${username} (Cfx: ${pending.cfxName}) angelegt`);
+    syncActiveCfgPermissions();
     return json(res, 200, { user: publicUser(user), setup: false }, [
       ['Set-Cookie', cookieHeader(COOKIE, token, SESSION_MS / 1000)],
       ['Set-Cookie', cookieHeader('orbit_claim', '', 0, 'Lax')],
@@ -822,6 +840,8 @@ async function handleApi(req, res, url) {
         if (taken) return redirect(res, '/settings?cfx=taken');
         db.prepare('UPDATE users SET cfx_id = ?, cfx_name = ? WHERE id = ?').run(profile.id, profile.username, state.user_id);
         audit(db, profile.username, 'cfx.link', profile.id, ip);
+        const linked = db.prepare('SELECT role FROM users WHERE id = ?').get(state.user_id);
+        if (linked?.role === 'owner') syncActiveCfgPermissions();
         return redirect(res, '/settings?cfx=ok');
       }
 
@@ -874,6 +894,7 @@ async function handleApi(req, res, url) {
   if (method === 'POST' && pathname === '/api/auth/cfx/unlink') {
     db.prepare('UPDATE users SET cfx_id = NULL, cfx_name = NULL WHERE id = ?').run(me.id);
     audit(db, me.username, 'cfx.unlink', '', ip);
+    if (me.role === 'owner') syncActiveCfgPermissions();
     return json(res, 200, { ok: true });
   }
 
@@ -2241,7 +2262,8 @@ async function handleApi(req, res, url) {
     }
     const merged = mergeCfgSecrets(original, content);
     try {
-      writeCfgFile(targetRel, merged);
+      const withPerms = applyOrbitPermissionsToCfg(merged, { master: loadMasterIdentity(db) });
+      writeCfgFile(targetRel, withPerms);
     } catch (err) {
       const draft = path.join(DATA_DIR, 'server.cfg.draft');
       try {

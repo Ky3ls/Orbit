@@ -9,6 +9,7 @@ import { ensureOnce } from './cfgUpsert.js';
 import { ensureEsxAddonColumns, patchMysql8CompatInResources } from './mysqlCompat.js';
 import { applyCfxBaseCfg, installCfxServerData } from './cfxDefaults.js';
 import { sanitizeCfgMetaComments } from './cfgSanitize.js';
+import { applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
 
 const exec = promisify(execFile);
 
@@ -349,7 +350,11 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
   }
   cfg = ensureOnce(cfg, 'orbit');
   cfg = sanitizeCfgMetaComments(cfg);
+  cfg = applyOrbitPermissionsToCfg(cfg, {
+    profile: pack.profile || recipeId,
+    master: opts.db ? loadMasterIdentity(opts.db) : {},
+  });
   fs.writeFileSync(cfgPath, cfg.trim() + '\n', 'utf8');
-  onLog(`Profil „${pack.title}“ + CFX-Defaults + CFG angewendet.`);
+  onLog(`Profil „${pack.title}“ + CFX-Defaults + Permissions + CFG angewendet.`);
   return results;
 }
