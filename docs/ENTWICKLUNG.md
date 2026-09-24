@@ -26,16 +26,23 @@ npm run dev
 
 Änderungen in `src/` → im Browser sichtbar (Hot Reload).
 
-## Live (tx2.ky3ls.space)
+## Live (/opt/orbit)
 
 ```bash
-cd tx2
-bash scripts/deploy-live.sh
+# lokal bauen + sicherer Sync (nur Code-Ordner)
+sudo bash scripts/deploy-live.sh
+# oder explizit:
+sudo bash scripts/safe-sync-live.sh /pfad/zum/repo
+sudo systemctl restart orbit
 ```
 
-Deploy kopiert nach `/opt/tx2`: **`dist`**, **`server`**, **`src`** (Referenz), `scripts`, `resources`, …
+Deploy kopiert **nur**: `dist/`, `server/`, `src/`, `scripts/`, `docs/`, `public/`, `resources/` (+ package-Dateien).
 
-**Nicht** am Server in alten Kopien unter `/opt/tx2/src` arbeiten ohne vorher `git pull` + Deploy — der Stand muss mit **Git `main`** übereinstimmen.
+**Geschützt (nie per Deploy löschen):** `data/`, `artifacts/`, `servers/`, `alpine/`, `node_modules/`.
+
+**Verboten:** `rsync -a --delete …/ /opt/orbit/` auf den gesamten Tree — das hat schon Panel-DB und FX-Artifacts zerstört.
+
+**Nicht** am Server in alten Kopien unter `/opt/orbit/src` arbeiten ohne vorher `git pull` + Deploy — der Stand muss mit **Git `main`** übereinstimmen.
 
 ## Branch
 
