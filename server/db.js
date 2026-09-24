@@ -151,6 +151,22 @@ export function audit(db, user, action, detail, ip) {
     .run(user, action, detail || '', ip || '', Date.now());
 }
 
+/** Orbit-interne Events (nicht FX-Konsole). */
+export function auditSystem(db, action, detail = '') {
+  try {
+    audit(db, 'system', action, String(detail || '').slice(0, 500), 'local');
+  } catch { /* db noch nicht bereit */ }
+}
+
+/** Callback für Sync/Deploy: schreibt nur Audit, nie die FiveM-Konsole. */
+export function auditLogger(db, actionPrefix = 'orbit') {
+  return (msg) => {
+    const text = String(msg || '').trim();
+    if (!text) return;
+    auditSystem(db, actionPrefix, text);
+  };
+}
+
 export function settingMap(db) {
   const out = {};
   for (const row of db.prepare('SELECT k, v FROM settings').all()) out[row.k] = row.v;

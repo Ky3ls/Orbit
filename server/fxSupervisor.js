@@ -117,18 +117,21 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   markFxConsoleEof(launch.dataPath);
   // System-Resource vor Start syncen
   try {
-    const { getDb } = await import('./db.js');
+    const { getDb, auditLogger } = await import('./db.js');
     const { syncOrbitSystemResource, ensureIngameToken } = await import('./orbitBridgeSync.js');
     const database = opts.db || getDb();
     ensureIngameToken(database);
-    syncOrbitSystemResource(launch.fxRoot, launch.dataPath, (t) => logLine('info', `[FX:${key}] ${t}`));
+    syncOrbitSystemResource(launch.fxRoot, launch.dataPath, auditLogger(database, 'orbit.sync'));
     // Launch-Args mit Token nachreichen falls resolve ohne db lief
     if (!opts.db) {
       const { orbitFxLaunchExtras } = await import('./orbitBridgeSync.js');
       launch.args.push(...orbitFxLaunchExtras(database));
     }
   } catch (err) {
-    logLine('warn', `[FX:${key}] orbit sync: ${err.message}`);
+    try {
+      const { getDb, auditSystem } = await import('./db.js');
+      auditSystem(opts.db || getDb(), 'orbit.sync.fail', err.message);
+    } catch { /* */ }
   }
   inst.phase = 'starting';
   inst.lastSettings = { ...settings };
