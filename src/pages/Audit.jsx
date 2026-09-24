@@ -12,10 +12,13 @@ export default function Audit() {
     <Page>
       <PageHeader
         eyebrow="System"
-        title="Audit"
-        description="Logins, Bans, Einstellungen, Ressourcen. Nichts davon lässt sich aus dem Panel löschen."
+        title="Admin-Aktionen"
+        description="Wer im Panel was gemacht hat (Login, Ban, Einstellungen, Ressourcen). Unveränderlich — nicht die FX-Konsole."
         actions={<input className="search" placeholder="Filtern" value={q} onChange={(e) => setQ(e.target.value)} />}
       />
+      <p className="page-hint muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 13 }}>
+        Hinweis: Für Server-/FX-Ausgabe siehe <strong>Server-/FX-Log</strong>. Hier nur Panel-Audit.
+      </p>
       <PanelCard padded={false}>
         <div className="table-wrap">
           <table className="o-table">

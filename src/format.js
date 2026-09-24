@@ -48,5 +48,6 @@ export function fmtPlaytime(ms) {
 export function roleLabel(role) {
   if (role === 'owner') return 'Inhaber';
   if (role === 'admin') return 'Admin';
+  if (role === 'custom') return 'Individuell';
   return 'Moderator';
 }

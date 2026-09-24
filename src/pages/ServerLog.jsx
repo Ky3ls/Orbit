@@ -1,60 +1,101 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { fmtFull } from '../format.js';
 import { Empty, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
 
+function fmtLineTime(ts) {
+  if (!ts) return '';
+  return new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(ts);
+}
+
 export default function ServerLog() {
-  const [entries, setEntries] = useState([]);
+  const [lines, setLines] = useState([]);
   const [q, setQ] = useState('');
+  const [err, setErr] = useState('');
+  const [paused, setPaused] = useState(false);
+  const seqRef = useRef(0);
+  const boxRef = useRef(null);
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
 
   useEffect(() => {
-    api('/api/audit').then((d) => setEntries(d.entries || [])).catch(() => {});
+    let alive = true;
+    let timer;
+
+    async function tick() {
+      if (!alive) return;
+      try {
+        const after = seqRef.current > 0 ? seqRef.current : 0;
+        const d = await api(`/api/server-log?after=${after}`);
+        if (!alive) return;
+        const batch = d.lines || [];
+        if (batch.length) {
+          if (!pausedRef.current) {
+            setLines((prev) => {
+              const map = new Map(prev.map((l) => [l.id, l]));
+              for (const l of batch) map.set(l.id, l);
+              return [...map.values()].sort((a, b) => a.id - b.id).slice(-500);
+            });
+          }
+          seqRef.current = Math.max(seqRef.current, ...batch.map((l) => l.id), d.seq || 0);
+        } else if (d.seq) {
+          seqRef.current = Math.max(seqRef.current, d.seq);
+        }
+        setErr('');
+      } catch (e) {
+        if (alive) setErr(e.message);
+      }
+      timer = setTimeout(tick, 2500);
+    }
+
+    tick();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, []);
 
-  const view = entries.filter((e) => `${e.user} ${e.action} ${e.detail}`.toLowerCase().includes(q.toLowerCase()));
-  const connectish = view.filter((e) => /player|kick|warn|ban|whitelist|note|join|leave/i.test(`${e.action} ${e.detail}`));
+  useEffect(() => {
+    if (paused || !boxRef.current) return;
+    boxRef.current.scrollTop = boxRef.current.scrollHeight;
+  }, [lines, paused]);
+
+  const view = q.trim()
+    ? lines.filter((l) => `${l.level} ${l.text}`.toLowerCase().includes(q.toLowerCase()))
+    : lines;
 
   return (
     <Page>
       <PageHeader
-        eyebrow="System"
-        title="Server Log"
-        description="Activity aus Audit und Warteschlange. Verbindungen erscheinen, sobald Events ankommen."
-        actions={<input className="search" placeholder="Filtern" value={q} onChange={(e) => setQ(e.target.value)} />}
+        eyebrow="Server"
+        title="Server-/FX-Log"
+        description="Live-Ausgabe der FiveM-/FX-Konsole (Crashes, Resources, Joins). Nicht dasselbe wie Admin-Aktionen."
+        actions={(
+          <div className="row" style={{ gap: 8 }}>
+            <input className="search" placeholder="Filtern" value={q} onChange={(e) => setQ(e.target.value)} />
+            <button type="button" className="btn btn-sm" onClick={() => setPaused((p) => !p)}>
+              {paused ? 'Weiter' : 'Pause'}
+            </button>
+          </div>
+        )}
       />
-
-      <PanelCard>
-        <h3>Connections / Moderation</h3>
-        {connectish.length === 0 ? (
-          <Empty title="Keine Connection-Events" text="Sobald Kick/Warn/Ban oder Spieleraktionen laufen, landen sie hier." />
+      <p className="page-hint muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 13 }}>
+        Hinweis: Panel-Aktionen (wer hat gebannt/geändert) stehen unter <strong>Admin-Aktionen</strong>.
+      </p>
+      {err && <div className="err">{err}</div>}
+      <PanelCard padded={false}>
+        {view.length === 0 ? (
+          <Empty title="Noch keine Logzeilen" text="Sobald FX schreibt oder die Konsole läuft, erscheinen Einträge hier." />
         ) : (
-          <div className="feed">
-            {connectish.slice(0, 40).map((row) => (
-              <article key={row.id}>
-                <time>{fmtFull(row.created)}</time>
-                <div><b>{row.user}</b><span>{row.action}</span><em>{row.detail}</em></div>
-              </article>
+          <div className="fx-log" ref={boxRef}>
+            {view.map((line) => (
+              <div key={line.id} className={`fx-log-line lvl-${line.level || 'info'}`}>
+                <time>{fmtLineTime(line.t)}</time>
+                <span className="fx-log-lvl">{line.level}</span>
+                <code>{line.text}</code>
+              </div>
             ))}
           </div>
         )}
-      </PanelCard>
-
-      <PanelCard padded={false}>
-        <div className="table-wrap">
-          <table className="o-table">
-            <thead><tr><th>Zeit</th><th>Wer</th><th>Aktion</th><th>Detail</th></tr></thead>
-            <tbody>
-              {view.slice(0, 200).map((row) => (
-                <tr key={row.id}>
-                  <td data-label="Zeit">{fmtFull(row.created)}</td>
-                  <td className="name" data-label="Wer">{row.user}</td>
-                  <td className="mono" data-label="Aktion">{row.action}</td>
-                  <td data-label="Detail">{row.detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </PanelCard>
     </Page>
   );

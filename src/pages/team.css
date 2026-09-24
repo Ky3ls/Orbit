@@ -1,0 +1,201 @@
+/* Team — modulare Karten */
+
+.tm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.tm-module-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.tm-module-head h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.tm-module-head .muted {
+  margin: 0;
+  font-size: 13px;
+}
+
+.tm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.08), transparent 42%),
+    var(--bg-2);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.tm-card:hover:not(:disabled) {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  transform: translateY(-1px);
+}
+
+.tm-card:disabled {
+  cursor: default;
+  opacity: 0.92;
+}
+
+.tm-card.off {
+  opacity: 0.65;
+}
+
+.tm-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.tm-card-top strong {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.tm-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tm-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tm-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tm-role {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.tm-role strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.tm-role ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tm-role li {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--muted);
+}
+
+.tm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.tm-perms h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.tm-perm-group {
+  margin: 0 0 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+}
+
+.tm-perm-group legend {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.tm-perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.tm-perm {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.tm-perm:hover {
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.tm-perm input {
+  grid-row: 1 / span 2;
+  margin-top: 3px;
+}
+
+.tm-perm span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tm-perm code {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .tm-grid {
+    grid-template-columns: 1fr;
+  }
+}

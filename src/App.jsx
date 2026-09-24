@@ -6,24 +6,20 @@ import Shell from './components/Shell.jsx';
 import { Mark } from './components/Ui.jsx';
 import Admins from './pages/Admins.jsx';
 import Audit from './pages/Audit.jsx';
-import Bans from './pages/Bans.jsx';
 import CfgEditor from './pages/CfgEditor.jsx';
 import Dashboard from './pages/Dashboard.jsx';
-import History from './pages/History.jsx';
 import Ingame from './pages/Ingame.jsx';
 import Install from './pages/Install.jsx';
 import Login from './pages/Login.jsx';
 import Database from './pages/Database.jsx';
 import Monitoring from './pages/Monitoring.jsx';
 import More from './pages/More.jsx';
-import PlayerDrops from './pages/PlayerDrops.jsx';
 import Players from './pages/Players.jsx';
 import Resources from './pages/Resources.jsx';
 import Schedule from './pages/Schedule.jsx';
 import ServerLog from './pages/ServerLog.jsx';
 import Settings from './pages/Settings.jsx';
 import Setup from './pages/Setup.jsx';
-import Whitelist from './pages/Whitelist.jsx';
 
 const PANEL_PREFIXES = [
   '/panel', '/monitoring', '/console', '/players', '/history', '/drops',
@@ -33,6 +29,11 @@ const PANEL_PREFIXES = [
 
 function isPanelPath(pathname) {
   return PANEL_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function PlayersRedirect({ filter }) {
+  const q = filter ? `?filter=${encodeURIComponent(filter)}` : '';
+  return <Navigate to={`/players${q}`} replace />;
 }
 
 export default function App() {
@@ -137,11 +138,11 @@ export default function App() {
           <Route path="panel" element={setupOk ? <Dashboard /> : <Navigate to="/setup" replace />} />
           <Route path="monitoring" element={setupOk ? <Monitoring /> : <Navigate to="/setup" replace />} />
           <Route path="console" element={<Navigate to="/panel" replace />} />
-          <Route path="players" element={setupOk ? <Players /> : <Navigate to="/setup" replace />} />
-          <Route path="history" element={setupOk ? <History /> : <Navigate to="/setup" replace />} />
-          <Route path="drops" element={setupOk ? <PlayerDrops /> : <Navigate to="/setup" replace />} />
-          <Route path="bans" element={setupOk ? <Bans /> : <Navigate to="/setup" replace />} />
-          <Route path="whitelist" element={setupOk ? <Whitelist user={session.user} /> : <Navigate to="/setup" replace />} />
+          <Route path="players" element={setupOk ? <Players user={session.user} /> : <Navigate to="/setup" replace />} />
+          <Route path="history" element={setupOk ? <PlayersRedirect /> : <Navigate to="/setup" replace />} />
+          <Route path="drops" element={setupOk ? <PlayersRedirect /> : <Navigate to="/setup" replace />} />
+          <Route path="bans" element={setupOk ? <PlayersRedirect filter="banned" /> : <Navigate to="/setup" replace />} />
+          <Route path="whitelist" element={setupOk ? <PlayersRedirect filter="allowlist" /> : <Navigate to="/setup" replace />} />
           <Route path="resources" element={setupOk ? <Resources /> : <Navigate to="/setup" replace />} />
           <Route path="schedule" element={setupOk ? <Schedule /> : <Navigate to="/setup" replace />} />
           <Route path="server-log" element={setupOk ? <ServerLog /> : <Navigate to="/setup" replace />} />

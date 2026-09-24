@@ -277,7 +277,9 @@ export async function handlePlatformApi(ctx) {
   }
 
   if (method === 'GET' && pathname === '/api/drops') {
-    if (!hasPerm(me, 'history')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hasPerm(me, 'players') && !hasPerm(me, 'history')) {
+      return json(res, 403, { error: 'Keine Berechtigung.' });
+    }
     const hours = Math.min(Number(url.searchParams.get('hours') || 24), 168);
     return json(res, 200, listDrops(db, hours));
   }
