@@ -70,9 +70,9 @@ export default function Monitoring() {
   return (
     <Page>
       <PageHeader
-        eyebrow="Host"
+        eyebrow={t('mon.eyebrow')}
         title={t('page.monitoring')}
-        description="Host-Last und Spielerzahl · Spielstatus vom FiveM-Endpunkt."
+        description={t('mon.desc')}
       />
       <div className="mon-page">
         <FxStatusStrip
@@ -85,7 +85,7 @@ export default function Monitoring() {
         <section className="gauges">
           <Gauge label="CPU" value={host.cpu} />
           <Gauge label="RAM" value={host.ramPct} tone="#8eb6ff" />
-          <Gauge label="Slots" value={playerPct} suffix="%" tone="#3dd68c" />
+          <Gauge label={t('settings.slots')} value={playerPct} suffix="%" tone="#3dd68c" />
         </section>
         <section className="mon-charts grid-2">
           <PanelCard className="mon-chart-card">
@@ -98,7 +98,7 @@ export default function Monitoring() {
               accessor={getCpu}
               yMax={100}
               formatY={pctAxis}
-              ariaLabel="CPU-Auslastung über Zeit"
+              ariaLabel={t('mon.cpuAria')}
             />
           </PanelCard>
           <PanelCard className="mon-chart-card">
@@ -112,13 +112,13 @@ export default function Monitoring() {
               color="#8eb6ff"
               yMax={100}
               formatY={pctAxis}
-              ariaLabel="RAM-Auslastung über Zeit"
+              ariaLabel={t('mon.ramAria')}
             />
           </PanelCard>
         </section>
         <PanelCard className="mon-chart-card">
           <div className="spread mon-chart-head">
-            <h3>Spieler</h3>
+            <h3>{t('mon.players')}</h3>
             <b className="mon-chart-val">{clients} / {maxClients || '–'}</b>
           </div>
           <AreaChart
@@ -127,19 +127,25 @@ export default function Monitoring() {
             color="#3dd68c"
             yMax={Math.max(maxClients, 1)}
             formatY={intAxis}
-            ariaLabel="Spielerzahl über Zeit"
+            ariaLabel={t('mon.playersAria')}
           />
         </PanelCard>
         {(state?.instances?.length > 0) && (
           <PanelCard padded={false}>
             <div style={{ padding: 16 }}>
-              <h3>Instanzen (Multi-Server)</h3>
-              <p className="muted" style={{ fontSize: 13 }}>Live-Probe pro Port — unabhängig vom „aktiven“ Panel-Server.</p>
+              <h3>{t('mon.instances')}</h3>
+              <p className="muted" style={{ fontSize: 13 }}>{t('mon.instancesHint')}</p>
             </div>
             <div className="table-wrap">
               <table className="o-table">
                 <thead>
-                  <tr><th>Name</th><th>Port</th><th>FX-Prozess</th><th>FiveM</th><th>Spieler</th></tr>
+                  <tr>
+                    <th>{t('common.name')}</th>
+                    <th>{t('common.port')}</th>
+                    <th>{t('mon.fxProcess')}</th>
+                    <th>{t('mon.fivem')}</th>
+                    <th>{t('mon.players')}</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {state.instances.map((i) => (
@@ -147,7 +153,7 @@ export default function Monitoring() {
                       <td>{i.name}{i.isActive ? ' ★' : ''}</td>
                       <td className="mono">{i.port}</td>
                       <td>{i.supervisorPhase}</td>
-                      <td>{i.online ? <span className="badge ok">online</span> : <span className="badge">offline</span>}</td>
+                      <td>{i.online ? <span className="badge ok">{t('status.online')}</span> : <span className="badge">{t('status.offline')}</span>}</td>
                       <td>{i.clients}/{i.maxClients}</td>
                     </tr>
                   ))}

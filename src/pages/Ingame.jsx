@@ -36,8 +36,8 @@ export default function Ingame({ user }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setStatus('System-Resource orbit — Admin-Menü.');
-  }, []);
+    setStatus(t('ingame.status'));
+  }, [t]);
 
   async function hotDeploy() {
     setErr('');
@@ -57,22 +57,21 @@ export default function Ingame({ user }) {
       <PageHeader
         eyebrow="Ingame"
         title={t('page.ingame')}
-        description="Eigenes Admin-Menü als System-Resource — Orbit-Design, Orbit-Befehle."
+        description={t('ingame.desc')}
       />
       {err && <div className="err">{err}</div>}
 
       <PanelCard>
         <p className="muted" style={{ marginTop: 0 }}>
-          Öffnen: <b>/orbit</b> · <b>/orbitmenu</b>
-          {' '}(Keybind unter FiveM → Tastaturbelegung → Orbit Admin-Menü)
+          {t('ingame.open')}
+          {' '}{t('ingame.bind')}
         </p>
         <p className="muted" style={{ fontSize: 13 }}>
-          Owner/Admin aus dem Panel: beim Joinen wird die License automatisch verknüpft — kein extra Cfx-Setup nötig.
-          Rechte kommen aus der Team-Rolle.
+          {t('ingame.autoLink')}
         </p>
         {(user?.role === 'owner' || user?.role === 'admin') && (
           <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 8 }} disabled={busy} onClick={hotDeploy}>
-            {busy ? '…' : 'Menü jetzt aktualisieren (ohne FX-Neustart)'}
+            {busy ? '…' : t('ingame.refresh')}
           </button>
         )}
         {status && <p className="banner" style={{ marginTop: 12 }}>{status}</p>}

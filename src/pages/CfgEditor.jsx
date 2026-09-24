@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Page, PageHeader, Split } from '../components/Ui.jsx';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 function formatBytes(n) {
   if (!n && n !== 0) return '';
@@ -27,6 +28,7 @@ function findMatches(text, query, caseSensitive) {
 }
 
 export default function CfgEditor() {
+  const { t } = useI18n();
   const [files, setFiles] = useState([]);
   const [root, setRoot] = useState('');
   const [activeFile, setActiveFile] = useState('');
@@ -108,7 +110,7 @@ export default function CfgEditor() {
   }
 
   async function reloadAll() {
-    if (dirty && !window.confirm('Ungespeicherte Änderungen verwerfen?')) return;
+    if (dirty && !window.confirm(t('cfg.discard'))) return;
     setErr('');
     setMsg('');
     try {
@@ -123,7 +125,7 @@ export default function CfgEditor() {
 
   async function selectFile(rel) {
     if (rel === activeFile) return;
-    if (dirty && !window.confirm('Ungespeicherte Änderungen verwerfen?')) return;
+    if (dirty && !window.confirm(t('cfg.discard'))) return;
     await loadFile(rel);
   }
 
@@ -221,19 +223,19 @@ export default function CfgEditor() {
   const aside = (
     <div className="cfg-side">
       <div className="cfg-side-head">
-        <span className="cfg-side-title">CFG-Dateien</span>
+        <span className="cfg-side-title">{t('cfg.files')}</span>
       </div>
       <input
         className="cfg-side-filter"
         type="search"
-        placeholder="Dateien filtern…"
+        placeholder={t('cfg.filterPh')}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        aria-label="CFG-Dateien filtern"
+        aria-label={t('cfg.filterAria')}
       />
-      <div className="cfg-side-list" role="listbox" aria-label="CFG-Dateien">
+      <div className="cfg-side-list" role="listbox" aria-label={t('cfg.files')}>
         {filteredFiles.length === 0 && (
-          <p className="cfg-side-empty">{loading ? 'Lädt…' : 'Keine .cfg gefunden'}</p>
+          <p className="cfg-side-empty">{loading ? t('common.loading') : t('cfg.empty')}</p>
         )}
         {filteredFiles.map((f) => (
           <button
@@ -248,14 +250,14 @@ export default function CfgEditor() {
             <span className="cfg-side-item-name">{f.name}</span>
             {f.rel !== f.name && <span className="cfg-side-item-path">{f.rel}</span>}
             <span className="cfg-side-item-meta">
-              {f.primary ? 'aktiv' : formatBytes(f.size)}
+              {f.primary ? t('cfg.active') : formatBytes(f.size)}
             </span>
           </button>
         ))}
       </div>
       {root && (
         <div className="cfg-side-foot" title={root}>
-          <span className="muted">{files.length} Datei{files.length === 1 ? '' : 'en'}</span>
+          <span className="muted">{files.length === 1 ? t('cfg.fileCount', { n: files.length }) : t('cfg.fileCountPlural', { n: files.length })}</span>
         </div>
       )}
     </div>
@@ -264,12 +266,12 @@ export default function CfgEditor() {
   return (
     <Page className="cfg-page">
       <PageHeader
-        eyebrow="Server"
-        title="CFG"
+        eyebrow={t('cfg.eyebrow')}
+        title={t('cfg.title')}
         description={
           activeFile
-            ? `${activeFile}${meta && !meta.writable ? ' · schreibgeschützt' : ''}${meta?.primary ? ` · ${meta.resources} ensures` : ''}${dirty ? ' · ungespeichert' : ''}`
-            : 'Server-Konfiguration'
+            ? `${activeFile}${meta && !meta.writable ? ` · ${t('cfg.readonly')}` : ''}${meta?.primary ? ` · ${t('cfg.ensures', { n: meta.resources })}` : ''}${dirty ? ` · ${t('cfg.unsaved')}` : ''}`
+            : t('cfg.desc')
         }
         actions={(
           <div className="cfg-head-actions">
@@ -286,7 +288,7 @@ export default function CfgEditor() {
             <button
               className="btn btn-sm"
               type="button"
-              title="Dateiliste neu scannen und aktuelle Datei neu laden"
+              title={t('cfg.refreshTitle')}
               onClick={() => reloadAll()}
               disabled={loading}
             >
@@ -308,7 +310,7 @@ export default function CfgEditor() {
             <div className="cfg-toolbar-file">
               <span className="cfg-file-badge">{activeFile || '—'}</span>
               {meta?.primary && <span className="cfg-pill">server.cfg</span>}
-              {dirty && <span className="cfg-pill dirty">geändert</span>}
+              {dirty && <span className="cfg-pill dirty">{t('cfg.dirty')}</span>}
             </div>
             {(searchOpen || search) && (
               <div className="cfg-find">
@@ -316,7 +318,7 @@ export default function CfgEditor() {
                   ref={searchRef}
                   className="cfg-find-input"
                   type="search"
-                  placeholder="In Datei suchen…"
+                  placeholder={t('cfg.findPh')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => {
@@ -325,16 +327,16 @@ export default function CfgEditor() {
                       findNext(e.shiftKey ? -1 : 1);
                     }
                   }}
-                  aria-label="In CFG suchen"
+                  aria-label={t('cfg.findAria')}
                 />
                 <span className="cfg-find-count">
                   {search
                     ? (matches.length ? `${matchIdx + 1}/${matches.length}` : '0')
                     : ''}
                 </span>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => findNext(-1)} disabled={!matches.length} aria-label="Vorheriger Treffer">↑</button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => findNext(1)} disabled={!matches.length} aria-label="Nächster Treffer">↓</button>
-                <label className="cfg-find-case" title="Groß-/Kleinschreibung">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => findNext(-1)} disabled={!matches.length} aria-label={t('cfg.findPrev')}>↑</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => findNext(1)} disabled={!matches.length} aria-label={t('cfg.findNext')}>↓</button>
+                <label className="cfg-find-case" title={t('cfg.findCase')}>
                   <input
                     type="checkbox"
                     checked={caseSensitive}
@@ -346,7 +348,7 @@ export default function CfgEditor() {
                   type="button"
                   className="btn btn-ghost btn-sm"
                   onClick={() => { setSearch(''); setSearchOpen(false); }}
-                  aria-label="Suche schließen"
+                  aria-label={t('cfg.findClose')}
                 >
                   ✕
                 </button>
@@ -354,7 +356,7 @@ export default function CfgEditor() {
             )}
             <div className="cfg-toolbar-actions">
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving || !dirty}>
-                {saving ? 'Speichert…' : 'Speichern'}
+                {saving ? t('cfg.saving') : t('common.save')}
               </button>
             </div>
           </div>
@@ -365,10 +367,10 @@ export default function CfgEditor() {
             onChange={onContentChange}
             spellCheck={false}
             disabled={loading && !content}
-            aria-label={`Inhalt von ${activeFile || 'CFG'}`}
+            aria-label={t('cfg.contentAria', { file: activeFile || 'CFG' })}
           />
           <div className="cfg-footer">
-            <span className="muted">Ctrl+F Suche · Ctrl+S Speichern · Secrets bleiben redacted</span>
+            <span className="muted">{t('cfg.footer')}</span>
           </div>
         </form>
       </Split>

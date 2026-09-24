@@ -6,6 +6,7 @@ import { stripAnsi } from '../consoleFormat.js';
 import { fmtTime } from '../format.js';
 import { useAppearance } from '../hooks/useAppearance.js';
 import { useFxStatus } from '../hooks/useFxStatus.js';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const MIN_H = 220;
 const MAX_H = 620;
@@ -28,6 +29,7 @@ export default function LiveConsole({
   height,
   onHeight,
 }) {
+  const { t } = useI18n();
   const active = variant === 'page' || variant === 'side' || variant === 'cockpit' || open;
   const fx = useFxStatus(active ? 8000 : 60_000);
   const [prefs] = useAppearance();
@@ -72,7 +74,6 @@ export default function LiveConsole({
       if (!Array.isArray(incoming) || !incoming.length) return;
       consoleBuf.current.push(...incoming);
       if (consoleRaf.current) return;
-      // Sofort flushen (queueMicrotask) — RAF kann hinter Idle-Frames hängen
       consoleRaf.current = 1;
       queueMicrotask(() => {
         consoleRaf.current = 0;
@@ -200,18 +201,18 @@ export default function LiveConsole({
       className={rootClass}
       style={variant === 'drawer' ? { height: h } : undefined}
       role={variant === 'drawer' ? 'dialog' : 'region'}
-      aria-label="Live-Konsole"
+      aria-label={t('console.aria')}
     >
       {variant === 'drawer' && (
-        <button type="button" className="lc-resize" aria-label="Höhe ändern" onPointerDown={onDragStart} />
+        <button type="button" className="lc-resize" aria-label={t('console.resize')} onPointerDown={onDragStart} />
       )}
       <header className="lc-head">
         <div className="lc-title">
           <span className={`lc-pulse${active ? ' on' : ''}`} aria-hidden="true" />
           <div>
-            <strong>Live-Konsole</strong>
+            <strong>{t('console.live')}</strong>
             <span className="lc-sub">
-              {fx.fxCommandReady ? 'Stream aktiv · Befehle werden ausgeführt' : 'Nur Log-Stream · Steuerung nicht verbunden'}
+              {fx.fxCommandReady ? t('console.streamReady') : t('console.streamOnly')}
             </span>
           </div>
         </div>
@@ -221,9 +222,9 @@ export default function LiveConsole({
             style={{ maxWidth: 160 }}
             value={targetId}
             onChange={(e) => setConsoleTarget(e.target.value)}
-            title="Konsolen-Zielinstanz"
+            title={t('console.targetTitle')}
           >
-            <option value="">Aktiver Server</option>
+            <option value="">{t('console.activeServer')}</option>
             {targets.map((s) => (
               <option key={s.id} value={s.id}>{s.name} :{s.port}</option>
             ))}
@@ -245,8 +246,8 @@ export default function LiveConsole({
         <div className="lc-actions">
           {(variant === 'drawer' || variant === 'side') && (
             <>
-              <Link className="btn btn-sm" to="/panel" onClick={onClose}>Cockpit</Link>
-              <button type="button" className="btn btn-sm" onClick={onClose}>Schließen</button>
+              <Link className="btn btn-sm" to="/panel" onClick={onClose}>{t('console.cockpit')}</Link>
+              <button type="button" className="btn btn-sm" onClick={onClose}>{t('common.close')}</button>
             </>
           )}
           <button
@@ -254,22 +255,22 @@ export default function LiveConsole({
             className={`btn btn-sm lc-auto${autoScroll ? ' on' : ''}`}
             onClick={toggleAutoScroll}
             aria-pressed={autoScroll}
-            title={autoScroll ? 'Auto-Scroll an — Klick zum Pausieren' : 'Auto-Scroll aus — Klick für sticky bottom'}
+            title={autoScroll ? t('console.autoOn') : t('console.autoOff')}
           >
-            Auto
+            {t('console.auto')}
           </button>
           {variant !== 'cockpit' && (
-            <button type="button" className="btn btn-sm" onClick={() => setLines([])}>Leeren</button>
+            <button type="button" className="btn btn-sm" onClick={() => setLines([])}>{t('console.clear')}</button>
           )}
           {variant === 'cockpit' && (
-            <button type="button" className="btn btn-sm" onClick={() => setLines([])}>CLR</button>
+            <button type="button" className="btn btn-sm" onClick={() => setLines([])}>{t('console.clr')}</button>
           )}
         </div>
       </header>
       <div className="lc-term" ref={box} onScroll={onScroll}>
         {visible.length === 0 && (
           <div className="lc-empty">
-            {lines.length ? 'Keine Zeilen — Filter aktiv (Aussehen).' : 'Warte auf FX-Ausgabe…'}
+            {lines.length ? t('console.emptyFilter') : t('console.emptyWait')}
           </div>
         )}
         {visible.map((line) => (
@@ -290,7 +291,7 @@ export default function LiveConsole({
         <input
           ref={inputRef}
           className="mono"
-          placeholder={fx.fxCommandReady ? 'Befehl — Pfeil hoch/runter für Verlauf' : 'Konsole nicht verbunden'}
+          placeholder={fx.fxCommandReady ? t('console.phReady') : t('console.phOffline')}
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={onKeyDown}
@@ -299,7 +300,7 @@ export default function LiveConsole({
           disabled={!fx.fxCommandReady}
         />
         <button className="btn btn-primary btn-sm" type="submit" disabled={sending || !fx.fxCommandReady}>
-          {sending ? '…' : 'Senden'}
+          {sending ? '…' : t('console.send')}
         </button>
       </form>
     </div>

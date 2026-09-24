@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 /** FX-Builds, Multi-Server, Prod — Host-Einstellungen. */
 export default function SettingsHostPanel({ initialTab = 'servers', onMessage, onError }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState(initialTab);
   const [artifacts, setArtifacts] = useState({ builds: [], installed: [], recommended: '', fxServerRoot: '' });
   const [servers, setServers] = useState([]);
@@ -59,7 +61,7 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
     try {
       await api('/api/servers', { method: 'POST', body: { name: newName.trim() } });
       setNewName('');
-      onMessage?.('Server angelegt und aktiviert.');
+      onMessage?.(t('host.created'));
       load();
     } catch (e) {
       onError?.(e.message);
@@ -70,7 +72,7 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
 
   async function activate(id) {
     await api('/api/servers/activate', { method: 'POST', body: { id } });
-    onMessage?.('Server aktiviert.');
+    onMessage?.(t('host.activated'));
     load();
   }
 
@@ -89,17 +91,17 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
   }
 
   const tabs = [
-    { id: 'servers', label: 'Instanzen' },
-    { id: 'artifacts', label: 'FX Builds' },
-    { id: 'prod', label: 'Prod' },
+    { id: 'servers', label: t('host.tab.servers') },
+    { id: 'artifacts', label: t('host.tab.artifacts') },
+    { id: 'prod', label: t('host.tab.prod') },
   ];
 
   return (
     <div className="st-host-panel">
       <div className="db-tabs" style={{ marginBottom: 16 }}>
-        {tabs.map((t) => (
-          <button key={t.id} type="button" className={`db-tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.label}
+        {tabs.map((tabItem) => (
+          <button key={tabItem.id} type="button" className={`db-tab${tab === tabItem.id ? ' active' : ''}`} onClick={() => setTab(tabItem.id)}>
+            {tabItem.label}
           </button>
         ))}
       </div>
@@ -112,24 +114,24 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
             Neuer Server: Name eingeben → Anlegen → Start.
           </p>
           <div className="row" style={{ gap: 8, marginBottom: 12 }}>
-            <input className="search grow" placeholder="Neuer Servername…" value={newName} onChange={(e) => setNewName(e.target.value)} />
-            <button type="button" className="btn btn-primary btn-sm" disabled={busy || newName.trim().length < 2} onClick={createServer}>Anlegen</button>
+            <input className="search grow" placeholder={t('host.newNamePh')} value={newName} onChange={(e) => setNewName(e.target.value)} />
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy || newName.trim().length < 2} onClick={createServer}>{t('common.create')}</button>
           </div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {servers.map((s) => (
               <li key={s.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
                 <span className="mono">{s.name}</span>
                 <span className="muted" style={{ fontSize: 12 }}>:{s.port}</span>
-                {s.is_active ? <span className="badge ok">aktiv</span> : (
-                  <button type="button" className="btn btn-sm" onClick={() => activate(s.id)}>Aktivieren</button>
+                {s.is_active ? <span className="badge ok">{t('common.active')}</span> : (
+                  <button type="button" className="btn btn-sm" onClick={() => activate(s.id)}>{t('host.activate')}</button>
                 )}
                 {s.supervisorPhase === 'running' || s.supervisorPhase === 'starting' ? (
                   <span className="badge ok">{s.supervisorPhase}{s.pid ? ` #${s.pid}` : ''}</span>
                 ) : (
-                  <span className="badge">gestoppt</span>
+                  <span className="badge">{t('host.stopped')}</span>
                 )}
-                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => serverControl(s.id, 'start')}>Start</button>
-                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => serverControl(s.id, 'stop')}>Stop</button>
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => serverControl(s.id, 'start')}>{t('ctl.start')}</button>
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => serverControl(s.id, 'stop')}>{t('ctl.stop')}</button>
                 <span className="muted" style={{ fontSize: 12 }}>{s.data_path}</span>
               </li>
             ))}
@@ -147,12 +149,12 @@ export default function SettingsHostPanel({ initialTab = 'servers', onMessage, o
           )}
           <div className="row" style={{ gap: 8, marginBottom: 12 }}>
             <select value={build} onChange={(e) => setBuild(e.target.value)}>
-              <option value="">Build wählen…</option>
+              <option value="">{t('host.pickBuild')}</option>
               {(artifacts.builds || []).map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
-            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={installBuild}>Download & Install</button>
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={installBuild}>{t('host.install')}</button>
           </div>
-          <p className="muted">Installiert:</p>
+          <p className="muted">{t('host.installed')}</p>
           <ul style={{ listStyle: 'none', padding: 0 }}>
             {(artifacts.installed || []).map((a) => (
               <li key={a.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>

@@ -4,13 +4,13 @@ import { Badge, Empty, Page, PageHeader } from '../components/Ui.jsx';
 import './schedule.css';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
-const PRESETS = [
-  { label: 'Morgen-Neustart', hhmm: '06:00' },
-  { label: 'Mittag-Neustart', hhmm: '12:00' },
-  { label: 'Nacht-Neustart', hhmm: '04:00' },
+const PRESET_DEFS = [
+  { labelKey: 'sch.preset.morning', hhmm: '06:00' },
+  { labelKey: 'sch.preset.noon', hhmm: '12:00' },
+  { labelKey: 'sch.preset.night', hhmm: '04:00' },
 ];
 
-function nextRunHint(hhmm) {
+function nextRunHint(hhmm, t) {
   if (!/^\d{2}:\d{2}$/.test(hhmm || '')) return '';
   const [h, m] = hhmm.split(':').map(Number);
   const now = new Date();
@@ -20,18 +20,22 @@ function nextRunHint(hhmm) {
   const diff = next - now;
   const hrs = Math.floor(diff / 3_600_000);
   const mins = Math.floor((diff % 3_600_000) / 60_000);
-  if (hrs >= 24) return 'morgen';
-  if (hrs > 0) return `in ${hrs}h ${mins}m`;
-  return `in ${mins}m`;
+  if (hrs >= 24) return t('sch.tomorrow');
+  if (hrs > 0) return t('sch.inHm', { h: hrs, m: mins });
+  return t('sch.inM', { m: mins });
 }
 
 export default function Schedule() {
   const { t } = useI18n();
   const [jobs, setJobs] = useState([]);
-  const [label, setLabel] = useState('Server-Neustart');
+  const [label, setLabel] = useState('');
   const [hhmm, setHhmm] = useState('06:00');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setLabel(t('sch.defaultLabel'));
+  }, [t]);
 
   function load() {
     api('/api/schedule')
@@ -56,7 +60,7 @@ export default function Schedule() {
     setErr('');
     try {
       await api('/api/schedule', { method: 'POST', body: { label: label.trim(), hhmm } });
-      setLabel('Server-Neustart');
+      setLabel(t('sch.defaultLabel'));
       load();
     } catch (error) {
       setErr(error.message);
@@ -85,74 +89,74 @@ export default function Schedule() {
   }
 
   function applyPreset(p) {
-    setLabel(p.label);
+    setLabel(t(p.labelKey));
     setHhmm(p.hhmm);
   }
 
   return (
     <Page className="sch-page">
       <PageHeader
-        eyebrow="Betrieb"
+        eyebrow={t('sch.eyebrow')}
         title={t('page.schedule')}
-        description="Geplante Server-Neustarts zur gewählten Uhrzeit — wenn die Server-Steuerung aktiv ist."
+        description={t('sch.desc')}
       />
 
       {err ? <div className="err sch-err">{err}</div> : null}
 
-      <div className="sch-stats" aria-label="Übersicht">
+      <div className="sch-stats" aria-label={t('common.overview')}>
         <div className="sch-stat">
-          <span>Aktiv</span>
+          <span>{t('sch.active')}</span>
           <strong>{active}</strong>
         </div>
         <div className="sch-stat">
-          <span>Gesamt</span>
+          <span>{t('sch.total')}</span>
           <strong>{jobs.length}</strong>
         </div>
         <div className="sch-stat sch-stat-wide">
-          <span>Als Nächstes</span>
+          <span>{t('sch.next')}</span>
           <strong>
             {upcoming
               ? `${upcoming.hhmm} · ${upcoming.label}`
               : '—'}
           </strong>
-          {upcoming ? <small>{nextRunHint(upcoming.hhmm)}</small> : null}
+          {upcoming ? <small>{nextRunHint(upcoming.hhmm, t)}</small> : null}
         </div>
       </div>
 
       <div className="sch-layout">
         <section className="sch-card sch-create" aria-labelledby="sch-create-title">
           <header className="sch-card-head">
-            <h2 id="sch-create-title">Neue Automation</h2>
-            <p>Täglich zur Minute — Orbit startet den Server neu.</p>
+            <h2 id="sch-create-title">{t('sch.createTitle')}</h2>
+            <p>{t('sch.createLead')}</p>
           </header>
 
-          <div className="sch-presets" role="group" aria-label="Vorlagen">
-            {PRESETS.map((p) => (
+          <div className="sch-presets" role="group" aria-label={t('sch.presets')}>
+            {PRESET_DEFS.map((p) => (
               <button
-                key={p.hhmm + p.label}
+                key={p.hhmm + p.labelKey}
                 type="button"
                 className="sch-preset"
                 onClick={() => applyPreset(p)}
               >
                 <b>{p.hhmm}</b>
-                <span>{p.label}</span>
+                <span>{t(p.labelKey)}</span>
               </button>
             ))}
           </div>
 
           <form className="sch-form" onSubmit={add}>
             <label className="sch-field">
-              <span>Bezeichnung</span>
+              <span>{t('sch.label')}</span>
               <input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="z. B. Nacht-Neustart"
+                placeholder={t('sch.labelPh')}
                 required
                 minLength={2}
               />
             </label>
             <label className="sch-field sch-field-time">
-              <span>Uhrzeit</span>
+              <span>{t('sch.time')}</span>
               <input
                 type="time"
                 value={hhmm}
@@ -165,21 +169,21 @@ export default function Schedule() {
               type="submit"
               disabled={busy || label.trim().length < 2}
             >
-              {busy ? '…' : 'Automation anlegen'}
+              {busy ? '…' : t('sch.submit')}
             </button>
           </form>
         </section>
 
         <section className="sch-card sch-list" aria-labelledby="sch-list-title">
           <header className="sch-card-head">
-            <h2 id="sch-list-title">Geplante Jobs</h2>
-            <p>{jobs.length ? `${active} aktiv von ${jobs.length}` : 'Noch keine Einträge'}</p>
+            <h2 id="sch-list-title">{t('sch.listTitle')}</h2>
+            <p>{jobs.length ? t('sch.listSummary', { active, total: jobs.length }) : t('sch.listEmpty')}</p>
           </header>
 
           {jobs.length === 0 ? (
             <Empty
-              title="Keine Automationen"
-              text="Lege links eine Uhrzeit fest — z. B. 06:00 für den Morgen-Neustart."
+              title={t('sch.emptyTitle')}
+              text={t('sch.emptyText')}
             />
           ) : (
             <ul className="sch-jobs">
@@ -187,18 +191,18 @@ export default function Schedule() {
                 <li key={job.id} className={`sch-job${job.enabled ? ' is-on' : ''}`}>
                   <div className="sch-job-time" aria-hidden="true">
                     <b>{job.hhmm}</b>
-                    {job.enabled ? <small>{nextRunHint(job.hhmm)}</small> : <small>pausiert</small>}
+                    {job.enabled ? <small>{nextRunHint(job.hhmm, t)}</small> : <small>{t('common.paused')}</small>}
                   </div>
                   <div className="sch-job-body">
                     <strong>{job.label}</strong>
-                    <Badge tone={job.enabled ? 'ok' : ''}>{job.enabled ? 'aktiv' : 'aus'}</Badge>
+                    <Badge tone={job.enabled ? 'ok' : ''}>{job.enabled ? t('sch.badgeOn') : t('sch.badgeOff')}</Badge>
                   </div>
                   <div className="sch-job-actions">
                     <button type="button" className="btn btn-sm" onClick={() => toggle(job)}>
-                      {job.enabled ? 'Pausieren' : 'Aktivieren'}
+                      {job.enabled ? t('sch.pause') : t('sch.enable')}
                     </button>
                     <button type="button" className="btn btn-sm btn-danger" onClick={() => remove(job)}>
-                      Löschen
+                      {t('common.delete')}
                     </button>
                   </div>
                 </li>

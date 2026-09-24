@@ -30,18 +30,18 @@ function playerIds(p) {
 }
 
 const FILTERS = [
-  { id: 'all', label: 'Alle' },
-  { id: 'online', label: 'Online' },
-  { id: 'offline', label: 'Offline' },
-  { id: 'banned', label: 'Gebannt' },
-  { id: 'allowlist', label: 'Allowlist' },
+  { id: 'all', labelKey: 'players.filter.all' },
+  { id: 'online', labelKey: 'players.filter.online' },
+  { id: 'offline', labelKey: 'players.filter.offline' },
+  { id: 'banned', labelKey: 'players.filter.banned' },
+  { id: 'allowlist', labelKey: 'players.filter.allowlist' },
 ];
 
 const SECTIONS = [
-  { id: 'info', label: 'Übersicht' },
-  { id: 'ids', label: 'Identifier' },
-  { id: 'history', label: 'Verlauf' },
-  { id: 'ban', label: 'Sperre' },
+  { id: 'info', labelKey: 'players.section.info' },
+  { id: 'ids', labelKey: 'players.section.ids' },
+  { id: 'history', labelKey: 'players.section.history' },
+  { id: 'ban', labelKey: 'players.section.ban' },
 ];
 
 const intAxis = (v) => `${Math.round(v)}`;
@@ -237,24 +237,24 @@ export default function Players({ user }) {
   const durationList = useMemo(() => {
     const list = (presets.length ? presets : BAN_DURATION_PRESETS).map((pr) => ({
       id: pr.id,
-      label: pr.label,
+      label: pr.labelKey ? t(pr.labelKey) : (pr.label || banDurationLabel(pr.id, t)),
     }));
-    list.push({ id: 'custom', label: 'Benutzerdefiniert' });
+    list.push({ id: 'custom', label: t('players.custom') });
     return list;
-  }, [presets]);
+  }, [presets, t]);
   const templateList = useMemo(() => {
     const tpls = detail?.banTemplates || [];
-    return tpls.map((t) => ({
-      id: String(t.id),
-      label: t.reason,
-      hint: banDurationLabel(t.duration_id),
-      reason: t.reason,
-      durationId: t.duration_id,
+    return tpls.map((tpl) => ({
+      id: String(tpl.id),
+      label: tpl.reason,
+      hint: banDurationLabel(tpl.duration_id, t),
+      reason: tpl.reason,
+      durationId: tpl.duration_id,
     }));
-  }, [detail?.banTemplates]);
+  }, [detail?.banTemplates, t]);
   const durationLabel = useMemo(
-    () => durationList.find((d) => d.id === durationId)?.label || banDurationLabel(durationId),
-    [durationList, durationId],
+    () => durationList.find((d) => d.id === durationId)?.label || banDurationLabel(durationId, t),
+    [durationList, durationId, t],
   );
 
   async function saveNote() {
@@ -283,10 +283,10 @@ export default function Players({ user }) {
 
   async function act(action) {
     if (!p?.online || !p.serverId) {
-      setErr('Spieler ist offline.');
+      setErr(t('players.errOffline'));
       return;
     }
-    if (reason.length < 2) { setErr('Bitte einen Grund angeben.'); return; }
+    if (reason.length < 2) { setErr(t('players.errReason')); return; }
     setBusy(true);
     setErr('');
     try {
@@ -301,7 +301,7 @@ export default function Players({ user }) {
   }
 
   async function applyBan() {
-    if (!p || reason.length < 3) { setErr('Ban-Grund mind. 3 Zeichen.'); return; }
+    if (!p || reason.length < 3) { setErr(t('players.errBanReason')); return; }
     setBusy(true);
     setErr('');
     try {
@@ -371,20 +371,20 @@ export default function Players({ user }) {
   return (
     <Page>
       <PageHeader
-        eyebrow="Spieler-Hub"
+        eyebrow={t('players.eyebrow')}
         title={t('page.players')}
-        description={`${onlineCount} online · ${Math.max(0, totalKnown - onlineCount)} offline · Drops 72h: ${dropTotal}`}
+        description={t('players.desc', { online: onlineCount, offline: Math.max(0, totalKnown - onlineCount), drops: dropTotal })}
         actions={(
-          <Badge tone={data.online ? 'ok' : 'bad'}>{onlineCount} live</Badge>
+          <Badge tone={data.online ? 'ok' : 'bad'}>{t('players.live', { n: onlineCount })}</Badge>
         )}
       />
 
-      <section className="pl-hub-charts" aria-label="Trends">
+      <section className="pl-hub-charts" aria-label={t('common.trends')}>
         <PanelCard className="pl-hub-chart">
           <div className="spread mon-chart-head">
             <div>
-              <h3>Spieleranzahl</h3>
-              <p className="pl-hub-hint">Live-Trend (Monitoring-Samples)</p>
+              <h3>{t('players.count')}</h3>
+              <p className="pl-hub-hint">{t('players.countHint')}</p>
             </div>
             <b className="mon-chart-val">{onlineCount} / {maxClients}</b>
           </div>
@@ -394,14 +394,14 @@ export default function Players({ user }) {
             color="#ff7a1a"
             yMax={maxClients}
             formatY={intAxis}
-            ariaLabel="Spieleranzahl über Zeit"
+            ariaLabel={t('players.countAria')}
           />
         </PanelCard>
         <PanelCard className="pl-hub-chart">
           <div className="spread mon-chart-head">
             <div>
-              <h3>Player Drops</h3>
-              <p className="pl-hub-hint">Crashes & Disconnects · 72h</p>
+              <h3>{t('players.drops')}</h3>
+              <p className="pl-hub-hint">{t('players.dropsHint')}</p>
             </div>
             <b className="mon-chart-val">{dropTotal}</b>
           </div>
@@ -410,7 +410,7 @@ export default function Players({ user }) {
             accessor={seriesDrops}
             color="#e85d4a"
             formatY={intAxis}
-            ariaLabel="Player Drops über Zeit"
+            ariaLabel={t('players.dropsAria')}
           />
           {(drops.stats || []).length > 0 && (
             <div className="pl-drop-tags">
@@ -435,13 +435,13 @@ export default function Players({ user }) {
               className={`pl-filter${filter === f.id ? ' active' : ''}`}
               onClick={() => setHubFilter(f.id)}
             >
-              {f.label}
+              {t(f.labelKey)}
             </button>
           ))}
         </div>
         <input
           className="search grow"
-          placeholder={filter === 'banned' ? 'Ban suchen…' : filter === 'allowlist' ? 'Allowlist suchen…' : 'Name oder Identifier…'}
+          placeholder={filter === 'banned' ? t('players.searchBan') : filter === 'allowlist' ? t('players.searchWl') : t('players.search')}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {
@@ -454,10 +454,10 @@ export default function Players({ user }) {
         />
         {!['banned', 'allowlist'].includes(filter) && (
           <select value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="status">Status</option>
-            <option value="last">Zuletzt</option>
-            <option value="play">Spielzeit</option>
-            <option value="name">Name</option>
+            <option value="status">{t('players.sort.status')}</option>
+            <option value="last">{t('players.sort.last')}</option>
+            <option value="play">{t('players.sort.play')}</option>
+            <option value="name">{t('players.sort.name')}</option>
           </select>
         )}
         <button
@@ -470,7 +470,7 @@ export default function Players({ user }) {
             loadDrops(true);
           }}
         >
-          Aktualisieren
+          {t('common.refresh')}
         </button>
       </div>
 
@@ -480,19 +480,19 @@ export default function Players({ user }) {
         <PanelCard padded={false} className="pl-manage">
           <div className="table-wrap">
             {banRows.length === 0 ? (
-              <Empty title="Keine aktiven Bans" text="Gebannte Spieler erscheinen hier — Unban direkt aus der Liste." />
+              <Empty title={t('players.emptyBans')} text={t('players.emptyBansText')} />
             ) : (
               <table className="o-table">
                 <thead>
-                  <tr><th>Name</th><th>Identifier</th><th>Grund</th><th>Bis</th><th></th></tr>
+                  <tr><th>{t('common.name')}</th><th>{t('common.identifier')}</th><th>{t('common.reason')}</th><th>{t('common.until')}</th><th></th></tr>
                 </thead>
                 <tbody>
                   {banRows.map((ban) => (
                     <tr key={ban.id}>
-                      <td data-label="Name">{ban.name || '–'}</td>
-                      <td className="mono" data-label="Identifier">{ban.identifier}</td>
-                      <td data-label="Grund">{ban.reason}</td>
-                      <td data-label="Bis">{ban.expires ? fmtFull(ban.expires) : 'Permanent'}</td>
+                      <td data-label={t('common.name')}>{ban.name || '–'}</td>
+                      <td className="mono" data-label={t('common.identifier')}>{ban.identifier}</td>
+                      <td data-label={t('common.reason')}>{ban.reason}</td>
+                      <td data-label={t('common.until')}>{ban.expires ? fmtFull(ban.expires) : t('common.permanent')}</td>
                       <td className="td-actions" data-label="">
                         {canRevoke && (
                           <button className="btn btn-sm" type="button" disabled={busy} onClick={() => revokeBan(ban.id)}>
@@ -514,19 +514,19 @@ export default function Players({ user }) {
               <form className="row" onSubmit={addWl}>
                 <input
                   className="grow"
-                  placeholder="license:… / discord:… / steam:…"
+                  placeholder={t('players.wlPh')}
                   value={wlForm.identifier}
                   onChange={(e) => setWlForm({ ...wlForm, identifier: e.target.value })}
                   required
                 />
                 <input
                   className="grow"
-                  placeholder="Notiz"
+                  placeholder={t('common.note')}
                   value={wlForm.note}
                   onChange={(e) => setWlForm({ ...wlForm, note: e.target.value })}
                 />
                 <button className="btn btn-primary" style={{ width: 'auto' }} type="submit" disabled={busy}>
-                  Hinzufügen
+                  {t('common.add')}
                 </button>
               </form>
             </PanelCard>
@@ -534,23 +534,23 @@ export default function Players({ user }) {
           <PanelCard padded={false}>
             <div className="table-wrap">
               {wlRows.length === 0 ? (
-                <Empty title="Allowlist leer" text="Freigaben anlegen oder Spieler im Modal auf die Allowlist setzen." />
+                <Empty title={t('players.emptyWl')} text={t('players.emptyWlText')} />
               ) : (
                 <table className="o-table">
                   <thead>
-                    <tr><th>Identifier</th><th>Notiz</th><th>Von</th><th>Seit</th><th></th></tr>
+                    <tr><th>{t('common.identifier')}</th><th>{t('common.note')}</th><th>{t('common.by')}</th><th>{t('common.since')}</th><th></th></tr>
                   </thead>
                   <tbody>
                     {wlRows.map((row) => (
                       <tr key={row.id}>
-                        <td className="mono" data-label="Identifier">{row.identifier}</td>
-                        <td data-label="Notiz">{row.note || '–'}</td>
-                        <td data-label="Von">{row.author}</td>
-                        <td data-label="Seit">{fmtFull(row.created)}</td>
+                        <td className="mono" data-label={t('common.identifier')}>{row.identifier}</td>
+                        <td data-label={t('common.note')}>{row.note || '–'}</td>
+                        <td data-label={t('common.by')}>{row.author}</td>
+                        <td data-label={t('common.since')}>{fmtFull(row.created)}</td>
                         <td className="td-actions" data-label="">
                           {canWlWrite && (
                             <button className="btn btn-sm btn-danger" type="button" disabled={busy} onClick={() => removeWl(row.id)}>
-                              Entfernen
+                              {t('common.remove')}
                             </button>
                           )}
                         </td>
@@ -563,7 +563,7 @@ export default function Players({ user }) {
           </PanelCard>
         </div>
       ) : rows.length === 0 ? (
-        <Empty title="Noch keine Spieler" text="Sobald jemand joined, erscheint er hier." />
+        <Empty title={t('players.empty')} text={t('players.emptyText')} />
       ) : (
         <div className="pl-grid">
           {rows.map((row) => {
@@ -574,13 +574,13 @@ export default function Players({ user }) {
                   <div>
                     <strong>{row.name}</strong>
                     <div className="pl-card-meta">
-                      {row.online ? `ID ${row.serverId} · ${row.ping ?? 0} ms` : 'Offline'} · {fmtPlaytime(row.play_ms)}
+                      {row.online ? t('players.cardMeta', { id: row.serverId, ping: row.ping ?? 0 }) : t('status.offline')} · {fmtPlaytime(row.play_ms)}
                     </div>
                   </div>
                   <div className="pl-card-badges">
                     {row.banned && <Badge tone="bad">Ban</Badge>}
                     {row.whitelisted && <Badge tone="ok">WL</Badge>}
-                    {row.online ? <Badge tone="ok">Online</Badge> : <Badge>Offline</Badge>}
+                    {row.online ? <Badge tone="ok">{t('status.online')}</Badge> : <Badge>{t('status.offline')}</Badge>}
                   </div>
                 </div>
                 <div className="pl-card-ids">
@@ -598,14 +598,14 @@ export default function Players({ user }) {
 
       {pick && p && (
         <Modal
-          title="Spieler"
+          title={t('players.modal')}
           onClose={() => { setPick(null); setDetail(null); setErr(''); }}
           wide
           aside={tab === 'ban' ? (
-            <aside className="pl-ban-aside" aria-label="Ban-Auswahl">
+            <aside className="pl-ban-aside" aria-label={t('players.banAside')}>
               <div className="pl-ban-aside-block">
-                <h4 className="pl-ban-aside-title">Vorlagen</h4>
-                <div className="pl-ban-aside-list" role="listbox" aria-label="Ban-Vorlagen">
+                <h4 className="pl-ban-aside-title">{t('common.templates')}</h4>
+                <div className="pl-ban-aside-list" role="listbox" aria-label={t('players.banTemplates')}>
                   <button
                     type="button"
                     role="option"
@@ -613,30 +613,30 @@ export default function Players({ user }) {
                     className={`pl-ban-aside-item${!templateId ? ' active' : ''}`}
                     onClick={() => applyTemplate('')}
                   >
-                    <span className="pl-ban-aside-item-label">Keine Vorlage</span>
-                    <span className="pl-ban-aside-item-hint">Manuell ausfüllen</span>
+                    <span className="pl-ban-aside-item-label">{t('players.noTemplate')}</span>
+                    <span className="pl-ban-aside-item-hint">{t('players.manualFill')}</span>
                   </button>
-                  {templateList.map((t) => (
+                  {templateList.map((tpl) => (
                     <button
-                      key={t.id}
+                      key={tpl.id}
                       type="button"
                       role="option"
-                      aria-selected={templateId === t.id}
-                      className={`pl-ban-aside-item${templateId === t.id ? ' active' : ''}`}
-                      onClick={() => applyTemplate(t.id, t)}
+                      aria-selected={templateId === tpl.id}
+                      className={`pl-ban-aside-item${templateId === tpl.id ? ' active' : ''}`}
+                      onClick={() => applyTemplate(tpl.id, tpl)}
                     >
-                      <span className="pl-ban-aside-item-label">{t.label}</span>
-                      {t.hint && <span className="pl-ban-aside-item-hint">{t.hint}</span>}
+                      <span className="pl-ban-aside-item-label">{tpl.label}</span>
+                      {tpl.hint && <span className="pl-ban-aside-item-hint">{tpl.hint}</span>}
                     </button>
                   ))}
                   {templateList.length === 0 && (
-                    <p className="pl-ban-aside-empty">Keine Vorlagen hinterlegt</p>
+                    <p className="pl-ban-aside-empty">{t('players.noTemplates')}</p>
                   )}
                 </div>
               </div>
               <div className="pl-ban-aside-block">
-                <h4 className="pl-ban-aside-title">Dauer</h4>
-                <div className="pl-ban-aside-list" role="listbox" aria-label="Ban-Dauer">
+                <h4 className="pl-ban-aside-title">{t('common.duration')}</h4>
+                <div className="pl-ban-aside-list" role="listbox" aria-label={t('players.banDuration')}>
                   {durationList.map((d) => (
                     <button
                       key={d.id}
@@ -661,13 +661,13 @@ export default function Players({ user }) {
                 <div className="pl-hero-row">
                   <h2>{p.name}</h2>
                   {p.online
-                    ? <span className="pl-live">Live · #{p.serverId}</span>
-                    : <span className="pl-off">Offline</span>}
+                    ? <span className="pl-live">{t('players.liveId', { id: p.serverId })}</span>
+                    : <span className="pl-off">{t('status.offline')}</span>}
                 </div>
                 <p className="pl-hero-sub">
-                  {p.online ? `${p.ping ?? 0} ms · Session ${fmtPlaytime(p.session_ms || detail?.player?.session_ms)}` : `Zuletzt ${fmtFull(p.last_seen)}`}
+                  {p.online ? t('players.session', { ping: p.ping ?? 0, session: fmtPlaytime(p.session_ms || detail?.player?.session_ms) }) : t('players.lastSeen', { when: fmtFull(p.last_seen) })}
                   {' · '}
-                  Gesamt {fmtPlaytime(p.play_ms)}
+                  {t('players.totalPlay', { play: fmtPlaytime(p.play_ms) })}
                 </p>
               </div>
               <button
@@ -676,18 +676,18 @@ export default function Players({ user }) {
                 disabled={busy || !canWlWrite}
                 onClick={toggleWl}
               >
-                {p.whitelisted ? 'Allowlist ✓' : 'Auf Allowlist'}
+                {p.whitelisted ? t('players.onAllowlist') : t('players.toAllowlist')}
               </button>
             </header>
 
             <div className="pl-rail" aria-hidden="true">
-              <div><small>Beigetreten</small><strong>{fmtFull(p.first_seen)}</strong></div>
+              <div><small>{t('players.joined')}</small><strong>{fmtFull(p.first_seen)}</strong></div>
               <div><small>Bans</small><strong>{p.bans ?? 0}</strong></div>
               <div><small>Warns</small><strong>{p.warns ?? 0}</strong></div>
               <div><small>IDs</small><strong>{ids.length}</strong></div>
             </div>
 
-            <div className="pl-seg" role="tablist" aria-label="Ansicht">
+            <div className="pl-seg" role="tablist" aria-label={t('players.viewAria')}>
               {SECTIONS.map((s) => (
                 <button
                   key={s.id}
@@ -697,7 +697,7 @@ export default function Players({ user }) {
                   className={tab === s.id ? 'active' : ''}
                   onClick={() => setTab(s.id)}
                 >
-                  {s.label}
+                  {t(s.labelKey)}
                 </button>
               ))}
             </div>
@@ -708,11 +708,11 @@ export default function Players({ user }) {
               {tab === 'info' && (
                 <div className="pl-panel">
                   <label className="field">
-                    <span>Interne Notiz</span>
-                    <textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nur für Admins sichtbar…" />
+                    <span>{t('players.note')}</span>
+                    <textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('players.notePh')} />
                   </label>
                   <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={saveNote}>
-                    Speichern
+                    {t('common.save')}
                   </button>
                 </div>
               )}
@@ -720,7 +720,7 @@ export default function Players({ user }) {
               {tab === 'ids' && (
                 <div className="pl-id-stack">
                   {ids.length === 0 ? (
-                    <p className="muted">Keine Identifier</p>
+                    <p className="muted">{t('players.noIds')}</p>
                   ) : ids.map((id) => (
                     <div key={id} className="pl-id-row">
                       <span>{idLabel(id)}</span>
@@ -733,7 +733,7 @@ export default function Players({ user }) {
               {tab === 'history' && (
                 <div className="pl-hist">
                   {(detail?.history?.bans || []).length === 0 && (detail?.history?.warns || []).length === 0 ? (
-                    <p className="muted">Noch keine Einträge.</p>
+                    <p className="muted">{t('players.noHistory')}</p>
                   ) : (
                     <>
                       {(detail?.history?.bans || []).map((b) => (
@@ -758,51 +758,51 @@ export default function Players({ user }) {
               {tab === 'ban' && (
                 <div className="pl-panel pl-ban">
                   <div className="pl-ban-summary" aria-live="polite">
-                    <span className="pl-ban-label">Auswahl</span>
+                    <span className="pl-ban-label">{t('players.selection')}</span>
                     <strong>{durationLabel}</strong>
                     {templateId ? (
-                      <em>{templateList.find((t) => t.id === templateId)?.label || 'Vorlage'}</em>
+                      <em>{templateList.find((tpl) => tpl.id === templateId)?.label || t('players.template')}</em>
                     ) : (
-                      <em>Keine Vorlage</em>
+                      <em>{t('players.noTemplate')}</em>
                     )}
                   </div>
                   <label className="pl-ban-field">
-                    <span className="pl-ban-label">Grund</span>
+                    <span className="pl-ban-label">{t('common.reason')}</span>
                     <textarea
                       rows={3}
                       value={reason}
                       onChange={(e) => { setReason(e.target.value); setTemplateId(''); }}
-                      placeholder="Regel, Kontext…"
+                      placeholder={t('players.reasonPh')}
                     />
                   </label>
                   {durationId === 'custom' && (
                     <div className="pl-ban-row custom">
                       <label className="pl-ban-field pl-ban-amt">
-                        <span className="pl-ban-label">Wert</span>
+                        <span className="pl-ban-label">{t('common.value')}</span>
                         <input
                           type="number"
                           min={1}
                           inputMode="numeric"
-                          placeholder="z. B. 3"
+                          placeholder={t('players.amtPh')}
                           value={customAmt}
                           onChange={(e) => setCustomAmt(e.target.value)}
                         />
                       </label>
                       <OrbitSelect
-                        label="Einheit"
+                        label={t('common.unit')}
                         value={customUnit}
                         onChange={setCustomUnit}
                         options={[
-                          { value: 'hours', label: 'Stunden' },
-                          { value: 'days', label: 'Tage' },
-                          { value: 'weeks', label: 'Wochen' },
+                          { value: 'hours', label: t('common.hours') },
+                          { value: 'days', label: t('common.days') },
+                          { value: 'weeks', label: t('common.weeks') },
                         ]}
                         className="pl-ban-unit"
                       />
                     </div>
                   )}
                   <button type="button" className="btn pl-ban-btn" disabled={busy} onClick={applyBan}>
-                    Sperre setzen
+                    {t('players.applyBan')}
                   </button>
                 </div>
               )}
@@ -812,7 +812,7 @@ export default function Players({ user }) {
               <div className="pl-actions">
                 <input
                   className="pl-actions-reason"
-                  placeholder="Grund für DM / Kick / Warn…"
+                  placeholder={t('players.actionPh')}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                 />

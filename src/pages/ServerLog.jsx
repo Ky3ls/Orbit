@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Empty, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
-
-function fmtLineTime(ts) {
-  if (!ts) return '';
-  return new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(ts);
-}
+import { toBcp47 } from '../i18n/core.js';
+import { useI18n } from '../i18n/I18nProvider.jsx';
 
 export default function ServerLog() {
+  const { t, lang } = useI18n();
   const [lines, setLines] = useState([]);
   const [q, setQ] = useState('');
   const [err, setErr] = useState('');
@@ -16,6 +14,11 @@ export default function ServerLog() {
   const boxRef = useRef(null);
   const pausedRef = useRef(false);
   pausedRef.current = paused;
+
+  function fmtLineTime(ts) {
+    if (!ts) return '';
+    return new Intl.DateTimeFormat(toBcp47(lang), { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(ts);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -66,25 +69,25 @@ export default function ServerLog() {
   return (
     <Page>
       <PageHeader
-        eyebrow="Server"
-        title="Server-/FX-Log"
-        description="Live-Ausgabe der FiveM-/FX-Konsole (Crashes, Resources, Joins). Nicht dasselbe wie Admin-Aktionen."
+        eyebrow={t('slog.eyebrow')}
+        title={t('page.serverLog')}
+        description={t('slog.desc')}
         actions={(
           <div className="row" style={{ gap: 8 }}>
-            <input className="search" placeholder="Filtern" value={q} onChange={(e) => setQ(e.target.value)} />
+            <input className="search" placeholder={t('common.filter')} value={q} onChange={(e) => setQ(e.target.value)} />
             <button type="button" className="btn btn-sm" onClick={() => setPaused((p) => !p)}>
-              {paused ? 'Weiter' : 'Pause'}
+              {paused ? t('common.resume') : t('common.pause')}
             </button>
           </div>
         )}
       />
       <p className="page-hint muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 13 }}>
-        Hinweis: Panel-Aktionen (wer hat gebannt/geändert) stehen unter <strong>Admin-Aktionen</strong>.
+        {t('slog.hint')}
       </p>
       {err && <div className="err">{err}</div>}
       <PanelCard padded={false}>
         {view.length === 0 ? (
-          <Empty title="Noch keine Logzeilen" text="Sobald FX schreibt oder die Konsole läuft, erscheinen Einträge hier." />
+          <Empty title={t('slog.empty')} text={t('slog.emptyText')} />
         ) : (
           <div className="fx-log" ref={boxRef}>
             {view.map((line) => (
