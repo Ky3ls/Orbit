@@ -7,7 +7,7 @@ import { sendSupervisorCommand, supervisorConsoleReady } from './fxSupervisor.js
  * @param {Record<string, string>} settings
  */
 export async function dispatchFxCommand(settings, command) {
-  if (orbitControlMode(settings) === 'orbit' && supervisorConsoleReady()) {
+  if (orbitControlMode(settings) === 'orbit' && supervisorConsoleReady(settings)) {
     return sendSupervisorCommand(settings, command);
   }
   if (fxCommandReady(settings)) {
@@ -19,6 +19,6 @@ export async function dispatchFxCommand(settings, command) {
 }
 
 export function fxConsoleReady(settings) {
-  if (orbitControlMode(settings) === 'orbit' && supervisorConsoleReady()) return true;
+  if (orbitControlMode(settings) === 'orbit' && supervisorConsoleReady(settings)) return true;
   return fxCommandReady(settings);
 }
