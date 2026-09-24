@@ -367,3 +367,4 @@ input:focus, select:focus, textarea:focus {
 }
 
 .chart { filter: drop-shadow(0 0 12px rgba(46, 230, 197, 0.15)); }
+.mon-chart-card.o-card { overflow: visible; }
