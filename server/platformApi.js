@@ -13,7 +13,7 @@ import { listSupervisorInstances, supervisorRunning } from './fxSupervisor.js';
 import { runRecipeYaml } from './recipeRunner.js';
 import { parseDropFromLogLine, listDrops, ensureDropsTable } from './playerDrops.js';
 import { runRecipeInstall, RECIPE_PACKS } from './recipeInstall.js';
-import { settingMap, setSetting, audit } from './db.js';
+import { settingMap, setSetting, audit, auditLogger } from './db.js';
 import { syncResourcesFromDisk } from './resourceScan.js';
 import { randomToken } from './auth.js';
 import { ORIGIN, ORBIT_ARTIFACTS_ROOT, ORBIT_SERVERS_ROOT, FX_SERVER_ROOT } from './config.js';
@@ -294,11 +294,11 @@ export async function handlePlatformApi(ctx) {
     const settings = settingMap(db);
     try {
       if (!supervisorConsoleReady(settings)) {
-        syncOrbitSystemResource(settings.fxServerRoot || FX_SERVER_ROOT, settings.fxDataPath || '', (t) => logLine('info', t));
+        syncOrbitSystemResource(settings.fxServerRoot || FX_SERVER_ROOT, settings.fxDataPath || '', auditLogger(db, 'orbit.sync'));
         ensureIngameToken(db);
         return json(res, 200, { ok: true, note: 'Resource kopiert — FX-Konsole offline; nach nächstem Start aktiv.' });
       }
-      hotDeployOrbit(db, (cmd) => sendSupervisorCommand(settings, cmd), settings.fxServerRoot, settings.fxDataPath, (t) => logLine('info', t));
+      hotDeployOrbit(db, (cmd) => sendSupervisorCommand(settings, cmd), settings.fxServerRoot, settings.fxDataPath, auditLogger(db, 'orbit.deploy'));
       return json(res, 200, { ok: true });
     } catch (err) {
       return json(res, 400, { error: err.message });

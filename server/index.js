@@ -35,7 +35,7 @@ import {
   verifyBootstrapPin,
 } from './bootstrapPin.js';
 import { ORIGIN, PORT, HOST, DATA_DIR, ORBIT_SERVERS_ROOT, CFG_PATH, FX_SERVER_ROOT } from './config.js';
-import { audit, getDb, setSetting, settingMap } from './db.js';
+import { audit, auditLogger, auditSystem, getDb, setSetting, settingMap } from './db.js';
 import { getUserPrefs, setUserPrefs } from './userPrefs.js';
 import { controlFx, fxProcessActive, FX_UNIT } from './control.js';
 import { fxConsoleReady } from './fxCommand.js';
@@ -2553,28 +2553,28 @@ const boot = (async () => {
     ensureIngameToken(db);
     const s = settingMap(db);
     if (s.fxDataPath) backfillFxConsole(s.fxDataPath, logLine, 100);
-    syncOrbitSystemResource(s.fxServerRoot || FX_SERVER_ROOT, s.fxDataPath || '', (t) => logLine('info', t));
+    syncOrbitSystemResource(s.fxServerRoot || FX_SERVER_ROOT, s.fxDataPath || '', auditLogger(db, 'orbit.sync'));
     if (supervisorConsoleReady(s)) {
-      hotDeployOrbit(db, (cmd) => sendSupervisorCommand(s, cmd), s.fxServerRoot, s.fxDataPath, (t) => logLine('info', t));
+      hotDeployOrbit(db, (cmd) => sendSupervisorCommand(s, cmd), s.fxServerRoot, s.fxDataPath, auditLogger(db, 'orbit.deploy'));
     }
-    // Nach Domain-Setup: FX erst jetzt starten (Live-Konsole bleibt verbunden)
+  2560|    // Nach Domain-Setup: FX erst jetzt starten (Live-Konsole bleibt verbunden)
     if (s.pendingFxAutostart === '1') {
       setSetting(db, 'pendingFxAutostart', '0');
       const active = getActiveOrbitServer(db);
       if (active) {
         controlFx('start', buildSettingsForServer(db, active), logLine)
-          .then(() => logLine('ok', 'Autostart nach Panel-Neustart.'))
-          .catch((err) => logLine('warn', `Autostart: ${err.message}`));
+          .then(() => auditSystem(db, 'fx.autostart', 'nach Panel-Neustart'))
+          .catch((err) => auditSystem(db, 'fx.autostart.fail', err.message));
       }
     }
   } catch (err) {
-    logLine('warn', `orbit boot: ${err.message}`);
+    auditSystem(db, 'orbit.boot', err.message);
   }
   try {
     syncCfgSecrets(readCfg());
   } catch { /* cfg noch nicht lesbar */ }
-  logLine('info', `Orbit bereit — API-TLS: ${REQUIRE_TLS ? 'erforderlich (HTTPS)' : 'relax'}.`);
-  refreshDiscordBot(settingMap(db)).catch((e) => logLine('warn', `Discord-Bot: ${e.message}`));
+  auditSystem(db, 'orbit.ready', `API-TLS: ${REQUIRE_TLS ? 'erforderlich (HTTPS)' : 'relax'}`);
+  refreshDiscordBot(settingMap(db)).catch((e) => auditSystem(db, 'discord.bot', e.message));
   await loop();
   setInterval(loop, 1000);
   server.listen(PORT, HOST, () => {
