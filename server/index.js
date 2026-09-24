@@ -957,6 +957,83 @@ async function handleApi(req, res, url) {
     }
   }
 
+  /** Live DB anlegen + Framework-SQL importieren (NDJSON-Stream). */
+  if (method === 'POST' && pathname === '/api/setup/database-prepare') {
+    if (me.role !== 'owner') return json(res, 403, { error: 'Nur Inhaber.' });
+    const body = await readBody(req);
+    const mode = body.mode === 'reuse' || body.mode === 'skip' ? body.mode : 'create';
+    const recipeId = str(body.recipe, 32) || 'esx';
+    res.writeHead(200, {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+    });
+    const send = (obj) => {
+      if (res.writableEnded || res.destroyed) return;
+      try { res.write(`${JSON.stringify(obj)}\n`); } catch { /* */ }
+    };
+    const emitLog = (text) => send({ type: 'log', text: String(text).slice(0, 400) });
+    const emitProg = (pct, label) => send({ type: 'progress', pct: Math.max(0, Math.min(100, Number(pct) || 0)), label: String(label || '') });
+
+    try {
+      if (mode === 'skip') {
+        setSetting(db, 'setupSqlReady', '0');
+        emitProg(100, 'Übersprungen');
+        send({ type: 'done', ok: true, skipped: true, dsn: '' });
+        res.end();
+        return;
+      }
+
+      let dsn = '';
+      if (mode === 'reuse') {
+        dsn = str(body.mysqlConnection, 280);
+        if (!/^mysql:\/\//i.test(dsn)) throw new Error('Ungültige mysql://…-URL.');
+        emitProg(10, 'Verbindung prüfen…');
+        emitLog('Vorhandene Connection wird verwendet.');
+        setSetting(db, 'mysqlDsn', dsn);
+      } else {
+        emitProg(5, 'Datenbank anlegen…');
+        emitLog('Lege Datenbank und User an…');
+        const prov = await provisionMysqlDatabase({
+          dbName: str(body.dbName, 48) || defaultDbName(str(body.serverName, 48) || 'server'),
+          appUser: str(body.dbUser, 32) || 'orbit',
+          appPassword: typeof body.dbPassword === 'string' && body.dbPassword.length >= 6
+            ? body.dbPassword.slice(0, 128)
+            : undefined,
+          rootPassword: str(body.mysqlRootPassword, 128) || undefined,
+        });
+        dsn = prov.dsn;
+        setSetting(db, 'mysqlDsn', dsn);
+        emitLog(`DB ${prov.dbName} + User ${prov.appUser} angelegt.`);
+        emitProg(20, 'SQL vom Recipe laden…');
+      }
+
+      const { prepareRecipeSqlImport } = await import('./setupDatabasePrepare.js');
+      const result = await prepareRecipeSqlImport(
+        recipeId,
+        dsn,
+        emitLog,
+        emitProg,
+      );
+      setSetting(db, 'setupSqlReady', '1');
+      setSetting(db, 'setupSqlRecipe', recipeId);
+      audit(db, me.username, 'setup.mysql.sql', `${recipeId}:${result.imported}`, ip);
+      send({
+        type: 'done',
+        ok: true,
+        dsn,
+        dsnRedacted: dsn.replace(/:([^:@]+)@/, ':***@'),
+        imported: result.imported || 0,
+        failed: result.failed || 0,
+        skipped: Boolean(result.skipped),
+      });
+    } catch (err) {
+      send({ type: 'error', error: String(err.message || err).slice(0, 300) });
+    }
+    res.end();
+    return;
+  }
+
   if (method === 'GET' && pathname === '/api/setup') {
     if (!hasPerm(me, 'settings') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
     const settings = settingMap(db);
@@ -1040,7 +1117,9 @@ async function handleApi(req, res, url) {
     }
     const licenseKey = str(body.licenseKey, 128);
     let mysqlDsn = str(body.mysqlConnection, 280);
-    if (body.createDatabase) {
+    const sqlAlreadyReady = settingMap(db).setupSqlReady === '1'
+      || body.skipSqlImport === true;
+    if (body.createDatabase && !mysqlDsn) {
       try {
         const prov = await provisionMysqlDatabase({
           dbName: str(body.dbName, 48) || defaultDbName(name),
@@ -1058,6 +1137,8 @@ async function handleApi(req, res, url) {
       }
     } else if (mysqlDsn) {
       setSetting(db, 'mysqlDsn', mysqlDsn);
+    } else if (!mysqlDsn) {
+      mysqlDsn = settingMap(db).mysqlDsn || '';
     }
     let imported = 0;
     let hostname = name;
@@ -1203,7 +1284,9 @@ async function handleApi(req, res, url) {
           mysqlConnection: mysqlDsn || settingsBefore.mysqlDsn || '',
           panelUrl: ORIGIN,
           ingameToken,
+          importSql: !sqlAlreadyReady,
         };
+        if (sqlAlreadyReady) logLine('info', 'SQL bereits im DB-Schritt importiert — übersprungen.');
         // Bei Übernahme: Recipe nur wenn leer oder explizit neu
         const resourcesDir = path.join(dataPath, 'resources');
         const hasResources = fs.existsSync(resourcesDir)
@@ -2220,12 +2303,16 @@ async function handleApi(req, res, url) {
         'fxDataPath', 'hostname', 'project', 'profileMode', 'profileRecipe',
         'orbitServerName', 'orbitServerSlug', 'serverLabel', 'mysqlDsn',
         'activeOrbitServerId', 'fivemPort', 'fxControlMode',
+        'setupSqlReady', 'setupSqlRecipe', 'svLicenseKey', 'pendingFxAutostart',
       ]) {
         try { db.prepare('DELETE FROM settings WHERE k = ?').run(k); } catch { /* */ }
       }
     } else {
       try { db.prepare('UPDATE orbit_servers SET is_active = 0').run(); } catch { /* */ }
       setSetting(db, 'activeOrbitServerId', '');
+      try { db.prepare('DELETE FROM settings WHERE k IN (?, ?)').run('setupSqlReady', 'setupSqlRecipe'); } catch {
+        try { db.prepare('DELETE FROM settings WHERE k = ?').run('setupSqlReady'); } catch { /* */ }
+      }
     }
 
     setSetting(db, 'setupDone', '0');
