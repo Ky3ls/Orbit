@@ -285,12 +285,14 @@ export default function LiveConsole({
           >
             <span className="lc-ts">{fmtTime(line.t)}</span>
             <span className="lc-sep" aria-hidden="true" />
-            {meta.tag ? (
-              <span className="lc-tag">[{meta.tag}]</span>
-            ) : (
-              <span className="lc-tag lc-tag-empty" aria-hidden="true" />
-            )}
-            <span className="lc-text">{meta.body}</span>
+            <span className="lc-msg">
+              {meta.tag ? (
+                <span className="lc-tag">[{meta.tag}]</span>
+              ) : (
+                <span className="lc-tag lc-tag-empty" aria-hidden="true" />
+              )}
+              <span className="lc-text">{meta.body}</span>
+            </span>
           </div>
         ))}
         <div className="lc-caret" aria-hidden="true">▌</div>
