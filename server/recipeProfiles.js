@@ -1,9 +1,10 @@
 /** Profil + server.cfg-Vorlagen (txAdmin-Recipe-Ersatz: Setup statt YAML-Runner). */
 
-const PMA_VOICE_ZIP = {
-  name: 'pma-voice',
-  url: 'https://github.com/AvarianKnight/pma-voice/releases/latest/download/pma-voice.zip',
+/** pma-voice: GitHub Releases hat kein Asset-ZIP — Clone statt Download. */
+const PMA_VOICE_CLONE = {
+  url: 'https://github.com/AvarianKnight/pma-voice.git',
   dest: '[standalone]/pma-voice',
+  depth: 1,
 };
 
 export const RECIPE_PACKS = {
@@ -13,9 +14,8 @@ export const RECIPE_PACKS = {
     ensures: ['oxmysql', 'pma-voice'],
     zips: [
       { name: 'oxmysql', url: 'https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip', dest: '[standalone]/oxmysql' },
-      { ...PMA_VOICE_ZIP },
     ],
-    clones: [],
+    clones: [{ ...PMA_VOICE_CLONE }],
     cfgBlock: '',
   },
   esx: {
@@ -27,7 +27,6 @@ export const RECIPE_PACKS = {
     zips: [
       { name: 'oxmysql', url: 'https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip', dest: '[standalone]/oxmysql' },
       { name: 'ox_lib', url: 'https://github.com/overextended/ox_lib/releases/latest/download/ox_lib.zip', dest: '[standalone]/ox_lib' },
-      { ...PMA_VOICE_ZIP },
     ],
     clones: [
       {
@@ -42,6 +41,7 @@ export const RECIPE_PACKS = {
         promote: '[esx_addons]',
         depth: 1,
       },
+      { ...PMA_VOICE_CLONE },
     ],
     cfgBlock: `
 # ESX Legacy
@@ -56,10 +56,10 @@ setr sv_stateBagStrictMode true
     ensures: ['oxmysql', 'pma-voice', 'qb-core', 'qb-multicharacter'],
     zips: [
       { name: 'oxmysql', url: 'https://github.com/overextended/oxmysql/releases/latest/download/oxmysql.zip', dest: '[standalone]/oxmysql' },
-      { ...PMA_VOICE_ZIP },
     ],
     clones: [
       { url: 'https://github.com/qbcore-framework/qb-core.git', dest: '[qb]/qb-core', depth: 1 },
+      { ...PMA_VOICE_CLONE },
     ],
     cfgBlock: `
 # QBCore

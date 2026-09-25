@@ -60,7 +60,7 @@ export function pushSeries(point) {
   if (runtime.series.length > MAX_SERIES) runtime.series.shift();
 }
 
-/** Orbit-Panel-Status — nicht in die Live-Konsole (Login, Boot-Monitor, Sync, …). */
+/** Orbit-Panel-Status — nicht in die Live-Konsole (Login, Boot-Monitor, Sync, Setup…). */
 function isLiveConsoleNoise(text) {
   const t = String(text || '');
   if (/^(?:\[FX:\d+\]\s*)?(?:Boot OK|Boot-Monitor|Boot-Timeout|Start in |Stop…|Stop vor Start|Quiet Mode|chat:|Permissions in |Crash-Restart|Auto-Restart|Resource startete|beendet \()/i.test(t)) {
@@ -71,6 +71,11 @@ function isLiveConsoleNoise(text) {
   if (/^[^\s]+ angemeldet$/i.test(t)) return true;
   if (/Cfx\.re verknüpft/i.test(t)) return true;
   if (/Master-Account .+ angelegt/i.test(t)) return true;
+  // Setup / Artifact / Recipe-Fortschritt
+  if (/^(?:Lade Artifact|Entpacke|Artifact bereit|Orbit-Server |mysql_connection_string|systemd orbit\.service\.d|Serverprofil |Lade |Clone |ZIP |Profil „|Permissions-Block|MySQL|FX Artifact|cfx-server-data|Bestehenden Server|SQL bereits|Vorhandener Server|ensureOnce|Altes public|Schreibzugriff|Lesezugriff|Traverse |Ordner angelegt|Ressourcen-Scan)/i.test(t)) {
+    return true;
+  }
+  if (/unter \/opt\/orbit\/servers\//i.test(t)) return true;
   return false;
 }
 
