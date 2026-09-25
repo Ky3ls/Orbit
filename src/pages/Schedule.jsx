@@ -135,7 +135,8 @@ export default function Schedule() {
               <button
                 key={p.hhmm + p.labelKey}
                 type="button"
-                className="sch-preset"
+                className={`sch-preset${hhmm === p.hhmm ? ' is-selected' : ''}`}
+                aria-pressed={hhmm === p.hhmm}
                 onClick={() => applyPreset(p)}
               >
                 <b>{p.hhmm}</b>

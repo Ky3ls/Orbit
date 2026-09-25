@@ -13,6 +13,7 @@
   --accent-2: #ff9a4d;
   --accent-rgb: 255, 122, 26;
   --accent-dim: rgba(var(--accent-rgb), 0.14);
+  --accent-ink: #ff7a1a;
   --ok: #3dd68c;
   --warn: #f5c16c;
   --bad: #ff5d73;
