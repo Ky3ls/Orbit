@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, mergeLines } from '../api.js';
 import { consoleLineVisible } from '../appearance.js';
-import { classifyConsoleLine } from '../consoleFormat.js';
+import { stripAnsi } from '../consoleFormat.js';
 import { fmtTime } from '../format.js';
 import { useAppearance } from '../hooks/useAppearance.js';
 import { useFxStatus } from '../hooks/useFxStatus.js';
@@ -90,15 +90,10 @@ export default function LiveConsole({
     };
   }, [active]);
 
-  const visible = useMemo(() => {
-    const out = [];
-    for (const line of lines) {
-      if (!consoleLineVisible(line, prefs?.console)) continue;
-      const meta = classifyConsoleLine(line.text, line.level);
-      out.push({ line, meta });
-    }
-    return out;
-  }, [lines, prefs?.console]);
+  const visible = useMemo(
+    () => lines.filter((line) => consoleLineVisible(line, prefs?.console)),
+    [lines, prefs?.console],
+  );
 
   useEffect(() => {
     stick.current = autoScroll;
@@ -278,21 +273,11 @@ export default function LiveConsole({
             {lines.length ? t('console.emptyFilter') : t('console.emptyWait')}
           </div>
         )}
-        {visible.map(({ line, meta }) => (
-          <div
-            key={line.id}
-            className={`lc-line ${line.level || 'info'} ${meta.markerClass}`}
-          >
+        {visible.map((line) => (
+          <div key={line.id} className={`lc-line ${line.level || 'info'}`}>
             <span className="lc-ts">{fmtTime(line.t)}</span>
-            <span className="lc-sep" aria-hidden="true" />
-            <span className="lc-msg">
-              {meta.tag ? (
-                <span className="lc-tag">[{meta.tag}]</span>
-              ) : (
-                <span className="lc-tag lc-tag-empty" aria-hidden="true" />
-              )}
-              <span className="lc-text">{meta.body}</span>
-            </span>
+            <span className="lc-prompt">›</span>
+            <span className="lc-text">{stripAnsi(line.text)}</span>
           </div>
         ))}
         <div className="lc-caret" aria-hidden="true">▌</div>
