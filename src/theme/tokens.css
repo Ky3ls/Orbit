@@ -20,6 +20,12 @@
   --info: #60a5fa;
   --shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   --glow: none;
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-axis: rgba(255, 255, 255, 0.08);
+  --chart-plot-bg: rgba(0, 0, 0, 0.22);
+  --surface-inset: rgba(0, 0, 0, 0.28);
+  --code-bg: #050505;
+  --code-fg: #e8e8e8;
   --radius: 12px;
   --radius-lg: 16px;
   --font: 'Outfit Variable', 'Outfit', system-ui, sans-serif;

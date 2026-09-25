@@ -827,8 +827,8 @@ button,
   gap: 8px;
   flex-shrink: 0;
   padding: 10px 16px 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(0, 0, 0, 0.18);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-inset, rgba(0, 0, 0, 0.18));
 }
 .res-search {
   flex: 1;
@@ -836,8 +836,9 @@ button,
   width: 100%;
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  color: var(--text);
   font-size: 13px;
 }
 .res-search:focus {
@@ -854,15 +855,15 @@ button,
   margin: 0;
   padding: 0;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
   color: var(--muted);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 .res-search-clear:hover {
-  color: #fff;
+  color: var(--text);
   border-color: rgba(var(--accent-rgb), 0.45);
   background: rgba(var(--accent-rgb), 0.1);
 }
@@ -889,13 +890,13 @@ button,
   display: flex;
   flex-direction: column;
   margin: 0;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.28);
+  background: var(--card);
   overflow: hidden;
 }
 .ws[data-nav="sidebar"] .res-group {
-  background: var(--bg-2);
+  background: var(--card);
   border-color: var(--line);
 }
 .res-group.is-open {
@@ -912,8 +913,8 @@ button,
   border-bottom: 1px solid transparent;
   border-radius: 0;
   border-left: 3px solid transparent;
-  background: rgba(255, 255, 255, 0.02);
-  color: inherit;
+  background: var(--bg-2);
+  color: var(--text);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -924,8 +925,8 @@ button,
 }
 .res-group-head.open {
   border-left-color: var(--accent);
-  border-bottom-color: rgba(255, 255, 255, 0.06);
-  background: rgba(var(--accent-rgb), 0.08);
+  border-bottom-color: var(--line);
+  background: var(--accent-dim);
 }
 .res-group-chevron {
   flex-shrink: 0;
@@ -953,7 +954,7 @@ button,
   font-size: 12.5px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--text);
 }
 .res-group-meta {
   display: inline-flex;
@@ -968,7 +969,7 @@ button,
   border-radius: 999px;
   border: 1px solid rgba(var(--accent-rgb), 0.28);
   background: rgba(var(--accent-rgb), 0.1);
-  color: var(--accent-2);
+  color: var(--accent);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -991,8 +992,9 @@ button,
   align-items: center;
   min-height: 0;
   padding: 5px 10px 5px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--line);
   background: transparent;
+  color: var(--text);
 }
 .res-page .ws-res-row:last-child {
   border-bottom: 0;
@@ -1008,7 +1010,7 @@ button,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--text);
 }
 
 /* Status-Spalte: Dot + Label */
@@ -1028,7 +1030,7 @@ button,
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--faint);
   flex-shrink: 0;
 }
 .res-status.tone-ok { color: var(--ok); }
@@ -1040,6 +1042,12 @@ button,
 .res-status.tone-bad .res-status-dot { background: var(--bad); }
 .res-status.tone-warn { color: var(--warn); }
 .res-status.tone-warn .res-status-dot { background: var(--warn); }
+.res-status:not([class*="tone-"]) {
+  color: var(--accent);
+}
+.res-status:not([class*="tone-"]) .res-status-dot {
+  background: var(--accent);
+}
 
 /* Aktionen als Segment-Gruppe */
 .res-row-actions {
@@ -1048,9 +1056,9 @@ button,
   gap: 0;
   margin: 0;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--line);
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-2);
 }
 .res-act {
   appearance: none;
@@ -1059,7 +1067,7 @@ button,
   min-height: 26px;
   border: 0;
   border-radius: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--line);
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -1074,7 +1082,7 @@ button,
   border-right: 0;
 }
 .res-act:hover:not(:disabled) {
-  color: #fff;
+  color: var(--text);
   background: rgba(var(--accent-rgb), 0.16);
 }
 .res-act-start:hover:not(:disabled) {
@@ -1087,7 +1095,7 @@ button,
 }
 .res-act-restart:hover:not(:disabled) {
   background: rgba(var(--accent-rgb), 0.18);
-  color: var(--accent-2);
+  color: var(--accent);
 }
 .res-act:disabled {
   opacity: 0.35;

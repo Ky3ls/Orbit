@@ -48,11 +48,15 @@ export function getAppearanceUserId() {
 
 export function applyAccentVars(accentId, root = document.documentElement) {
   const a = ACCENT_PRESETS[accentId] || ACCENT_PRESETS.orange;
-  root.style.setProperty('--accent', a.hex);
-  root.style.setProperty('--accent-2', a.hex2);
-  root.style.setProperty('--accent-rgb', a.rgb);
-  root.style.setProperty('--accent-dim', `rgba(${a.rgb}, 0.14)`);
-  root.style.setProperty('--line-strong', `rgba(${a.rgb}, 0.45)`);
+  const light = root.dataset.theme === 'light';
+  const hex = light && a.lightHex ? a.lightHex : a.hex;
+  const hex2 = light && a.lightHex2 ? a.lightHex2 : a.hex2;
+  const rgb = light && a.lightRgb ? a.lightRgb : a.rgb;
+  root.style.setProperty('--accent', hex);
+  root.style.setProperty('--accent-2', hex2);
+  root.style.setProperty('--accent-rgb', rgb);
+  root.style.setProperty('--accent-dim', `rgba(${rgb}, 0.14)`);
+  root.style.setProperty('--line-strong', `rgba(${rgb}, 0.45)`);
   root.dataset.accent = a.id;
 }
 

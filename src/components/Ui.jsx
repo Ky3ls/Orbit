@@ -179,7 +179,7 @@ function niceYTicks(scaleMax, fixed) {
 /** Monitor-Chart mit Y-Skala, Grid und Zeitachse (Labels außerhalb SVG → kein Stretch). */
 export const AreaChart = memo(function AreaChart({
   data,
-  color = '#ff7a1a',
+  color = 'var(--accent)',
   accessor = (d) => d.v,
   yMax,
   formatY = (v) => `${Math.round(v)}`,
@@ -241,13 +241,13 @@ export const AreaChart = memo(function AreaChart({
                 x2={w}
                 y1={y}
                 y2={y}
-                stroke="rgba(255,255,255,0.06)"
+                stroke="var(--chart-grid)"
                 strokeWidth="0.4"
                 vectorEffect="non-scaling-stroke"
               />
             );
           })}
-          <line x1="0" x2={w} y1={h} y2={h} stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
+          <line x1="0" x2={w} y1={h} y2={h} stroke="var(--chart-axis)" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
           <path d={area} fill={`url(#${id})`} />
           <path d={line} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
         </svg>
@@ -262,7 +262,7 @@ export const AreaChart = memo(function AreaChart({
   );
 });
 
-export const Gauge = memo(function Gauge({ label, value, suffix = '%', tone = '#ff7a1a' }) {
+export const Gauge = memo(function Gauge({ label, value, suffix = '%', tone = 'var(--accent)' }) {
   const pct = Math.max(0, Math.min(100, value || 0));
   const r = 52;
   const c = 2 * Math.PI * r;
@@ -270,7 +270,7 @@ export const Gauge = memo(function Gauge({ label, value, suffix = '%', tone = '#
   return (
     <div className="gauge card o-card">
       <svg viewBox="0 0 140 140">
-        <circle cx="70" cy="70" r={r} stroke="rgba(255,255,255,0.06)" strokeWidth="10" fill="none" />
+        <circle cx="70" cy="70" r={r} stroke="var(--chart-grid)" strokeWidth="10" fill="none" />
         <circle
           cx="70" cy="70" r={r} stroke={tone} strokeWidth="10" fill="none"
           strokeLinecap="round"

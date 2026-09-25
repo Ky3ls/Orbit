@@ -109,7 +109,7 @@ export default function Monitoring() {
             <AreaChart
               data={series}
               accessor={getRam}
-              color="#8eb6ff"
+              color="var(--info)"
               yMax={100}
               formatY={pctAxis}
               ariaLabel={t('mon.ramAria')}
@@ -124,7 +124,7 @@ export default function Monitoring() {
           <AreaChart
             data={series}
             accessor={getPlayers}
-            color="#3dd68c"
+            color="var(--ok)"
             yMax={Math.max(maxClients, 1)}
             formatY={intAxis}
             ariaLabel={t('mon.playersAria')}
