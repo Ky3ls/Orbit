@@ -59,12 +59,26 @@ async function downloadZip(url, destDir, onLog) {
   const zipPath = path.join(destDir, '_orbit_dl.zip');
   onLog(`Lade ${path.basename(destDir)}…`);
   const res = await fetch(url, { signal: AbortSignal.timeout(300_000), redirect: 'follow' });
-  if (!res.ok) throw new Error(`Download ${res.status}`);
-  fs.writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
-  await exec('unzip', ['-o', zipPath, '-d', destDir], { timeout: 120_000 });
-  fs.unlinkSync(zipPath);
+  if (!res.ok) {
+    rmRfSafe(destDir);
+    throw new Error(`Download ${res.status}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
+    rmRfSafe(destDir);
+    throw new Error(`Download ist kein ZIP (${buf.slice(0, 40).toString('utf8').replace(/\s+/g, ' ').slice(0, 40)})`);
+  }
+  fs.writeFileSync(zipPath, buf);
+  try {
+    await exec('unzip', ['-o', zipPath, '-d', destDir], { timeout: 120_000 });
+  } catch (err) {
+    rmRfSafe(destDir);
+    throw new Error(`Entpacken fehlgeschlagen: ${err.message}`);
+  }
+  try { fs.unlinkSync(zipPath); } catch { /* */ }
   flattenResourceDir(destDir);
   if (!fs.existsSync(path.join(destDir, 'fxmanifest.lua'))) {
+    rmRfSafe(destDir);
     throw new Error(`${path.basename(destDir)}: fxmanifest.lua fehlt nach Entpacken`);
   }
   return { skipped: false };

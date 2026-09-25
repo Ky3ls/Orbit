@@ -148,7 +148,7 @@ import { fxCommandReady } from './rcon.js';
 import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
 import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail.js';
 import { syncOrbitPermissionsFile, applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
-import { logLine, runtime, pushSeries, setLogHook, snapshot, onConsoleWake } from './state.js';
+import { logLine, logPanel, runtime, pushSeries, setLogHook, snapshot, onConsoleWake } from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
@@ -1353,7 +1353,7 @@ async function handleApi(req, res, url) {
         const hasFx = fxRoot && fs.existsSync(path.join(fxRoot, 'alpine/opt/cfx-server/FXServer'));
         if (!hasFx && body.installArtifact !== false) {
           const build = await fetchRecommendedBuild();
-          const installed = await installArtifact(build, (t) => logLine('info', t));
+          const installed = await installArtifact(build, (t) => logPanel('info', t));
           fxRoot = installed.path;
           setSetting(db, 'fxServerRoot', fxRoot);
           setSetting(db, 'fxArtifactBuild', installed.build);
@@ -1387,7 +1387,7 @@ async function handleApi(req, res, url) {
           importSql: !sqlAlreadyReady,
           db,
         };
-        if (sqlAlreadyReady) logLine('info', 'SQL bereits im DB-Schritt importiert — übersprungen.');
+        if (sqlAlreadyReady) logPanel('info', 'SQL bereits im DB-Schritt importiert — übersprungen.');
         // Bei Übernahme: Recipe nur wenn leer oder explizit neu
         const resourcesDir = path.join(dataPath, 'resources');
         const hasResources = fs.existsSync(resourcesDir)
@@ -1397,11 +1397,11 @@ async function handleApi(req, res, url) {
           if (deploy === 'remote' && recipeUrl) {
             const resRecipe = await fetch(recipeUrl, { signal: AbortSignal.timeout(120_000) });
             if (!resRecipe.ok) throw new Error(`Recipe-URL ${resRecipe.status}`);
-            await runRecipeYaml(await resRecipe.text(), dataPath, (t) => logLine('info', t));
+            await runRecipeYaml(await resRecipe.text(), dataPath, (t) => logPanel('info', t));
           } else if (recipe === 'esx' || recipe === 'qb' || recipe === 'blank') {
-            await runRecipeInstall(recipe, dataPath, (t) => logLine('info', t), recipeOpts);
+            await runRecipeInstall(recipe, dataPath, (t) => logPanel('info', t), recipeOpts);
           } else {
-            await runRecipeInstall('blank', dataPath, (t) => logLine('info', t), recipeOpts);
+            await runRecipeInstall('blank', dataPath, (t) => logPanel('info', t), recipeOpts);
             const cfgFile = path.join(dataPath, 'server.cfg');
             let cfgText = fs.existsSync(cfgFile) ? fs.readFileSync(cfgFile, 'utf8') : '';
             for (const resName of RECIPES[recipe] || RECIPES.blank) {
@@ -1411,7 +1411,7 @@ async function handleApi(req, res, url) {
             fs.writeFileSync(cfgFile, cfgText.trim() + '\n', 'utf8');
           }
         } else {
-          logLine('info', `Bestehenden Server übernommen (${dataPath}) — Recipe übersprungen.`);
+          logPanel('info', `Bestehenden Server übernommen (${dataPath}) — Recipe übersprungen.`);
         }
         // Permissions immer ans CFG-Ende (ESX-ACEs nur bei recipe=esx)
         try {
@@ -1421,13 +1421,13 @@ async function handleApi(req, res, url) {
             profile: recipe,
             master: loadMasterIdentity(db),
           });
-          if (synced.changed) logLine('info', 'Permissions-Block in server.cfg geschrieben.');
+          if (synced.changed) logPanel('info', 'Permissions-Block in server.cfg geschrieben.');
         } catch (err) {
-          logLine('warn', `Permissions-Block: ${err.message}`);
+          logPanel('warn', `Permissions-Block: ${err.message}`);
         }
         syncResourcesFromDisk(db);
         imported = (RECIPES[recipe] || RECIPES.blank).length;
-        logLine('ok', `Orbit-Server „${row.name}“ unter ${dataPath}${result.reused ? ' (reuse)' : ''}`);
+        logPanel('ok', `Orbit-Server „${row.name}“ unter ${dataPath}${result.reused ? ' (reuse)' : ''}`);
       } catch (err) {
         return json(res, 500, { error: `Server/Recipe: ${err.message}` });
       }
@@ -1460,7 +1460,7 @@ async function handleApi(req, res, url) {
         try {
           syncCfgSecrets({ raw: fs.readFileSync(cfgFile, 'utf8') });
         } catch { /* */ }
-        if (mysqlDsn) logLine('ok', `mysql_connection_string → ${cfgFile}`);
+        if (mysqlDsn) logPanel('ok', `mysql_connection_string → ${cfgFile}`);
       } catch (err) {
         nextSteps.push(`CFG Secrets: ${err.message}`);
       }
@@ -1479,7 +1479,7 @@ async function handleApi(req, res, url) {
       let hasFx = root && fs.existsSync(path.join(root, 'alpine/opt/cfx-server/FXServer'));
       if (!hasFx && body.installArtifact !== false) {
         const build = await fetchRecommendedBuild();
-        const installed = await installArtifact(build, (t) => logLine('info', t));
+        const installed = await installArtifact(build, (t) => logPanel('info', t));
         setSetting(db, 'fxServerRoot', installed.path);
         setSetting(db, 'fxArtifactBuild', installed.build);
         artifactBuild = installed.build;
@@ -1564,7 +1564,7 @@ async function handleApi(req, res, url) {
     }
 
     audit(db, me.username, 'setup', deploy, ip);
-    logLine('ok', `Serverprofil ${deploy}: ${hostname}`);
+    logPanel('ok', `Serverprofil ${deploy}: ${hostname}`);
     const cfg = deploy === 'existing' ? '' : renderCfg({ name: hostname, project: project || hostname, port, maxClients: slots, locale, tags, onesync, recipe });
     return json(res, 200, {
       ok: true,
@@ -2346,7 +2346,7 @@ async function handleApi(req, res, url) {
       runtime.hostname = result.settings.hostname;
       runtime.maxClients = maxClients;
       audit(db, me.username, 'orbit-server.create', result.orbitServerSlug, ip);
-      logLine('ok', `Orbit-Server „${result.orbitServerName}“ → ${result.fxDataPath}`);
+      logPanel('ok', `Orbit-Server „${result.orbitServerName}“ → ${result.fxDataPath}`);
       return json(res, 200, {
         ok: true,
         profile: orbitServerProfile(settingMap(db)),
