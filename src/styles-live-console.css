@@ -191,28 +191,28 @@
 }
 .lc-form .btn { width: auto; min-width: 88px; }
 
-/* —— Light Mode: gleiche Hellgrau-Familie, dunkler Log-Text —— */
+/* —— Light Mode: helles Panel, dunkler Log-Text —— */
 html[data-theme="light"] .live-console-drawer {
-  background: var(--bg-2);
-  box-shadow: 0 -16px 48px rgba(26, 26, 30, 0.18);
+  background: var(--bg-elevated);
+  box-shadow: 0 -16px 48px rgba(20, 20, 28, 0.18);
   border-top-color: rgba(var(--accent-rgb), 0.3);
   backdrop-filter: none;
 }
 html[data-theme="light"] .live-console-page {
-  background: var(--bg-2);
+  background: var(--bg-elevated);
 }
 html[data-theme="light"] .live-console-side {
-  background: var(--bg-2);
+  background: var(--card);
 }
 html[data-theme="light"] .lc-head {
   border-bottom-color: var(--line);
-  background: var(--bg);
+  background: var(--bg-elevated);
 }
 html[data-theme="light"] .lc-resize::after {
-  background: rgba(26, 26, 30, 0.28);
+  background: rgba(20, 20, 28, 0.28);
 }
 html[data-theme="light"] .lc-chip {
-  background: rgba(26, 26, 30, 0.08);
+  background: rgba(20, 20, 28, 0.08);
   color: var(--muted);
 }
 html[data-theme="light"] .lc-chip:hover:not(:disabled) {
@@ -222,7 +222,7 @@ html[data-theme="light"] .lc-actions .lc-auto.on {
   color: var(--text);
 }
 html[data-theme="light"] .lc-term {
-  background: var(--bg-2);
+  background: var(--card);
   color: var(--text);
 }
 html[data-theme="light"] .lc-empty {
@@ -256,7 +256,7 @@ html[data-theme="light"] .lc-err {
 }
 html[data-theme="light"] .lc-form {
   border-top-color: var(--line);
-  background: var(--bg);
+  background: var(--bg-elevated);
 }
 html[data-theme="light"] .lc-form input {
   background: var(--bg-elevated);

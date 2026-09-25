@@ -64,7 +64,7 @@ export function applyAppearance(prefs = readAppearance()) {
   root.dataset.sidebar = p.sidebarCollapsed ? 'collapsed' : 'expanded';
   applyAccentVars(p.accent, root);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', p.theme === 'light' ? '#8e8e96' : '#000000');
+  if (meta) meta.setAttribute('content', p.theme === 'light' ? '#7a7a82' : '#000000');
 }
 
 export function initAppearance() {
