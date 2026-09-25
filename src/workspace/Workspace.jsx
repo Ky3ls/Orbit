@@ -251,7 +251,6 @@ export default function Workspace({ user, onLogout }) {
       {menuOpen && (
         <div className="profile-menu ws-profile-menu">
           <Link to="/settings" className="pm-item" onClick={() => setMenuOpen(false)}>{t('common.settings')}</Link>
-          <button type="button" className="pm-item" onClick={() => { setMenuOpen(false); setMoreOpen(true); }}>{t('nav.modules')}</button>
           <button type="button" className="pm-item pm-logout" onClick={() => { setMenuOpen(false); onLogout(); }}>{t('common.logout')}</button>
         </div>
       )}
@@ -322,15 +321,6 @@ export default function Workspace({ user, onLogout }) {
                   {powerMenu}
                 </div>
               )}
-              <RailLink
-                asButton
-                icon="more"
-                label={t('nav.modules')}
-                pri
-                active={moreOpen}
-                pressed={moreOpen}
-                onClick={() => setMoreOpen(true)}
-              />
             </div>
           </nav>
 
