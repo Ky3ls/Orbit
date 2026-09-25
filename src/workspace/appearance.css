@@ -1,24 +1,24 @@
-/* Orbit — soft light + nav chrome (sidebar / dock) */
+/* Orbit — Light (StarAdmin-Stil) + nav chrome (sidebar / dock) */
 
-/* Light: dunkler Canvas, helle Flächen (klare Hierarchie, kein Einheitsgrau) */
+/* Light: heller Canvas, weiße Elevated/Cards — klarer Kontrast, kein Mittelgrau */
 html[data-theme="light"] {
   color-scheme: light;
-  --bg: #7a7a82;
-  --bg-2: #6e6e76;
-  --bg-elevated: #d4d4da;
-  --card: #ceced4;
-  --glass: rgba(212, 212, 218, 0.94);
-  --line: rgba(20, 20, 28, 0.18);
+  --bg: #f2f5f7;
+  --bg-2: #e8ecf0;
+  --bg-elevated: #ffffff;
+  --card: #ffffff;
+  --glass: rgba(255, 255, 255, 0.94);
+  --line: rgba(20, 28, 36, 0.1);
   --line-strong: rgba(var(--accent-rgb), 0.45);
-  --text: #141418;
-  --muted: #3a3a44;
-  --faint: #55555e;
-  --accent-dim: rgba(var(--accent-rgb), 0.16);
+  --text: #1a1d21;
+  --muted: #5c6570;
+  --faint: #8a939e;
+  --accent-dim: rgba(var(--accent-rgb), 0.14);
   --ok: #1a8a58;
   --warn: #9a7209;
   --bad: #b83a3a;
   --info: #336090;
-  --shadow: 0 12px 32px rgba(20, 20, 28, 0.22);
+  --shadow: 0 4px 16px rgba(20, 28, 36, 0.07), 0 1px 3px rgba(20, 28, 36, 0.04);
   --glow: none;
 }
 
@@ -50,11 +50,11 @@ html[data-theme="light"] select optgroup {
   color: var(--text);
 }
 html[data-theme="light"] .btn {
-  background: rgba(20, 20, 28, 0.08);
+  background: rgba(20, 28, 36, 0.05);
 }
 html[data-theme="light"] .btn:hover {
-  border-color: rgba(20, 20, 28, 0.22);
-  background: rgba(20, 20, 28, 0.12);
+  border-color: rgba(20, 28, 36, 0.16);
+  background: rgba(20, 28, 36, 0.08);
 }
 html[data-theme="light"] .btn-solid,
 html[data-theme="light"] .cfx {
@@ -75,27 +75,28 @@ html[data-theme="light"] .modal {
   box-shadow: var(--shadow);
 }
 html[data-theme="light"] .modal-back {
-  background: rgba(40, 40, 48, 0.38);
+  background: rgba(20, 28, 36, 0.32);
 }
 html[data-theme="light"] .orbit-veil {
   background:
-    radial-gradient(42% 36% at 8% 0%, rgba(var(--accent-rgb), 0.08), transparent 68%),
-    radial-gradient(34% 28% at 96% 6%, rgba(var(--accent-rgb), 0.04), transparent 70%),
+    radial-gradient(42% 36% at 8% 0%, rgba(var(--accent-rgb), 0.06), transparent 68%),
+    radial-gradient(34% 28% at 96% 6%, rgba(var(--accent-rgb), 0.03), transparent 70%),
     linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%) !important;
 }
 html[data-theme="light"] .orbit-veil::after {
-  opacity: 0.28;
+  opacity: 0.2;
   background-image:
-    linear-gradient(rgba(20, 20, 28, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 20, 28, 0.06) 1px, transparent 1px);
+    linear-gradient(rgba(20, 28, 36, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 28, 36, 0.04) 1px, transparent 1px);
 }
-/* Chrome + Konsole: hell abgesetzt vom dunklen Canvas */
+/* Chrome + Konsole: weiß/elevated auf hellem Canvas */
 html[data-theme="light"] .os-sidebar,
 html[data-theme="light"] .ws-rail {
   background: var(--bg-elevated);
+  box-shadow: var(--shadow);
 }
 html[data-theme="light"] .os-sidebar-link:hover {
-  background: rgba(20, 20, 28, 0.08);
+  background: rgba(20, 28, 36, 0.05);
   color: var(--text);
 }
 html[data-theme="light"] .os-sidebar-link.active {
@@ -103,7 +104,7 @@ html[data-theme="light"] .os-sidebar-link.active {
 }
 html[data-theme="light"] .dock-item:hover {
   color: var(--text);
-  background: rgba(20, 20, 28, 0.08);
+  background: rgba(20, 28, 36, 0.05);
 }
 html[data-theme="light"] .shell-orbit {
   background: var(--bg);
@@ -131,7 +132,10 @@ html[data-theme="light"] .ws-split-aside {
   background: var(--card);
 }
 html[data-theme="light"] .appear-toggle {
-  background: rgba(20, 20, 28, 0.06);
+  background: var(--bg-2);
+}
+html[data-theme="light"] .ws-dock {
+  box-shadow: 0 8px 28px rgba(20, 28, 36, 0.12);
 }
 html[data-theme="light"] .ws[data-cockpit='1'] .ws-header {
   background: var(--bg-elevated);
@@ -674,7 +678,7 @@ html[data-theme="light"] .live-console-cockpit .lc-form input {
   cursor: pointer;
 }
 html[data-theme="light"] .ws-more-backdrop {
-  background: rgba(28, 28, 34, 0.4);
+  background: rgba(20, 28, 36, 0.28);
 }
 html[data-theme="light"] .ws-more-panel {
   background: var(--bg-elevated);
