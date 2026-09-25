@@ -63,6 +63,27 @@ html[data-theme="light"] .btn:hover {
   border-color: rgba(20, 28, 36, 0.16);
   background: rgba(20, 28, 36, 0.08);
 }
+/* Danger/Löschen: dunkles Rot statt hellrosa (#ffc9b0) auf weißem Card */
+html[data-theme="light"] .btn-danger {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.45);
+  background: rgba(180, 35, 24, 0.08);
+}
+html[data-theme="light"] .btn-danger:hover {
+  color: #912018;
+  border-color: rgba(180, 35, 24, 0.65);
+  background: rgba(180, 35, 24, 0.14);
+}
+html[data-theme="light"] .btn-ghost.btn-danger {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.4);
+  background: transparent;
+}
+html[data-theme="light"] .btn-ghost.btn-danger:hover {
+  color: #912018;
+  border-color: rgba(180, 35, 24, 0.6);
+  background: rgba(180, 35, 24, 0.08);
+}
 html[data-theme="light"] .btn-solid,
 html[data-theme="light"] .cfx {
   background: var(--bg-elevated);
