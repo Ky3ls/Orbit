@@ -1,24 +1,24 @@
 /* Orbit — soft light + nav chrome (sidebar / dock) */
 
-/* Cool Hellgrau: eine Familie für alle Surfaces (kein Warm-Beige, kein Weiß) */
+/* Cool Mittelgrau: eine Familie für alle Surfaces (kein Hellgrau, kein Weiß) */
 html[data-theme="light"] {
   color-scheme: light;
-  --bg: #c8c8ce;
-  --bg-2: #bcbcc2;
-  --bg-elevated: #d2d2d8;
-  --card: #ceced4;
-  --glass: rgba(206, 206, 212, 0.95);
-  --line: rgba(26, 26, 30, 0.18);
+  --bg: #8e8e96;
+  --bg-2: #7e7e86;
+  --bg-elevated: #9a9aa2;
+  --card: #94949c;
+  --glass: rgba(148, 148, 156, 0.95);
+  --line: rgba(12, 12, 16, 0.28);
   --line-strong: rgba(var(--accent-rgb), 0.45);
-  --text: #1a1a1e;
-  --muted: #4a4a52;
-  --faint: #5c5c66;
+  --text: #0e0e12;
+  --muted: #282830;
+  --faint: #3e3e48;
   --accent-dim: rgba(var(--accent-rgb), 0.16);
   --ok: #1a8a58;
   --warn: #9a7209;
   --bad: #b83a3a;
   --info: #336090;
-  --shadow: 0 12px 32px rgba(26, 26, 30, 0.16);
+  --shadow: 0 12px 32px rgba(12, 12, 16, 0.28);
   --glow: none;
 }
 
@@ -30,7 +30,7 @@ html[data-theme="light"] .ws {
 }
 
 html[data-theme="light"] .btn-primary {
-  color: #1a1a1e !important;
+  color: #0e0e12 !important;
 }
 
 /* Flächen die sonst weiß/dunkel hardcodiert sind */
