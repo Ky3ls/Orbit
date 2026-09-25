@@ -91,7 +91,6 @@ function settingsKey(settings) {
 }
 
 function attachStreams(proc, logLine, key, dataPath, settings) {
-  const prefix = `[FX:${key}] `;
   const quiet = settings?.quietMode === '1' || settings?.quietMode === true;
   // Quiet: Live-Konsole + Logdatei weiter; kein Mirror auf process.stdout (systemd/Terminal)
   const onData = (chunk) => {
@@ -99,7 +98,7 @@ function attachStreams(proc, logLine, key, dataPath, settings) {
     for (const line of text.split(/\r?\n/)) {
       const trimmed = line.trimEnd();
       if (!trimmed) continue;
-      const out = `${prefix}${trimmed.slice(0, 480)}`;
+      const out = trimmed.slice(0, 480);
       if (dataPath) emitFxConsoleLine(dataPath, out, logLine);
       else logLine('info', out);
       if (!quiet) {
