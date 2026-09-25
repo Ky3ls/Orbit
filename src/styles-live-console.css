@@ -190,3 +190,75 @@
   background: rgba(255, 255, 255, 0.04);
 }
 .lc-form .btn { width: auto; min-width: 88px; }
+
+/* —— Light Mode: gleiche Hellgrau-Familie, dunkler Log-Text —— */
+html[data-theme="light"] .live-console-drawer {
+  background: var(--bg-2);
+  box-shadow: 0 -16px 48px rgba(26, 26, 30, 0.18);
+  border-top-color: rgba(var(--accent-rgb), 0.3);
+  backdrop-filter: none;
+}
+html[data-theme="light"] .live-console-page {
+  background: var(--bg-2);
+}
+html[data-theme="light"] .live-console-side {
+  background: var(--bg-2);
+}
+html[data-theme="light"] .lc-head {
+  border-bottom-color: var(--line);
+  background: var(--bg);
+}
+html[data-theme="light"] .lc-resize::after {
+  background: rgba(26, 26, 30, 0.28);
+}
+html[data-theme="light"] .lc-chip {
+  background: rgba(26, 26, 30, 0.08);
+  color: var(--muted);
+}
+html[data-theme="light"] .lc-chip:hover:not(:disabled) {
+  color: var(--text);
+}
+html[data-theme="light"] .lc-actions .lc-auto.on {
+  color: var(--text);
+}
+html[data-theme="light"] .lc-term {
+  background: var(--bg-2);
+  color: var(--text);
+}
+html[data-theme="light"] .lc-empty {
+  color: var(--muted);
+}
+html[data-theme="light"] .lc-line {
+  border-bottom-color: rgba(26, 26, 30, 0.08);
+}
+html[data-theme="light"] .lc-ts {
+  color: var(--muted);
+}
+html[data-theme="light"] .lc-text,
+html[data-theme="light"] .lc-line.info .lc-text {
+  color: var(--text);
+}
+html[data-theme="light"] .lc-line.ok .lc-text {
+  color: var(--ok);
+}
+html[data-theme="light"] .lc-line.warn .lc-text {
+  color: var(--warn);
+}
+html[data-theme="light"] .lc-line.bad .lc-text {
+  color: var(--bad);
+}
+html[data-theme="light"] .lc-line.bad {
+  background: rgba(184, 58, 58, 0.12);
+}
+html[data-theme="light"] .lc-err {
+  background: rgba(184, 58, 58, 0.12);
+  color: var(--bad);
+}
+html[data-theme="light"] .lc-form {
+  border-top-color: var(--line);
+  background: var(--bg);
+}
+html[data-theme="light"] .lc-form input {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
