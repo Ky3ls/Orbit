@@ -124,6 +124,21 @@ import {
   exportPlayersJson,
   revokeAllowlists,
 } from './systemTools.js';
+import {
+  BACKUP_TYPES,
+  DEFAULT_RETENTION,
+  MAX_UPLOAD_BYTES,
+  RETENTION_OPTIONS,
+  SERVER_BACKUP_CONTENTS,
+  assertBackupType,
+  backupBusy,
+  deleteBackup,
+  listBackups,
+  normalizeRetention,
+  parseBackupId,
+  runBackup,
+  saveUploadedBackup,
+} from './backup/index.js';
 import { hotDeployOrbit, ensureIngameToken, syncOrbitSystemResource } from './orbitBridgeSync.js';
 import { parseDropFromLogLine, recordDrop } from './playerDrops.js';
 import { notifyServerEvent, notifyPlayerDrop } from './discord.js';
@@ -530,6 +545,27 @@ async function loop() {
   }
 }
 
+function scheduleKind(job) {
+  const k = String(job?.kind || 'restart').trim().toLowerCase();
+  if (k === 'backup_server') return 'backup_server';
+  if (k === 'backup_database') return 'backup_database';
+  return 'restart';
+}
+
+function runScheduledBackup(job, settings, hhmm) {
+  const type = scheduleKind(job) === 'backup_database' ? 'database' : 'server';
+  const retention = normalizeRetention(job.retention);
+  logLine('info', `Zeitplan „${job.label}“: ${type}-Backup (Retention ${retention}).`);
+  audit(db, 'system', 'schedule.backup', `${job.label} ${type} ${hhmm}`, 'local');
+  runBackup(type, { settings, retention })
+    .then((meta) => {
+      logLine('ok', `Zeitplan-Backup ok: ${meta.name} (${meta.size} B)`);
+    })
+    .catch((err) => {
+      logLine('bad', `Zeitplan-Backup fehlgeschlagen: ${err.message}`);
+    });
+}
+
 function checkSchedule() {
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -538,11 +574,18 @@ function checkSchedule() {
   const due = db.prepare('SELECT * FROM schedule WHERE enabled = 1 AND hhmm = ?').all(hhmm);
   if (!due.length) return;
   firedMinute = key;
-  const control = settingMap(db).controlEnabled !== '0';
+  const settings = settingMap(db);
+  const control = settings.controlEnabled !== '0';
   for (const job of due) {
     if (job.last_key === key) continue;
     db.prepare('UPDATE schedule SET last_key = ? WHERE id = ?').run(key, job.id);
-    const settings = settingMap(db);
+    const kind = scheduleKind(job);
+
+    if (kind === 'backup_server' || kind === 'backup_database') {
+      runScheduledBackup(job, settings, hhmm);
+      continue;
+    }
+
     const via = orbitControlMode(settings) === 'orbit' ? 'Orbit-Prozess' : 'systemd';
     const detail = control
       ? `Zeitplan „${job.label}“: Neustart über ${via}.`
@@ -589,7 +632,8 @@ function syncCfgSecrets(parsed) {
 }
 
 function nextRestartInfo() {
-  const jobs = db.prepare('SELECT id, label, hhmm, enabled FROM schedule WHERE enabled = 1 ORDER BY hhmm').all();
+  const jobs = db.prepare('SELECT id, label, hhmm, enabled, kind FROM schedule WHERE enabled = 1 ORDER BY hhmm').all()
+    .filter((j) => scheduleKind(j) === 'restart');
   if (!jobs.length) return { at: null, inMs: null, label: null, jobId: null, text: 'Kein Neustart geplant' };
   const now = new Date();
   const cur = now.getHours() * 60 + now.getMinutes();
@@ -2131,7 +2175,17 @@ async function handleApi(req, res, url) {
 
   if (method === 'GET' && pathname === '/api/schedule') {
     if (!hasPerm(me, 'schedule')) return json(res, 403, { error: 'Keine Berechtigung.' });
-    return json(res, 200, { jobs: db.prepare('SELECT * FROM schedule ORDER BY hhmm').all() });
+    const jobs = db.prepare('SELECT * FROM schedule ORDER BY hhmm').all().map((j) => ({
+      ...j,
+      kind: scheduleKind(j),
+      retention: normalizeRetention(j.retention),
+    }));
+    return json(res, 200, {
+      jobs,
+      kinds: ['restart', 'backup_server', 'backup_database'],
+      retentionOptions: [...RETENTION_OPTIONS],
+      backupContents: SERVER_BACKUP_CONTENTS,
+    });
   }
 
   if (method === 'POST' && pathname === '/api/schedule') {
@@ -2139,9 +2193,14 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     const label = str(body.label, 48);
     const hhmm = str(body.hhmm, 5);
+    const kindRaw = String(body.kind || 'restart').trim().toLowerCase();
+    const kind = ['restart', 'backup_server', 'backup_database'].includes(kindRaw) ? kindRaw : '';
+    const retention = normalizeRetention(body.retention, DEFAULT_RETENTION);
+    if (!kind) return json(res, 400, { error: 'Job-Typ ungültig.' });
     if (label.length < 2 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) return json(res, 400, { error: 'Zeitplan ungültig.' });
-    db.prepare('INSERT INTO schedule (label, hhmm, enabled) VALUES (?, ?, 1)').run(label, hhmm);
-    audit(db, me.username, 'schedule.add', `${label} ${hhmm}`, ip);
+    db.prepare('INSERT INTO schedule (label, hhmm, enabled, kind, retention) VALUES (?, ?, 1, ?, ?)')
+      .run(label, hhmm, kind, retention);
+    audit(db, me.username, 'schedule.add', `${kind} ${label} ${hhmm}`, ip);
     return json(res, 200, { ok: true });
   }
 
@@ -2151,10 +2210,130 @@ async function handleApi(req, res, url) {
     if (method === 'DELETE') db.prepare('DELETE FROM schedule WHERE id = ?').run(Number(sched[1]));
     else {
       const body = await readBody(req);
-      db.prepare('UPDATE schedule SET enabled = ? WHERE id = ?').run(body.enabled ? 1 : 0, Number(sched[1]));
+      if (body.enabled !== undefined) {
+        db.prepare('UPDATE schedule SET enabled = ? WHERE id = ?').run(body.enabled ? 1 : 0, Number(sched[1]));
+      }
+      if (body.retention !== undefined) {
+        db.prepare('UPDATE schedule SET retention = ? WHERE id = ?')
+          .run(normalizeRetention(body.retention), Number(sched[1]));
+      }
+      if (body.label !== undefined || body.hhmm !== undefined) {
+        const row = db.prepare('SELECT * FROM schedule WHERE id = ?').get(Number(sched[1]));
+        if (!row) return json(res, 404, { error: 'Job nicht gefunden.' });
+        const label = body.label !== undefined ? str(body.label, 48) : row.label;
+        const hhmm = body.hhmm !== undefined ? str(body.hhmm, 5) : row.hhmm;
+        if (label.length < 2 || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) {
+          return json(res, 400, { error: 'Zeitplan ungültig.' });
+        }
+        db.prepare('UPDATE schedule SET label = ?, hhmm = ? WHERE id = ?').run(label, hhmm, Number(sched[1]));
+      }
     }
     audit(db, me.username, 'schedule.update', sched[1], ip);
     return json(res, 200, { ok: true });
+  }
+
+  // —— Server-/DB-Backups (Automationen) ——
+  if (method === 'GET' && pathname === '/api/backups') {
+    if (!hasPerm(me, 'schedule')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    const typeParam = url.searchParams.get('type');
+    try {
+      if (typeParam) {
+        const type = assertBackupType(typeParam);
+        return json(res, 200, {
+          type,
+          items: listBackups(type),
+          retentionOptions: [...RETENTION_OPTIONS],
+          maxUploadBytes: MAX_UPLOAD_BYTES,
+          contents: type === 'server' ? SERVER_BACKUP_CONTENTS : null,
+          busy: backupBusy(),
+        });
+      }
+      return json(res, 200, {
+        server: listBackups('server'),
+        database: listBackups('database'),
+        retentionOptions: [...RETENTION_OPTIONS],
+        maxUploadBytes: MAX_UPLOAD_BYTES,
+        contents: SERVER_BACKUP_CONTENTS,
+        busy: backupBusy(),
+        types: [...BACKUP_TYPES],
+      });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  if (method === 'POST' && pathname === '/api/backups/run') {
+    if (!hasPerm(me, 'schedule')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    const body = await readBody(req);
+    try {
+      const type = assertBackupType(body.type);
+      const retention = normalizeRetention(body.retention, DEFAULT_RETENTION);
+      const meta = await runBackup(type, { settings: settingMap(db), retention });
+      audit(db, me.username, 'backup.run', `${type} ${meta.name}`, ip);
+      return json(res, 200, {
+        ok: true,
+        backup: {
+          id: meta.id,
+          type: meta.type,
+          name: meta.name,
+          size: meta.size,
+          created: meta.created,
+          retention: meta.retention,
+        },
+      });
+    } catch (err) {
+      const status = /läuft bereits/i.test(err.message) ? 409 : 500;
+      return json(res, status, { error: err.message });
+    }
+  }
+
+  if (method === 'POST' && pathname === '/api/backups/upload') {
+    if (!hasPerm(me, 'schedule')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    const type = url.searchParams.get('type') || 'server';
+    const retention = url.searchParams.get('retention');
+    try {
+      const meta = await saveUploadedBackup(req, type, retention);
+      audit(db, me.username, 'backup.upload', `${meta.type} ${meta.name}`, ip);
+      return json(res, 200, { ok: true, backup: meta });
+    } catch (err) {
+      const status = err.status || (/ungültig|Erwartete|Leer|keine Datei/i.test(err.message) ? 400 : 500);
+      return json(res, status, { error: err.message });
+    }
+  }
+
+  const backupOne = pathname.match(/^\/api\/backups\/(.+)\/(download)$/);
+  if (backupOne && method === 'GET') {
+    if (!hasPerm(me, 'schedule')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    try {
+      const { path: filePath, filename } = parseBackupId(backupOne[1]);
+      if (!fs.existsSync(filePath)) return json(res, 404, { error: 'Backup nicht gefunden.' });
+      const st = fs.statSync(filePath);
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${filename.replace(/"/g, '')}"`,
+        'Content-Length': st.size,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      fs.createReadStream(filePath).pipe(res);
+      audit(db, me.username, 'backup.download', filename, ip);
+      return;
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  const backupDel = pathname.match(/^\/api\/backups\/(.+)$/);
+  if (backupDel && method === 'DELETE' && !pathname.endsWith('/download') && pathname !== '/api/backups/run' && pathname !== '/api/backups/upload') {
+    if (!hasPerm(me, 'schedule')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    try {
+      const result = deleteBackup(backupDel[1]);
+      audit(db, me.username, 'backup.delete', `${result.type} ${result.name}`, ip);
+      return json(res, 200, { ok: true });
+    } catch (err) {
+      const status = /nicht gefunden/i.test(err.message) ? 404 : 400;
+      return json(res, status, { error: err.message });
+    }
   }
 
   if (method === 'GET' && pathname === '/api/audit') {
