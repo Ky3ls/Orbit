@@ -9,7 +9,7 @@
     <title>Orbit · Server Control</title>
     <style>
       html, body { background: #000000; color: #f5f5f5; margin: 0; }
-      html[data-theme="light"], html[data-theme="light"] body { background: #7a7a82; color: #141418; }
+      html[data-theme="light"], html[data-theme="light"] body { background: #f2f5f7; color: #1a1d21; }
     </style>
     <script>
       try {
@@ -38,7 +38,7 @@
         root.style.setProperty('--line-strong', 'rgba(' + c[2] + ', 0.45)');
         root.dataset.accent = a.accent && accents[a.accent] ? a.accent : 'orange';
         var m = document.querySelector('meta[name="theme-color"]');
-        if (m) m.setAttribute('content', a.theme === 'light' ? '#7a7a82' : '#000000');
+        if (m) m.setAttribute('content', a.theme === 'light' ? '#f2f5f7' : '#000000');
       } catch (e) {}
     </script>
   </head>
