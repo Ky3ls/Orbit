@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { orbitControlMode, resolveFxLaunch } from './fxLaunch.js';
 import { emitFxConsoleLine, markFxConsoleEof, resetFxConsoleLog } from './fxLogTail.js';
-import { clearConsole } from './state.js';
+import { clearConsole, logPanel } from './state.js';
 
 const MAX_BACKOFF_SEC = 120;
 /** Nach so vielen Sekunden stabil → Crash-Zähler zurücksetzen */
@@ -155,11 +155,11 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   } catch { /* ss fehlt → ignorieren */ }
 
   if (orbitBusy || systemdBusy || portBusy) {
-    logLine('info', `[FX:${key}] Stop vor Start (Prozess/Port belegt)…`);
+    logPanel('info', `[FX:${key}] Stop vor Start (Prozess/Port belegt)…`);
     try {
       await forceFreeGamePort(settings, logLine, port);
     } catch (err) {
-      logLine('warn', `[FX:${key}] Stop vor Start: ${err.message}`);
+      logPanel('warn', `[FX:${key}] Stop vor Start: ${err.message}`);
     }
     for (let i = 0; i < 20; i += 1) {
       try {
@@ -185,7 +185,7 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     ensureIngameToken(database);
     syncOrbitSystemResource(launch.fxRoot, launch.dataPath, auditLogger(database, 'orbit.sync'));
     if (launch.dataPath) {
-      syncChatFromArtifact(launch.dataPath, launch.fxRoot, (m) => logLine('info', `[FX:${key}] ${m}`));
+      syncChatFromArtifact(launch.dataPath, launch.fxRoot, (m) => logPanel('info', `[FX:${key}] ${m}`));
       const cfgName = String(settings.fxCfgPath || 'server.cfg').replace(/^\/+/, '') || 'server.cfg';
       const cfgFile = path.join(launch.dataPath, cfgName);
       const synced = syncOrbitPermissionsFile(cfgFile, {
@@ -193,7 +193,7 @@ export async function startFxProcess(settings, logLine, opts = {}) {
         master: loadMasterIdentity(database),
         profile: String(settings.profileRecipe || '').trim() || undefined,
       });
-      if (synced.changed) logLine('info', `[FX:${key}] Permissions in ${cfgName} aktualisiert (Dateiende).`);
+      if (synced.changed) logPanel('info', `[FX:${key}] Permissions in ${cfgName} aktualisiert (Dateiende).`);
     }
     // Launch-Args mit Token nachreichen falls resolve ohne db lief
     if (!opts.db) {
@@ -213,9 +213,9 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     clearTimeout(inst.bootTimer);
     inst.bootTimer = null;
   }
-  logLine('info', `[FX:${key}] Start in ${launch.dataPath}`);
+  logPanel('info', `[FX:${key}] Start in ${launch.dataPath}`);
   if (settings.quietMode === '1') {
-    logLine('info', `[FX:${key}] Quiet Mode — FX-Ausgabe nur in Live-Konsole, nicht im Terminal.`);
+    logPanel('info', `[FX:${key}] Quiet Mode — FX-Ausgabe nur in Live-Konsole, nicht im Terminal.`);
   }
 
   const proc = spawn(launch.command, launch.args, {
@@ -237,7 +237,7 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   proc.on('exit', (code, signal) => {
     const msg = signal ? `Signal ${signal}` : `Exit ${code}`;
     const crashed = !(code === 0 && !signal);
-    logLine(crashed ? 'warn' : 'info', `[FX:${key}] beendet (${msg}).`);
+    logPanel(crashed ? 'warn' : 'info', `[FX:${key}] beendet (${msg}).`);
     inst.child = null;
     inst.phase = 'idle';
     if (inst.bootTimer) {
@@ -299,7 +299,7 @@ function scheduleBootMonitor(inst, key, logLine, settings, tolSec) {
   const port = Number(settings.fivemPort) || 30120;
   const host = settings.fivemHost || '127.0.0.1';
   const deadline = Date.now() + tolSec * 1000;
-  logLine('info', `[FX:${key}] Boot-Monitor ${tolSec}s (Resource Starting Tolerance).`);
+  logPanel('info', `[FX:${key}] Boot-Monitor ${tolSec}s (Resource Starting Tolerance).`);
 
   const tick = async () => {
     const cur = getInst(key);
@@ -314,7 +314,7 @@ function scheduleBootMonitor(inst, key, logLine, settings, tolSec) {
       const { probeFiveM } = await import('./fivem.js');
       const probe = await probeFiveM(host, port);
       if (probe.online) {
-        logLine('ok', `[FX:${key}] Boot OK (Endpunkt online, Toleranz ${tolSec}s).`);
+        logPanel('ok', `[FX:${key}] Boot OK (Endpunkt online, Toleranz ${tolSec}s).`);
         cur.bootTimer = null;
         return;
       }
@@ -344,7 +344,7 @@ function scheduleBootMonitor(inst, key, logLine, settings, tolSec) {
 function scheduleCrashRestart(inst, key, logLine, reason) {
   const auto = inst.lastSettings?.autoRestartEnabled !== '0';
   if (!auto || !inst.lastSettings) {
-    logLine('warn', `[FX:${key}] Auto-Restart aus (${reason}).`);
+    logPanel('warn', `[FX:${key}] Auto-Restart aus (${reason}).`);
     return;
   }
 
@@ -355,7 +355,7 @@ function scheduleCrashRestart(inst, key, logLine, reason) {
 
   inst.restartAttempt += 1;
   const delaySec = Math.min(MAX_BACKOFF_SEC, 3 * (2 ** Math.min(inst.restartAttempt - 1, 5)));
-  logLine('info', `[FX:${key}] Crash-Restart #${inst.restartAttempt} in ${delaySec}s… (${reason})`);
+  logPanel('info', `[FX:${key}] Crash-Restart #${inst.restartAttempt} in ${delaySec}s… (${reason})`);
 
   if (inst.restartTimer) clearTimeout(inst.restartTimer);
   const snap = inst.lastSettings;
@@ -412,7 +412,7 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
     clearTimeout(inst.bootTimer);
     inst.bootTimer = null;
   }
-  logLine('info', `[FX:${key}] Stop…`);
+  logPanel('info', `[FX:${key}] Stop…`);
   const proc = inst.child;
   const done = new Promise((resolve) => {
     const timer = setTimeout(() => {

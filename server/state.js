@@ -60,20 +60,47 @@ export function pushSeries(point) {
   if (runtime.series.length > MAX_SERIES) runtime.series.shift();
 }
 
-export function logLine(level, text) {
+/** Orbit-Panel-Status — nicht in die Live-Konsole (Login, Boot-Monitor, Sync, …). */
+function isLiveConsoleNoise(text) {
+  const t = String(text || '');
+  if (/^(?:\[FX:\d+\]\s*)?(?:Boot OK|Boot-Monitor|Boot-Timeout|Start in |Stop…|Stop vor Start|Quiet Mode|chat:|Permissions in |Crash-Restart|Auto-Restart|Resource startete|beendet \()/i.test(t)) {
+    return true;
+  }
+  if (/FiveM-Endpunkt (?:nicht )?erreichbar/i.test(t)) return true;
+  if (/über Cfx\.re angemeldet$/i.test(t)) return true;
+  if (/^[^\s]+ angemeldet$/i.test(t)) return true;
+  if (/Cfx\.re verknüpft/i.test(t)) return true;
+  if (/Master-Account .+ angelegt/i.test(t)) return true;
+  return false;
+}
+
+/**
+ * @param {string} level
+ * @param {string} text
+ * @param {{ console?: boolean }} [opts] console:false = nur Hook/Audit, nicht Live-Konsole
+ */
+export function logLine(level, text, opts = {}) {
   runtime.consoleSeq += 1;
   const clean = stripAnsi(text).slice(0, 500);
-  runtime.console.push({
-    id: runtime.consoleSeq,
-    t: Date.now(),
-    level,
-    text: clean,
-  });
-  if (runtime.console.length > MAX_CONSOLE) runtime.console.splice(0, runtime.console.length - MAX_CONSOLE);
+  const toConsole = opts.console !== false && !isLiveConsoleNoise(clean);
+  if (toConsole) {
+    runtime.console.push({
+      id: runtime.consoleSeq,
+      t: Date.now(),
+      level,
+      text: clean,
+    });
+    if (runtime.console.length > MAX_CONSOLE) runtime.console.splice(0, runtime.console.length - MAX_CONSOLE);
+    notifyConsoleWake();
+  }
   try {
     logHook?.(level, clean);
   } catch { /* */ }
-  notifyConsoleWake();
+}
+
+/** Explizit Panel-only (nie Live-Konsole). */
+export function logPanel(level, text) {
+  logLine(level, text, { console: false });
 }
 
 /** Panel-Konsole leeren (z. B. bei Server-Start). */
