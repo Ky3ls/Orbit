@@ -14,6 +14,7 @@ html[data-theme="light"] {
   --muted: #5c6570;
   --faint: #8a939e;
   --accent-dim: rgba(var(--accent-rgb), 0.14);
+  --accent-ink: #c45a08;
   --ok: #1a8a58;
   --warn: #9a7209;
   --bad: #b83a3a;
