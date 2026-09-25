@@ -1,9 +1,23 @@
 /* Automationen — Neustarts + Backups */
 
+/*
+ * Page className hängt an ModuleShell (.ws-module.sch-page).
+ * Tabs/Stats/Cards sind Kinder von .ws-module-content — deshalb muss
+ * der vertikale Rhythmus HIER gesetzt werden, nicht nur auf .sch-page.
+ * Canvas-Hintergrund macht Grid-Gutters zwischen weißen Cards sichtbar
+ * (ws-column ist in Light Mode oft bg-elevated = weiß → Gap unsichtbar).
+ */
 .sch-page {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 0;
+}
+
+.sch-page .ws-module-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background: var(--bg);
 }
 
 .sch-err { margin: 0; }
@@ -113,13 +127,18 @@
 
 .sch-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.25fr);
-  gap: 26px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px;
+  column-gap: 32px;
+  row-gap: 28px;
   align-items: stretch;
 }
 
 .sch-layout-backup {
-  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
+  gap: 32px;
+  column-gap: 32px;
+  row-gap: 28px;
 }
 
 .sch-form-backup {
@@ -224,12 +243,14 @@
 .sch-card {
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: var(--bg-elevated, var(--bg-2));
+  background: var(--bg-elevated, var(--card, var(--bg-2)));
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  box-shadow: inset 3px 0 0 rgba(var(--accent-rgb), 0.55);
+  box-shadow:
+    var(--shadow, 0 1px 3px rgba(0, 0, 0, 0.06)),
+    inset 3px 0 0 rgba(var(--accent-rgb), 0.55);
   min-height: 0;
 }
 
@@ -455,7 +476,9 @@
   .sch-layout,
   .sch-layout-backup {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 24px;
+    column-gap: 24px;
+    row-gap: 24px;
   }
   .sch-layout-backup .sch-files {
     grid-column: auto;
