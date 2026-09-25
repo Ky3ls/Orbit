@@ -187,13 +187,13 @@ function hit(key, limit, windowMs) {
 }
 
 const RECIPES = {
-  blank: ['oxmysql'],
-  esx: ['oxmysql', 'es_extended', 'ox_lib', '[core]', '[esx_addons]'],
-  qb: ['oxmysql', 'qb-core', 'qb-multicharacter', '[qb]'],
-  qbox: ['oxmysql', 'qbx_core', 'ox_lib', '[qbx]'],
-  vmenu: ['oxmysql', 'vMenu'],
-  streetkings: ['oxmysql', 'streetkings'],
-  warfare: ['oxmysql', 'warfaretacticsv'],
+  blank: ['oxmysql', 'pma-voice'],
+  esx: ['oxmysql', 'es_extended', 'ox_lib', 'pma-voice', '[core]', '[esx_addons]'],
+  qb: ['oxmysql', 'pma-voice', 'qb-core', 'qb-multicharacter', '[qb]'],
+  qbox: ['oxmysql', 'qbx_core', 'ox_lib', 'pma-voice', '[qbx]'],
+  vmenu: ['oxmysql', 'pma-voice', 'vMenu'],
+  streetkings: ['oxmysql', 'pma-voice', 'streetkings'],
+  warfare: ['oxmysql', 'pma-voice', 'warfaretacticsv'],
   redm: ['oxmysql'],
   vorp: ['oxmysql', 'vorp_core', 'vorp_character'],
 };

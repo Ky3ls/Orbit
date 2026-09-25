@@ -4,7 +4,7 @@ import { FX_SERVER_ROOT, ORBIT_SERVERS_ROOT } from './config.js';
 import { resolveCustomDataPath, resolveOrbitServersRoot } from './serverPathPolicy.js';
 import { sanitizeCfgMetaComments } from './cfgSanitize.js';
 
-const DEFAULT_ENSURES = ['oxmysql'];
+const DEFAULT_ENSURES = ['oxmysql', 'pma-voice'];
 
 export function slugifyServerName(name) {
   const base = String(name || '')
