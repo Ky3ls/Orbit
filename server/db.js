@@ -131,6 +131,8 @@ export function getDb() {
     'ALTER TABLE bans ADD COLUMN ids TEXT',
     'ALTER TABLE players ADD COLUMN play_ms INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE resources ADD COLUMN folder TEXT',
+    "ALTER TABLE schedule ADD COLUMN kind TEXT NOT NULL DEFAULT 'restart'",
+    'ALTER TABLE schedule ADD COLUMN retention INTEGER NOT NULL DEFAULT 5',
   ]) {
     try { db.exec(sql); } catch (err) {
       if (!String(err.message).includes('duplicate column')) throw err;
