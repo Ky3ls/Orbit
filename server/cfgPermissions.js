@@ -118,15 +118,30 @@ function stripOrbitPermissionBlocks(text) {
     'gi',
   );
   out = out.replace(legacyRe, '');
-  // Ab "# Permissions" bis Dateiende (unser Block ist immer zuletzt)
-  out = out.replace(/(?:\r?\n)*#\s*Permissions\s*(?:\r?\n[\s\S]*)?$/i, '');
+  // Ab "# Permissions" bis Dateiende — ensure-Zeilen aus dem Tail retten (Bug-Reparatur)
+  let rescuedEnsures = [];
+  const permTail = out.match(/((?:\r?\n)*#\s*Permissions\b[\s\S]*)$/i);
+  if (permTail) {
+    rescuedEnsures = permTail[1]
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => /^ensure\s+\S+/i.test(l));
+    out = out.slice(0, out.length - permTail[1].length);
+  }
   const lines = out.split(/\r?\n/);
   const kept = lines.filter((line) => {
     const t = line.trim();
     if (!t) return true;
     return !MANAGED_LINE_RES.some((re) => re.test(t));
   });
-  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+  let body = kept.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+  for (const line of rescuedEnsures) {
+    const name = line.replace(/^\s*ensure\s+/i, '').trim();
+    if (!name) continue;
+    const re = new RegExp(`^\\s*ensure\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$|#)`, 'mi');
+    if (!re.test(body)) body = `${body}\n${line}`;
+  }
+  return body;
 }
 
 /**
