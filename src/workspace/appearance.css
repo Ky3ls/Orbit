@@ -20,6 +20,12 @@ html[data-theme="light"] {
   --info: #336090;
   --shadow: 0 4px 16px rgba(20, 28, 36, 0.07), 0 1px 3px rgba(20, 28, 36, 0.04);
   --glow: none;
+  --chart-grid: rgba(20, 28, 36, 0.08);
+  --chart-axis: rgba(20, 28, 36, 0.14);
+  --chart-plot-bg: var(--bg);
+  --surface-inset: var(--bg-2);
+  --code-bg: #f7f9fb;
+  --code-fg: #1a1d21;
 }
 
 html[data-theme="light"] body,
@@ -150,6 +156,110 @@ html[data-theme="light"] .ws-online-chip {
 }
 html[data-theme="light"] .live-console-cockpit .lc-form input {
   background: var(--bg-elevated);
+}
+
+/* —— Light: Cards / Charts / Code / Listen —— */
+html[data-theme="light"] .o-card,
+html[data-theme="light"] .ob-tile,
+html[data-theme="light"] .nx-panel {
+  background: var(--card) !important;
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow) !important;
+}
+html[data-theme="light"] .o-card::before,
+html[data-theme="light"] .nx-panel::before {
+  opacity: 0;
+}
+html[data-theme="light"] .o-empty {
+  background: var(--bg);
+  border-color: var(--line);
+  color: var(--muted);
+}
+html[data-theme="light"] .o-empty strong {
+  color: var(--text);
+}
+html[data-theme="light"] .o-metric {
+  background: var(--bg);
+  border-color: var(--line);
+}
+html[data-theme="light"] .mon-chart-val {
+  color: var(--text);
+}
+html[data-theme="light"] .chart-plot {
+  background: var(--chart-plot-bg);
+  border: 1px solid var(--line);
+}
+html[data-theme="light"] .gauge svg circle:first-child {
+  stroke: rgba(20, 28, 36, 0.1);
+}
+
+/* Ressourcen */
+html[data-theme="light"] .res-toolbar {
+  background: var(--bg-elevated);
+  border-bottom-color: var(--line);
+}
+html[data-theme="light"] .res-search {
+  background: var(--bg-elevated);
+  border-color: var(--line);
+  color: var(--text);
+}
+html[data-theme="light"] .res-search-clear {
+  background: var(--bg-2);
+  border-color: var(--line);
+  color: var(--muted);
+}
+html[data-theme="light"] .res-search-clear:hover {
+  color: var(--text);
+}
+html[data-theme="light"] .res-group {
+  background: var(--card);
+  border-color: var(--line);
+}
+html[data-theme="light"] .res-group-head {
+  background: var(--bg);
+  color: var(--text);
+}
+html[data-theme="light"] .res-group-head.open {
+  background: var(--accent-dim);
+  border-bottom-color: var(--line);
+}
+html[data-theme="light"] .res-group-folder,
+html[data-theme="light"] .res-group-title .mono,
+html[data-theme="light"] .res-row-name {
+  color: var(--text) !important;
+}
+html[data-theme="light"] .res-page .res-row,
+html[data-theme="light"] .res-page .ws-res-row {
+  border-bottom-color: var(--line);
+}
+html[data-theme="light"] .res-status-dot {
+  background: var(--faint);
+}
+html[data-theme="light"] .res-row-actions {
+  background: var(--bg-2);
+  border-color: var(--line);
+}
+html[data-theme="light"] .res-act {
+  border-right-color: var(--line);
+  color: var(--text);
+}
+html[data-theme="light"] .res-act:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* Logs / Code-Flächen */
+html[data-theme="light"] .fx-log {
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--code-fg);
+}
+html[data-theme="light"] .fx-log-line {
+  border-bottom-color: var(--line);
+}
+html[data-theme="light"] .cfg-area {
+  background: var(--code-bg);
+  color: var(--code-fg);
 }
 
 /* —— Settings: Aussehen —— */

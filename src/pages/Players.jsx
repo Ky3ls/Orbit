@@ -391,7 +391,6 @@ export default function Players({ user }) {
           <AreaChart
             data={playerSeries}
             accessor={seriesPlayers}
-            color="#ff7a1a"
             yMax={maxClients}
             formatY={intAxis}
             ariaLabel={t('players.countAria')}
@@ -408,7 +407,7 @@ export default function Players({ user }) {
           <AreaChart
             data={dropSeries}
             accessor={seriesDrops}
-            color="#e85d4a"
+            color="var(--bad)"
             formatY={intAxis}
             ariaLabel={t('players.dropsAria')}
           />

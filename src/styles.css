@@ -19,6 +19,12 @@
   --info: #8eb6ff;
   --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
   --glow: none;
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-axis: rgba(255, 255, 255, 0.08);
+  --chart-plot-bg: rgba(0, 0, 0, 0.22);
+  --surface-inset: rgba(0, 0, 0, 0.28);
+  --code-bg: #050505;
+  --code-fg: #e8e8e8;
   --radius: 18px;
   --side: 262px;
   --font: 'Outfit Variable', 'Outfit', sans-serif;
@@ -1408,9 +1414,9 @@ input:focus, select:focus, textarea:focus {
   position: relative;
   padding: 16px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(12, 12, 16, 0.92);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow);
 }
 .o-card-flush { padding: 0; overflow: hidden; }
 .o-card h3 {
@@ -1423,14 +1429,14 @@ input:focus, select:focus, textarea:focus {
   padding: 40px 20px;
   text-align: center;
   color: var(--muted);
-  border: 1px dashed rgba(255,255,255,0.1);
+  border: 1px dashed var(--line);
   border-radius: 14px;
-  background: rgba(0,0,0,0.18);
+  background: var(--bg-2);
 }
 .o-empty strong {
   display: block;
   margin-bottom: 6px;
-  color: #fff;
+  color: var(--text);
   font-family: var(--display);
   font-size: 18px;
   letter-spacing: -0.02em;
@@ -1445,8 +1451,8 @@ input:focus, select:focus, textarea:focus {
   overflow: hidden;
   padding: 16px 14px 18px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(12,12,16,0.62);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
 }
 .o-metric-label {
   display: block;
@@ -1827,7 +1833,7 @@ input:focus, select:focus, textarea:focus {
   font-size: 10px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--faint);
+  color: var(--muted);
   user-select: none;
 }
 .chart-plot {
@@ -1835,7 +1841,7 @@ input:focus, select:focus, textarea:focus {
   min-width: 0;
   min-height: 0;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--chart-plot-bg, rgba(0, 0, 0, 0.18));
 }
 .chart-empty {
   position: absolute;
@@ -1853,7 +1859,7 @@ input:focus, select:focus, textarea:focus {
   font-size: 10px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--faint);
+  color: var(--muted);
   user-select: none;
 }
 .mon-page {
@@ -1878,12 +1884,13 @@ input:focus, select:focus, textarea:focus {
 }
 .mon-chart-head h3 {
   margin: 0;
+  color: var(--text);
 }
 .mon-chart-val {
   font-variant-numeric: tabular-nums;
   font-size: 13px;
   font-weight: 650;
-  color: #fff;
+  color: var(--text);
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1896,7 +1903,7 @@ input:focus, select:focus, textarea:focus {
 .gauge strong { font-size: 22px; font-family: var(--display); }
 .table-wrap { overflow: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); }
+th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--line); }
 th {
   color: var(--faint);
   font-size: 11px;
@@ -1916,7 +1923,7 @@ td .badge { margin-left: 8px; }
   background: rgba(0,0,0,0.3);
 }
 .empty { padding: 32px 14px; text-align: center; color: var(--muted); }
-.empty strong { display: block; color: white; margin-bottom: 6px; font-family: var(--display); }
+.empty strong { display: block; color: var(--text); margin-bottom: 6px; font-family: var(--display); }
 .modal-back {
   position: fixed; inset: 0; z-index: 80;
   display: grid; place-items: center;
@@ -1999,14 +2006,16 @@ td .badge { margin-left: 8px; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   line-height: 1.45;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--code-bg, rgba(0, 0, 0, 0.25));
+  color: var(--code-fg, var(--text));
+  border-radius: 10px;
 }
 .fx-log-line {
   display: grid;
   grid-template-columns: 72px 52px minmax(0, 1fr);
   gap: 8px;
   padding: 3px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--line);
 }
 .fx-log-line time { color: var(--faint); }
 .fx-log-lvl {
@@ -2047,7 +2056,8 @@ td .badge { margin-left: 8px; }
   padding: 14px;
   border: 0;
   border-radius: 0;
-  background: rgba(0,0,0,0.45);
+  background: var(--code-bg, rgba(0, 0, 0, 0.45));
+  color: var(--code-fg, var(--text));
   resize: vertical;
   line-height: 1.45;
   font-size: 12.5px;

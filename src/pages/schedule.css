@@ -202,7 +202,7 @@
 
 .sch-job.is-on {
   border-color: rgba(var(--accent-rgb), 0.35);
-  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.1), rgba(0, 0, 0, 0.12) 42%);
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.1), color-mix(in srgb, var(--bg-2) 70%, transparent) 42%);
 }
 
 .sch-job-time {

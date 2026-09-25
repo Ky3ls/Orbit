@@ -31,7 +31,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   flex-direction: column;
   min-height: 0;
   padding: 0;
-  background: #040404;
+  background: var(--bg-2);
   border-right: 1px solid var(--line);
   overflow: hidden;
 }
@@ -106,7 +106,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 
 .db-table-btn.active {
   background: var(--accent-dim);
-  color: var(--accent-2);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -116,7 +116,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  background: #000;
+  background: var(--bg-elevated);
 }
 
 .db-main-head {
@@ -127,7 +127,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: #050505;
+  background: var(--card);
   flex-shrink: 0;
 }
 
@@ -157,7 +157,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   border: none;
   padding: 0;
   font: inherit;
-  color: var(--accent-2);
+  color: var(--accent);
   cursor: pointer;
 }
 
@@ -179,7 +179,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   padding: 6px 10px;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
-  background: #030303;
+  background: var(--bg);
 }
 
 .db-tab {
@@ -202,7 +202,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 .db-tab.active {
   border-color: var(--accent);
   background: var(--accent-dim);
-  color: var(--accent-2);
+  color: var(--accent);
 }
 
 .db-panel {
@@ -230,7 +230,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   border: none;
   padding: 0;
   font: inherit;
-  color: var(--accent-2);
+  color: var(--accent);
   cursor: pointer;
   text-decoration: underline;
 }
