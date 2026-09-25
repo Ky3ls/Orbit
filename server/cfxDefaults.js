@@ -9,7 +9,6 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ensureOnce } from './cfgUpsert.js';
 import { FX_SERVER_ROOT } from './config.js';
-import { applyOrbitPermissionsToCfg } from './cfgPermissions.js';
 
 const exec = promisify(execFile);
 
@@ -228,6 +227,6 @@ export function applyCfxBaseCfg(cfg, profile = 'blank') {
     out = `${out.trimEnd()}\n\n${baseBlock}\n`;
   }
   out = applyFrameworkAce(out, profile);
-  out = applyOrbitPermissionsToCfg(out, { profile });
+  // Permissions erst nach allen ensure-Zeilen (siehe recipeInstall / syncOrbitPermissions*)
   return out;
 }

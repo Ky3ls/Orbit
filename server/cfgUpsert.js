@@ -54,11 +54,19 @@ export function upsertCfgSetr(cfg, key, value, { quoted = false } = {}) {
   return `${String(cfg).trimEnd()}\n${line}\n`;
 }
 
-/** ensure-Zeile nur einmal; Namen mit [brackets] korrekt. */
+/** ensure-Zeile nur einmal; vor dem Permissions-Block einfügen (nie danach — sonst weg beim Sync). */
 export function ensureOnce(cfg, resourceName) {
   const name = String(resourceName || '').trim();
   if (!name) return cfg;
+  const text = String(cfg || '');
   const re = new RegExp(`^\\s*ensure\\s+${escapeRe(name)}(?:\\s|$|#)`, 'mi');
-  if (re.test(cfg)) return cfg;
-  return `${String(cfg).trimEnd()}\nensure ${name}\n`;
+  if (re.test(text)) return text;
+  const line = `ensure ${name}\n`;
+  const permAt = text.search(/\n#\s*Permissions\b/i);
+  const legacyAt = text.search(/\n#\s*---\s*Orbit Permissions\s*---/i);
+  const cut = permAt >= 0 ? permAt : legacyAt;
+  if (cut >= 0) {
+    return `${text.slice(0, cut).trimEnd()}\n${line}${text.slice(cut)}`;
+  }
+  return `${text.trimEnd()}\n${line}`;
 }

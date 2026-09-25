@@ -358,7 +358,7 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
   if (profileBlock) {
     cfg = mergeCfgProfile(cfg, profileBlock);
   }
-  // Ensures nur einmal (auch [core] / [esx_addons])
+  // Ensures vor Permissions (Permissions immer zuletzt)
   for (const res of pack.ensures) {
     cfg = ensureOnce(cfg, res);
   }
@@ -369,6 +369,6 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
     master: opts.db ? loadMasterIdentity(opts.db) : {},
   });
   fs.writeFileSync(cfgPath, cfg.trim() + '\n', 'utf8');
-  onLog(`Profil „${pack.title}“ + CFX-Defaults + Permissions + CFG angewendet.`);
+  onLog(`Profil „${pack.title}“ + CFX-Defaults + Ensures + Permissions angewendet.`);
   return results;
 }
