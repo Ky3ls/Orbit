@@ -29,9 +29,9 @@ const DEPLOYS = [
 ];
 
 const TEMPLATES = [
-  { id: 'blank', title: 'CFX Default FiveM', tags: ['FIVEM'], text: 'Nur Basis-Ressourcen für einen FiveM-Server.' },
-  { id: 'esx', title: 'ESX Legacy', tags: ['ROLEPLAY', 'FIVEM'], text: 'Jobs, Housing, Fahrzeuge — populäres RP-Framework.' },
-  { id: 'qb', title: 'QBCore Framework', tags: ['ROLEPLAY', 'FIVEM'], text: 'Fortgeschrittenes RP-Framework.' },
+  { id: 'blank', title: 'CFX Default FiveM', tags: ['FIVEM'], text: 'Basis-Ressourcen inkl. oxmysql & pma-voice.' },
+  { id: 'esx', title: 'ESX Legacy', tags: ['ROLEPLAY', 'FIVEM'], text: 'Jobs, Housing, Fahrzeuge — inkl. pma-voice.' },
+  { id: 'qb', title: 'QBCore Framework', tags: ['ROLEPLAY', 'FIVEM'], text: 'Fortgeschrittenes RP-Framework inkl. pma-voice.' },
   { id: 'redm', title: 'CFX Default RedM', tags: ['REDM'], text: 'Basis-Ressourcen für RedM.' },
   { id: 'vorp', title: 'VORP Core', tags: ['ROLEPLAY', 'REDM'], text: 'Führendes RP-Framework für RedM.' },
 ];
