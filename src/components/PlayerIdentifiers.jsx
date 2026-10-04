@@ -10,11 +10,13 @@ const ID_LABELS = {
   live: 'Microsoft',
   ip: 'IP',
   hardware: 'HWID',
+  identifier2: 'identifier2',
 };
 
+/** Bekannte Reihenfolge; unbekannte Typen folgen alphabetisch — nichts wird verworfen. */
 const KIND_ORDER = [
   'license', 'license2', 'discord', 'steam', 'fivem',
-  'xbl', 'live', 'ip', 'hardware',
+  'xbl', 'live', 'ip', 'hardware', 'identifier2',
 ];
 
 export function idKind(id) {
@@ -32,21 +34,24 @@ function idValue(id) {
   return i > 0 ? s.slice(i + 1) : s;
 }
 
-/** Gruppiert Identifier; mehrere Werte (v. a. IPs) mit `; ` in einer Zeile. */
+/** Gruppiert Identifier; mehrere Werte (v. a. IPs) mit `; ` in einer Zeile. Kein Typ-Filter. */
 export function groupIdentifiers(ids) {
   const map = new Map();
   for (const raw of ids || []) {
-    const kind = idKind(raw);
-    const value = idValue(raw);
-    if (!value) continue;
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    const kind = idKind(s);
+    const value = idValue(s);
+    // Auch Werte ohne Prefix / leerer Suffix als Rohstring behalten
+    const entry = value || s;
     if (!map.has(kind)) map.set(kind, []);
     const list = map.get(kind);
-    if (!list.includes(value)) list.push(value);
+    if (!list.includes(entry)) list.push(entry);
   }
   const keys = [...map.keys()].sort((a, b) => {
     const ia = KIND_ORDER.indexOf(a);
     const ib = KIND_ORDER.indexOf(b);
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    return (ia < 0 ? 1000 : ia) - (ib < 0 ? 1000 : ib) || a.localeCompare(b);
   });
   return keys.map((kind) => ({
     kind,
