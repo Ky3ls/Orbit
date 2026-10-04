@@ -455,7 +455,8 @@ html[data-theme="light"] .cfg-find {
   border-radius: 20px;
   border: 1px solid var(--line);
   background: var(--bg-elevated);
-  box-shadow: var(--shadow);
+  /* Kein Drop-/Inset-Shadow: gegen den schwarzen Gap wirkt der linke Rand sonst wie Glow */
+  box-shadow: none;
   overflow: hidden;
 }
 
