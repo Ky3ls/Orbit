@@ -54,11 +54,6 @@
 .osel-trigger.open .osel-caret { transform: rotate(180deg); }
 
 .osel-menu {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
   margin: 0;
   padding: 6px;
   list-style: none;
@@ -74,6 +69,12 @@
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--accent-rgb), 0.55) rgba(255, 255, 255, 0.06);
+}
+/* Portal → document.body: entkommt Card overflow:hidden */
+.osel-menu-portal {
+  position: fixed;
+  z-index: 10050;
+  right: auto;
 }
 .osel-menu::-webkit-scrollbar {
   width: 8px;
