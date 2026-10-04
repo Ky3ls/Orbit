@@ -72,6 +72,25 @@ export default function LiveConsole({
   const inputRef = useRef(null);
   const consoleBuf = useRef([]);
   const consoleRaf = useRef(0);
+  /** true = offline bestätigt → keine (Alt-)Logs annehmen */
+  const suppressLogsRef = useRef(false);
+
+  /** FX läuft / startet — sonst Konsole leer halten (keine Alt-Logs). */
+  const consoleLive = !!(
+    fx.online
+    || fx.processActive
+    || fx.unitActive
+    || fx.status === 'starting'
+    || fx.status === 'restarting'
+    || fx.supervisorPhase === 'starting'
+    || fx.supervisorPhase === 'restarting'
+  );
+
+  function wipeConsole() {
+    consoleBuf.current = [];
+    consoleRaf.current = 0;
+    setLines([]);
+  }
 
   useEffect(() => {
     if (!active) return;
@@ -84,15 +103,25 @@ export default function LiveConsole({
     setTargetId(String(id || ''));
   }
 
+  // Erst nach Status-Hydration: offline → clear + suppress; live → Logs erlauben
+  useEffect(() => {
+    if (!fx.ready) return;
+    if (consoleLive) {
+      suppressLogsRef.current = false;
+      return;
+    }
+    suppressLogsRef.current = true;
+    wipeConsole();
+  }, [fx.ready, consoleLive]);
+
   useEffect(() => {
     if (!active) return undefined;
     const es = new EventSource('/api/stream');
     es.addEventListener('console_clear', () => {
-      consoleBuf.current = [];
-      consoleRaf.current = 0;
-      setLines([]);
+      wipeConsole();
     });
     es.addEventListener('console', (e) => {
+      if (suppressLogsRef.current) return;
       let incoming;
       try { incoming = JSON.parse(e.data); } catch { return; }
       if (!Array.isArray(incoming) || !incoming.length) return;
@@ -101,6 +130,10 @@ export default function LiveConsole({
       consoleRaf.current = 1;
       queueMicrotask(() => {
         consoleRaf.current = 0;
+        if (suppressLogsRef.current) {
+          consoleBuf.current = [];
+          return;
+        }
         const batch = consoleBuf.current;
         consoleBuf.current = [];
         if (batch.length) setLines((prev) => mergeLines(prev, batch));
@@ -307,10 +340,14 @@ export default function LiveConsole({
       <div className="lc-term" ref={box} onScroll={onScroll}>
         {visible.length === 0 && (
           <div className="lc-empty">
-            {lines.length ? t('console.emptyFilter') : t('console.emptyWait')}
+            {fx.ready && !consoleLive
+              ? t('console.emptyOffline')
+              : lines.length
+                ? t('console.emptyFilter')
+                : t('console.emptyWait')}
           </div>
         )}
-        {visible.map((line) => (
+        {(consoleLive || !fx.ready) && visible.map((line) => (
           <div key={line.id} className={`lc-line ${line.level || 'info'}`}>
             <span className="lc-ts">{fmtTime(line.t)}</span>
             <span className="lc-prompt">›</span>
@@ -319,16 +356,19 @@ export default function LiveConsole({
             </span>
           </div>
         ))}
-        <div className="lc-caret" aria-hidden="true">▌</div>
+        {(consoleLive || !fx.ready) && visible.length > 0 && (
+          <div className="lc-caret" aria-hidden="true">▌</div>
+        )}
       </div>
       {err && <div className="lc-err">{err}</div>}
       <form
         className="lc-form"
-        onSubmit={(e) => { e.preventDefault(); send(); }}
+        onSubmit={(e) => { e.preventDefault(); if (fx.fxCommandReady) send(); }}
       >
         <input
           ref={inputRef}
           className="mono"
+          type="text"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={onKeyDown}

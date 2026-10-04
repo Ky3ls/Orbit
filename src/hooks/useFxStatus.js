@@ -8,12 +8,13 @@ const EMPTY = {
   processActive: false,
   controlEnabled: false,
   status: 'offline',
+  ready: false,
 };
 
 /** Pollt /api/server/status für FX-Metadaten (leichtgewichtig). */
 export function useFxStatus(intervalMs = 8000) {
   const [fx, setFx] = useState(EMPTY);
-  const prev = useRef(EMPTY);
+  const prev = useRef(null);
 
   useEffect(() => {
     let stop = false;
@@ -31,8 +32,9 @@ export function useFxStatus(intervalMs = 8000) {
             controlEnabled: !!d.controlEnabled,
             status: d.status || 'offline',
             supervisorPhase: d.supervisorPhase,
+            ready: true,
           };
-          if (sameJson(prev.current, next)) return;
+          if (prev.current && sameJson(prev.current, next)) return;
           prev.current = next;
           setFx(next);
         })
