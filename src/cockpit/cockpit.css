@@ -294,6 +294,8 @@
   background: var(--card);
 }
 .live-console-cockpit .lc-form input {
+  flex: 1 1 auto;
+  min-width: 0;
   background: var(--bg-2);
   color: var(--text);
   border-color: var(--line);

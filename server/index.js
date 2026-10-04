@@ -163,7 +163,7 @@ import { fxCommandReady } from './rcon.js';
 import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
 import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail.js';
 import { syncOrbitPermissionsFile, applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
-import { logLine, logPanel, runtime, pushSeries, setLogHook, snapshot, onConsoleWake } from './state.js';
+import { logLine, logPanel, runtime, pushSeries, setLogHook, snapshot, onConsoleWake, clearConsole } from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
@@ -495,6 +495,17 @@ async function loop() {
         runtime.onlineSince = null;
         db.prepare("UPDATE resources SET actual = 'unknown'").run();
         logLine('warn', 'FiveM-Endpunkt nicht erreichbar.');
+        // Offline: Live-Konsole leeren — keine historischen FX-Logs anzeigen
+        if (!active && runtime.controlPhase !== 'starting' && runtime.controlPhase !== 'restarting') {
+          clearConsole();
+        }
+      }
+      // Prozess weg + Endpoint offline → Konsole leer halten
+      if (!probe.online && !active
+        && runtime.controlPhase !== 'starting'
+        && runtime.controlPhase !== 'restarting'
+        && runtime.console.length) {
+        clearConsole();
       }
       if (probe.online && !runtime.onlineSince) runtime.onlineSince = Date.now();
       if (!probe.online) runtime.onlineSince = null;
@@ -1660,7 +1671,18 @@ async function handleApi(req, res, url) {
         send('console', fresh);
       }
     };
-    send('console', runtime.console.slice(-200));
+    // Offline: keine historischen Buffer-Zeilen — Client startet leer
+    const fxLive = runtime.online
+      || runtime.unitActive
+      || runtime.controlPhase === 'starting'
+      || runtime.controlPhase === 'restarting'
+      || runtime.supervisorPhase === 'starting'
+      || runtime.supervisorPhase === 'restarting';
+    if (fxLive) {
+      send('console', runtime.console.slice(-200));
+    } else if (runtime.consoleClearId) {
+      send('console_clear', { id: runtime.consoleClearId, at: runtime.consoleClearedAt });
+    }
     send('state', snapshot());
     // Event-driven: neue Zeilen sofort pushen
     const unsub = onConsoleWake(flushConsole);
