@@ -96,12 +96,10 @@ local function pushPlayers(payload)
   payload.token = ORBIT_TOKEN
   OrbitHttp('POST', '/api/ingame/players-sync', payload, nil, function(code)
     if code ~= 200 then
-      print(('^1[orbit]^0 players-sync HTTP %s'):format(tostring(code)))
-    elseif payload.event == 'playerJoining' then
-      local p = payload.player or {}
-      print(('^2[orbit]^0 Spieler online: %s (#%s)'):format(tostring(p.name or '?'), tostring(p.id or '?')))
+      print(('^1players-sync HTTP %s^7'):format(tostring(code)))
     elseif payload.event == 'playerDropped' then
-      print(('^3[orbit]^0 Spieler offline: #%s'):format(tostring(payload.id or '?')))
+      -- Connect-Log kommt aus sv_hardcap; hier nur Offline (kein Doppel-„online“)
+      print(('^3Spieler offline: #%s^7'):format(tostring(payload.id or '?')))
     end
   end)
 end
@@ -198,7 +196,7 @@ end)
 
 AddEventHandler('onResourceStart', function(res)
   if res ~= RESOURCE then return end
-  print(('^2[orbit]^0 v4 · Panel %s · Token %s · Live-Playerlist'):format(
+  print(('^2v4 · Panel %s · Token %s · Live-Playerlist · Slot-Cap^7'):format(
     PANEL,
     tokenReady() and 'ok' or 'fehlt'
   ))
@@ -210,7 +208,12 @@ end)
 
 RegisterCommand('orbit', function(source)
   if source == 0 then
-    print(('[orbit] Panel %s · online %d'):format(PANEL, #GetPlayers()))
+    print(('Panel %s · online %d · slots %d/%d'):format(
+      PANEL,
+      #GetPlayers(),
+      OrbitHardcapCount and OrbitHardcapCount() or 0,
+      GetConvarInt('sv_maxclients', 32)
+    ))
     syncFull()
   end
 end, false)

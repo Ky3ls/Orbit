@@ -112,7 +112,7 @@ RegisterCommand('orbitEvent', function(source, args)
   local eventName = args[1]
   local payload = decodePayload(table.concat(args, ' ', 2))
   if type(eventName) ~= 'string' or not HANDLERS[eventName] then
-    print(('[orbit] unbekanntes Event: %s'):format(tostring(eventName)))
+    print(('unbekanntes Event: %s'):format(tostring(eventName)))
     return
   end
   HANDLERS[eventName](payload or {})

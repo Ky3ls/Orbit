@@ -13,18 +13,17 @@ import { FX_SERVER_ROOT } from './config.js';
 const exec = promisify(execFile);
 
 const CFX_DATA_URL = 'https://github.com/citizenfx/cfx-server-data.git';
-/** Letzter Commit mit hardcap + sessionmanager (danach aus master entfernt) */
+/** Letzter Commit mit sessionmanager (hardcap-Logik steckt in Orbit; hardcap nicht mehr ensure'n) */
 const CFX_LEGACY_SHA = 'e265cb251c88260533c847d4a1a2838c7d828a66';
 
 const SKIP_TOP = new Set(['[test]', '[local]']);
 
-/** Blank / Minimal */
+/** Blank / Minimal — Slot-Cap über Orbit (kein ensure hardcap) */
 export const CFX_BLANK_ENSURES = [
   'mapmanager',
   'chat',
   'spawnmanager',
   'sessionmanager',
-  'hardcap',
   'baseevents',
   'basic-gamemode',
 ];
@@ -33,7 +32,6 @@ export const CFX_BLANK_ENSURES = [
 export const CFX_FRAMEWORK_ENSURES = [
   'chat',
   'sessionmanager',
-  'hardcap',
   'baseevents',
 ];
 
@@ -91,18 +89,24 @@ export function syncChatFromArtifact(dataPath, fxRoot = FX_SERVER_ROOT, onLog = 
 }
 
 /**
- * hardcap + sessionmanager aus älterem cfx-server-data Commit (nicht mehr im master).
+ * sessionmanager aus älterem cfx-server-data Commit (nicht mehr im master).
+ * hardcap wird nicht mehr installiert/ensured — Slot-Cap läuft in Orbit.
  */
 export async function installLegacySystemResources(dataPath, onLog = () => {}) {
   const resources = path.join(String(dataPath).replace(/\/$/, ''), 'resources');
   const systemDir = path.join(resources, '[system]');
   fs.mkdirSync(systemDir, { recursive: true });
 
-  const need = ['hardcap', 'sessionmanager'].filter(
+  // Vorhandenes hardcap-Verzeichnis belassen, aber nie ensure'n
+  if (fs.existsSync(path.join(systemDir, 'hardcap', 'fxmanifest.lua'))) {
+    onLog('hardcap: Ordner vorhanden — Slot-Cap über Orbit, ensure hardcap nicht setzen');
+  }
+
+  const need = ['sessionmanager'].filter(
     (n) => !fs.existsSync(path.join(systemDir, n, 'fxmanifest.lua')),
   );
   if (!need.length) {
-    onLog('hardcap/sessionmanager: bereits vorhanden');
+    onLog('sessionmanager: bereits vorhanden');
     return { ok: true, skipped: true };
   }
 
@@ -110,7 +114,7 @@ export async function installLegacySystemResources(dataPath, onLog = () => {}) {
   const zip = path.join(tmp, 'cfx.zip');
   try {
     fs.mkdirSync(tmp, { recursive: true });
-    onLog('Lade hardcap/sessionmanager (Legacy cfx-server-data)…');
+    onLog('Lade sessionmanager (Legacy cfx-server-data)…');
     const res = await fetch(
       `https://codeload.github.com/citizenfx/cfx-server-data/zip/${CFX_LEGACY_SHA}`,
       { signal: AbortSignal.timeout(120_000), redirect: 'follow' },
@@ -211,6 +215,9 @@ export function applyCfxBaseCfg(cfg, profile = 'blank') {
   // Alten / neuen Block ersetzen
   out = out.replace(/# --- Orbit CFX Defaults ---[\s\S]*?# --- Ende CFX Defaults ---\n?/m, '');
   out = out.replace(/^# Basis-Ressourcen\n(?:ensure [^\n]+\n)*/m, '');
+  // hardcap → Orbit Slot-Cap (nie ensure'n, auch Legacy-Zeilen entfernen)
+  out = out.replace(/^\s*ensure\s+hardcap\s*$/gmi, '');
+  out = out.replace(/^\s*start\s+hardcap\s*$/gmi, '');
   // Framework: mapmanager-ensure entfernen falls manuell gesetzt
   if (profile === 'esx' || profile === 'qb') {
     out = out.replace(/^\s*ensure\s+mapmanager\s*$/gmi, '');

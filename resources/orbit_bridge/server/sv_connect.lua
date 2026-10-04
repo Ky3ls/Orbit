@@ -31,6 +31,12 @@ local function handleConnecting(name, setKickReason, d)
     setKickReason('[Orbit] Server wird neu gestartet, bitte kurz warten.')
     return
   end
+
+  -- Slot-Cap + Connect-Log (ehem. hardcap) — vor Deferrals
+  if OrbitHardcapOnConnecting and not OrbitHardcapOnConnecting(name, setKickReason) then
+    return
+  end
+
   if not checkJoinEnabled() then return end
   if not player then return end
 
