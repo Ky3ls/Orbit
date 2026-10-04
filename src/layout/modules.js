@@ -35,7 +35,7 @@ export const MOBILE_DOCK = [
 ];
 
 export function flatModulePaths() {
-  const paths = ['/more', '/ingame'];
+  const paths = ['/more'];
   for (const g of MODULES) {
     for (const item of g.items) paths.push(item.to);
   }

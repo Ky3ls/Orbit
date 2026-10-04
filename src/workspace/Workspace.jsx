@@ -73,11 +73,7 @@ function MoreSheet({ open, onClose, user, hideDockDuplicates, modules, t }) {
       if (hideDockDuplicates && DOCK_PATHS.has(item.to)) return false;
       return true;
     });
-    const extra = [];
-    if (group.id === 'ops') {
-      extra.push({ to: '/ingame', label: t('nav.ingame'), icon: 'cfg' });
-    }
-    return { ...group, items: [...items, ...extra] };
+    return { ...group, items };
   }).filter((g) => g.items.length > 0);
 
   return (
@@ -317,10 +313,9 @@ export default function Workspace({ user, onLogout }) {
                 })}
               </div>
             ))}
-            <div className="ws-rail-group">
-              <span className="ws-rail-group-label">{t('nav.extra')}</span>
-              <RailLink to="/ingame" icon="cfg" label={t('nav.ingame')} pri={false} />
-              {canControl && (
+            {canControl && (
+              <div className="ws-rail-group">
+                <span className="ws-rail-group-label">{t('nav.extra')}</span>
                 <div className="ws-rail-power" ref={powerRef}>
                   <RailLink
                     asButton
@@ -333,8 +328,8 @@ export default function Workspace({ user, onLogout }) {
                   />
                   {powerMenu}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </nav>
 
           <div className="ws-rail-foot">
