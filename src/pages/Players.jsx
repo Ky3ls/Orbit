@@ -907,9 +907,6 @@ export default function Players({ user }) {
 
               {tab === 'ban' && (
                 <div className="pl-panel pl-ban">
-                  {isBanned ? (
-                    <p className="pl-ban-already">{t('players.banActiveHint')}</p>
-                  ) : null}
                   <div className="pl-ban-summary" aria-live="polite">
                     <span className="pl-ban-label">{t('players.selection')}</span>
                     <strong>{durationLabel}</strong>
