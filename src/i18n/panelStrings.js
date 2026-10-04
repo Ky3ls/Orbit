@@ -22,7 +22,7 @@ export const panelDe = {
   'console.emptyWait': 'Warte auf FX-Ausgabe…',
   'console.emptyOffline': 'Server offline',
   'console.phReady': 'Sende einen Befehl…',
-  'console.phOffline': '…',
+  'console.phOffline': 'Server offline — kein Befehl möglich',
   'console.send': 'Senden',
 
   // FX strip / meta
@@ -500,7 +500,7 @@ export const panelEn = {
   'console.emptyWait': 'Waiting for FX output…',
   'console.emptyOffline': 'Server offline',
   'console.phReady': 'Send a command…',
-  'console.phOffline': '…',
+  'console.phOffline': 'Server offline — can’t send commands',
   'console.send': 'Send',
 
   'fx.aria': 'FX controls',
