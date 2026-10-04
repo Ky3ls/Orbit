@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
 import { fmtFull, fmtPlaytime } from '../format.js';
 import { AreaChart, Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import PlayerIdentifiers from '../components/PlayerIdentifiers.jsx';
 import {
   BAN_DURATION_PRESETS,
   banDurationLabel,
@@ -12,18 +13,6 @@ import {
 import './players.css';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
-const ID_LABELS = {
-  license: 'License', license2: 'License 2', discord: 'Discord', steam: 'Steam',
-  fivem: 'Cfx.re', xbl: 'Xbox', live: 'Microsoft', ip: 'IP', hardware: 'HWID',
-};
-
-function idKind(id) {
-  const i = String(id || '').indexOf(':');
-  return i > 0 ? id.slice(0, i) : 'id';
-}
-function idLabel(id) {
-  return ID_LABELS[idKind(id)] || idKind(id);
-}
 function playerIds(p) {
   if (Array.isArray(p.identifiers) && p.identifiers.length) return p.identifiers;
   try {
@@ -656,30 +645,54 @@ export default function Players({ user }) {
       ) : (
         <div className="pl-grid">
           {rows.map((row) => {
-            const preview = playerIds(row).filter((id) => !id.startsWith('ip:')).slice(0, 3);
+            const idsPreview = playerIds(row);
             return (
-              <button key={row.identifier} type="button" className={`pl-card${row.online ? ' online' : ''}${row.banned ? ' banned' : ''}`} onClick={() => openPlayer(row)}>
+              <article
+                key={row.identifier}
+                className={`pl-card${row.online ? ' online' : ''}${row.banned ? ' banned' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => openPlayer(row)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openPlayer(row);
+                  }
+                }}
+              >
                 <div className="pl-card-top">
-                  <div>
-                    <strong>{row.name}</strong>
+                  <div className="pl-card-identity">
+                    <strong className="pl-card-name">{row.name}</strong>
                     <div className="pl-card-meta">
-                      {row.online ? t('players.cardMeta', { id: row.serverId, ping: row.ping ?? 0 }) : t('status.offline')} · {fmtPlaytime(row.play_ms)}
+                      {row.online
+                        ? (
+                          <>
+                            <span>ID {row.serverId}</span>
+                            <span className="pl-meta-sep" aria-hidden="true">·</span>
+                            <span>{row.ping ?? 0} ms</span>
+                            <span className="pl-meta-sep" aria-hidden="true">·</span>
+                            <span>{fmtPlaytime(row.play_ms)}</span>
+                          </>
+                        )
+                        : (
+                          <>
+                            <span>{t('status.offline')}</span>
+                            <span className="pl-meta-sep" aria-hidden="true">·</span>
+                            <span>{fmtPlaytime(row.play_ms)}</span>
+                          </>
+                        )}
                     </div>
                   </div>
                   <div className="pl-card-badges">
                     {row.banned && <Badge tone="bad">Ban</Badge>}
                     {row.whitelisted && <Badge tone="ok">WL</Badge>}
-                    {row.online ? <Badge tone="ok">{t('status.online')}</Badge> : <Badge>{t('status.offline')}</Badge>}
+                    {row.online
+                      ? <span className="pl-status online">{t('status.online')}</span>
+                      : <span className="pl-status">{t('status.offline')}</span>}
                   </div>
                 </div>
-                <div className="pl-card-ids">
-                  {preview.map((id) => (
-                    <span key={id} className="pl-id-chip" title={id}>
-                      <em>{idLabel(id)}</em>{id.slice(id.indexOf(':') + 1, id.indexOf(':') + 9)}…
-                    </span>
-                  ))}
-                </div>
-              </button>
+                <PlayerIdentifiers ids={idsPreview} compact maxRows={5} mask />
+              </article>
             );
           })}
         </div>
@@ -832,16 +845,11 @@ export default function Players({ user }) {
               )}
 
               {tab === 'ids' && (
-                <div className="pl-id-stack">
-                  {ids.length === 0 ? (
-                    <p className="muted">{t('players.noIds')}</p>
-                  ) : ids.map((id) => (
-                    <div key={id} className="pl-id-row">
-                      <span>{idLabel(id)}</span>
-                      <code className="mono">{id}</code>
-                    </div>
-                  ))}
-                </div>
+                ids.length === 0 ? (
+                  <p className="muted">{t('players.noIds')}</p>
+                ) : (
+                  <PlayerIdentifiers ids={ids} mask={false} className="pl-ids-sheet" />
+                )
               )}
 
               {tab === 'history' && (
