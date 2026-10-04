@@ -362,15 +362,21 @@
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: var(--bg-2);
+  background: var(--bg-elevated, var(--card));
 }
 .pl-hist-card.ban {
   border-color: rgba(196, 60, 60, 0.35);
-  background: linear-gradient(90deg, rgba(196, 60, 60, 0.1), var(--bg-2) 40%);
+  background:
+    linear-gradient(90deg, rgba(196, 60, 60, 0.12), transparent 42%),
+    var(--bg-elevated, var(--card));
+}
+.pl-hist-card.ban.active {
+  border-color: rgba(196, 60, 60, 0.55);
 }
 .pl-hist-card header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
   margin-bottom: 6px;
   font-size: 12px;
@@ -379,8 +385,95 @@
 .pl-hist-card p { margin: 0; font-size: 14px; }
 .pl-hist-card footer {
   margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 11px;
   color: var(--muted);
+}
+.pl-hist-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.pl-hist-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(196, 60, 60, 0.4);
+  background: rgba(196, 60, 60, 0.14);
+  color: #f0a0a0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.pl-hist-pill.off {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: none;
+}
+
+.pl-banned-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(196, 60, 60, 0.45);
+  background: rgba(196, 60, 60, 0.16);
+  color: #ffb4b4;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.pl-ban-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(196, 60, 60, 0.4);
+  background:
+    linear-gradient(135deg, rgba(196, 60, 60, 0.16), transparent 55%),
+    var(--bg-elevated, var(--card));
+}
+.pl-ban-banner strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+.pl-ban-banner p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+.pl-ban-banner small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.pl-ban-already {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(196, 60, 60, 0.28);
+  background: rgba(196, 60, 60, 0.08);
+  color: var(--muted);
+  font-size: 13px;
+}
+.pl-ban-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .pl-ban {
