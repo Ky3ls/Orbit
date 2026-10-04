@@ -57,6 +57,8 @@ export function applyAccentVars(accentId, root = document.documentElement) {
   root.style.setProperty('--accent-rgb', rgb);
   root.style.setProperty('--accent-dim', `rgba(${rgb}, 0.14)`);
   root.style.setProperty('--line-strong', `rgba(${rgb}, 0.45)`);
+  /* Text-Akzent (Presets/Stats/Job-Zeiten): folgt Accent inkl. Light-Kontrast */
+  root.style.setProperty('--accent-ink', hex);
   root.dataset.accent = a.id;
 }
 
