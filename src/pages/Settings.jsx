@@ -5,6 +5,11 @@ import { fmtFull } from '../format.js';
 import SettingsHostPanel from '../components/SettingsHostPanel.jsx';
 import { Page, PageHeader } from '../components/Ui.jsx';
 import OrbitSelect from '../components/OrbitSelect.jsx';
+import AllowlistPanel from '../components/allowlist/AllowlistPanel.jsx';
+import {
+  ALLOWLIST_MODE_KEYS,
+  ALLOWLIST_MODE_VALUES,
+} from '../components/allowlist/allowlistUtils.js';
 import { useAppearance } from '../hooks/useAppearance.js';
 import { ACCENT_PRESETS } from '../appearance.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
@@ -27,17 +32,6 @@ const SECTION_DEFS = [
   { id: 'account', labelKey: 'settings.sec.account', hintKey: 'settings.sec.accountHint', owner: false },
   { id: 'danger', labelKey: 'settings.sec.danger', hintKey: 'settings.sec.dangerHint', owner: true },
 ];
-
-const ALLOWLIST_MODE_KEYS = {
-  disabled: 'settings.allowlist.mode.disabled',
-  admin_only: 'settings.allowlist.mode.admin_only',
-  discord_member: 'settings.allowlist.mode.discord_member',
-  discord_roles: 'settings.allowlist.mode.discord_roles',
-  approved_license: 'settings.allowlist.mode.approved_license',
-  external: 'settings.allowlist.mode.external',
-};
-
-const ALLOWLIST_MODE_VALUES = ['disabled', 'admin_only', 'discord_member', 'discord_roles', 'approved_license', 'external'];
 
 /** Felder je Settings-Tab — verhindert Cross-Tab-Validierung (z. B. RCON beim Language-Save). */
 const SECTION_FIELDS = {
@@ -450,48 +444,15 @@ export default function Settings({ user, onUser, onSetupReset }) {
                   lead={t('settings.allowlist.lead')}
                   actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
                 >
-                  <div className="st-radio-list">
-                    {modes.map((m) => (
-                      <label key={m.value} className={`st-radio${(form.allowlistMode || 'disabled') === m.value ? ' on' : ''}`}>
-                        <input
-                          type="radio"
-                          name="allowlistMode"
-                          checked={(form.allowlistMode || 'disabled') === m.value}
-                          onChange={() => set({ allowlistMode: m.value })}
-                        />
-                        <span>{m.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <label className="field">
-                    <span>{t('settings.allowlist.instructions')}</span>
-                    <textarea
-                      rows={3}
-                      value={form.allowlistInstructions || ''}
-                      onChange={(e) => set({ allowlistInstructions: e.target.value })}
-                      disabled={(form.allowlistMode || 'disabled') === 'disabled' || form.allowlistMode === 'admin_only'}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>{t('settings.allowlist.roles')}</span>
-                    <input
-                      value={form.allowlistDiscordRoles || ''}
-                      onChange={(e) => set({ allowlistDiscordRoles: e.target.value })}
-                      placeholder={t('settings.allowlist.rolesPh')}
-                      disabled={form.allowlistMode !== 'discord_roles'}
-                    />
-                  </label>
-                  {isOwner && (
-                    <label className="field">
-                      <span>{t('settings.allowlist.ip')}</span>
-                      <textarea
-                        placeholder={t('settings.allowlist.ipPh')}
-                        value={form.ipAllowlist || ''}
-                        onChange={(e) => set({ ipAllowlist: e.target.value })}
-                        rows={2}
-                      />
-                    </label>
-                  )}
+                  <AllowlistPanel
+                    mode={form.allowlistMode}
+                    modes={modes}
+                    instructions={form.allowlistInstructions}
+                    discordRoles={form.allowlistDiscordRoles}
+                    ipAllowlist={form.ipAllowlist}
+                    showIp={isOwner}
+                    onChange={set}
+                  />
                 </ModuleCard>
               </form>
             </div>
