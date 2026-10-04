@@ -118,7 +118,7 @@ export default function Cockpit() {
           <Link to="/cfg">CFG</Link>
         </nav>
 
-        {(data?.players || []).length > 0 && (
+        {online && (data?.players || []).length > 0 && (
           <div className="ck-feed">
             <p className="ck-feed-label">ONLINE</p>
             <div className="ck-feed-scroll">

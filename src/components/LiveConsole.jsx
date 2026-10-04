@@ -338,13 +338,11 @@ export default function LiveConsole({
         </div>
       </header>
       <div className="lc-term" ref={box} onScroll={onScroll}>
-        {visible.length === 0 && (
+        {visible.length === 0 && !(fx.ready && !consoleLive) && (
           <div className="lc-empty">
-            {fx.ready && !consoleLive
-              ? t('console.emptyOffline')
-              : lines.length
-                ? t('console.emptyFilter')
-                : t('console.emptyWait')}
+            {lines.length
+              ? t('console.emptyFilter')
+              : t('console.emptyWait')}
           </div>
         )}
         {(consoleLive || !fx.ready) && visible.map((line) => (
