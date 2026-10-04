@@ -202,7 +202,7 @@ const de = {
   'settings.bans.hwidOff': '0 — HWID-Bans aus',
   'settings.bans.hwidRec': '1 — empfohlen',
   'settings.bans.templates': 'Ban-Vorlagen',
-  'settings.bans.templatesLead': 'Vorlagen beim Sperren vorausfüllen.',
+  'settings.bans.templatesLead': 'Vorlagen beim Ban vorausfüllen.',
   'settings.bans.reason': 'Grund',
   'settings.bans.reasonPh': 'z. B. RDM / FailRP',
   'settings.bans.duration': 'Dauer',
