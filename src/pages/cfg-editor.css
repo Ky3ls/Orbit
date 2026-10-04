@@ -1,20 +1,26 @@
-/* CFG Editor — Theme-Tokens (Dark + Light) */
+/* CFG Editor — Theme-Tokens (Dark + Light)
+ * Flush im ModuleShell: kein zweiter Card-Rahmen um Sidebar+Editor. */
 
 .cfg-page .ws-module-content {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
   min-height: 0;
+}
+
+.cfg-page .ws-module-content > .err,
+.cfg-page .ws-module-content > .banner {
+  margin: 10px 16px 0;
 }
 
 .cfg-page .ws-split {
   min-height: calc(100dvh - 150px);
   flex: 1;
-  border: 1px solid var(--line);
-  border-radius: 14px;
   overflow: hidden;
   margin: 0;
-  background: var(--card);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .cfg-page .ws-split-aside {

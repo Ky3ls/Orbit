@@ -264,7 +264,7 @@ export default function CfgEditor() {
   );
 
   return (
-    <Page className="cfg-page">
+    <Page className="cfg-page ws-module-flush">
       <PageHeader
         eyebrow={t('cfg.eyebrow')}
         title={t('cfg.title')}
