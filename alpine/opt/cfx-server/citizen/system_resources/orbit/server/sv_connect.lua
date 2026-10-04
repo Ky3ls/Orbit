@@ -22,14 +22,27 @@ local function collectTokens(player)
   return tokens
 end
 
+local function deferDone(d, msg)
+  if not d or d.done == nil then return end
+  pcall(function()
+    if msg ~= nil then
+      d.done(msg)
+    else
+      d.done()
+    end
+  end)
+end
+
 local function rejectJoin(d, resp)
   local fallback = tostring((resp and resp.reason) or '[Orbit] Zugang verweigert.')
   -- Ban: presentCard halten — NIEMALS sync/kurz danach done() (killt die Card-UI)
   if type(resp) == 'table' and tostring(resp.kind or '') == 'ban' then
     CreateThread(function()
       Wait(0)
-      if d.update then
-        pcall(d.update, 'Orbit…')
+      if d.update ~= nil then
+        pcall(function()
+          d.update('Orbit…')
+        end)
       end
       Wait(0)
       if type(OrbitPresentBanCard) == 'function' then
@@ -43,13 +56,11 @@ local function rejectJoin(d, resp)
         print('^1[Orbit] OrbitPresentBanCard fehlt (sv_ban_card.lua?) — Text-Reject^0')
       end
       local banId = resp.banId and (' (Ban-ID #' .. tostring(resp.banId) .. ')') or ''
-      if d.done then
-        pcall(d.done, '\n[Orbit] Du bist gebannt.' .. banId)
-      end
+      deferDone(d, '\n[Orbit] Du bist gebannt.' .. banId)
     end)
     return
   end
-  d.done('\n' .. fallback)
+  deferDone(d, '\n' .. fallback)
 end
 
 local function handleConnecting(name, setKickReason, d)
@@ -73,28 +84,11 @@ local function handleConnecting(name, setKickReason, d)
   d.defer()
   Wait(0)
 
-  -- Einmalig: echte Types der Deferral-Callbacks (FiveM-Refs ≠ immer type function)
-  if not _G.__orbitDeferralTypesLogged then
-    _G.__orbitDeferralTypesLogged = true
-    local keys = {}
-    if type(d) == 'table' then
-      for k, v in pairs(d) do
-        keys[#keys + 1] = ('%s=%s'):format(tostring(k), type(v))
-      end
-    end
-    print(('^3[Orbit] deferral-types d=%s presentCard=%s done=%s keys={%s}^0'):format(
-      type(d),
-      type(d and d.presentCard),
-      type(d and d.done),
-      table.concat(keys, ', ')
-    ))
-  end
-
   local ids = GetPlayerIdentifiers(player) or {}
   local tokens = collectTokens(player)
 
   if #ids < 1 then
-    d.done('\n[Orbit] Keine Identifier — prüfe sv_lan / Rockstar-Login.')
+    deferDone(d, '\n[Orbit] Keine Identifier — prüfe sv_lan / Rockstar-Login.')
     return
   end
 
@@ -109,11 +103,11 @@ local function handleConnecting(name, setKickReason, d)
     if done then return end
     done = true
     if code ~= 200 or type(resp) ~= 'table' then
-      d.done('\n[Orbit] Panel nicht erreichbar — versuche es gleich nochmal.')
+      deferDone(d, '\n[Orbit] Panel nicht erreichbar — versuche es gleich nochmal.')
       return
     end
     if resp.allow == true then
-      d.done()
+      deferDone(d)
     else
       rejectJoin(d, resp)
     end
@@ -124,11 +118,13 @@ local function handleConnecting(name, setKickReason, d)
     while not done and t < 25 do
       Wait(1000)
       t = t + 1
-      d.update(('\n[Orbit] Banlist/Allowlist prüfen… (%ss)'):format(t))
+      pcall(function()
+        d.update(('\n[Orbit] Banlist/Allowlist prüfen… (%ss)'):format(t))
+      end)
     end
     if not done then
       done = true
-      d.done('\n[Orbit] Timeout bei Banlist-Prüfung.')
+      deferDone(d, '\n[Orbit] Timeout bei Banlist-Prüfung.')
     end
   end)
 end

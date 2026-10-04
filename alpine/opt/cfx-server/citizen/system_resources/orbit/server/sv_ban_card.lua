@@ -10,31 +10,18 @@ local function truncate(s, max)
   return s:sub(1, math.max(0, max - 1)) .. '...'
 end
 
---- FiveM-Callbacks sind oft `function` ODER callable table (`__cfx_functionReference`).
---- Striktes `type(x) == 'function'` war Root-Cause: Card nie gezeigt → done()-Text-Dialog.
-local function isCallable(v)
-  if v == nil then return false end
-  local t = type(v)
-  if t == 'function' then return true end
-  if t == 'table' then
-    local mt = getmetatable(v)
-    if mt and (type(mt.__call) == 'function' or mt.__call ~= nil) then return true end
-    local ok, ref = pcall(rawget, v, '__cfx_functionReference')
-    if ok and ref ~= nil then return true end
-    -- Manche Runtimes: table ohne sichtbares Metatable, aber trotzdem aufrufbar
-    return true
-  end
-  -- userdata / sonstige Ref-Wrapper: per pcall testen
-  return t == 'userdata'
-end
-
+--- done()/presentCard sind oft callable tables (__cfx_functionReference).
+--- Immer als deferrals.done(...) / deferrals.presentCard(...) aufrufen —
+--- nie lokal extrahieren und via pcall(fn, ...) ohne Objekt-Kontext.
 local function safeDone(deferrals, msg)
-  if deferrals and isCallable(deferrals.done) then
-    pcall(deferrals.done, '\n' .. tostring(msg or '[Orbit] Du bist gebannt.'))
-  end
+  if not deferrals or deferrals.done == nil then return end
+  pcall(function()
+    deferrals.done('\n' .. tostring(msg or '[Orbit] Du bist gebannt.'))
+  end)
 end
 
---- Einfache Adaptive Card (v1.0) — ohne $schema/Container/Action.style
+--- Minimale Adaptive Card (v1.0): NUR TextBlocks + optional OpenUrl/Submit.
+--- Kein FactSet/Container/$schema — FiveM-Renderer ist streng.
 function OrbitBuildBanCard(payload)
   payload = type(payload) == 'table' and payload or {}
   local serverName = trim(payload.serverName)
@@ -58,17 +45,13 @@ function OrbitBuildBanCard(payload)
       type = 'TextBlock',
       text = 'ORBIT',
       weight = 'Bolder',
-      size = 'Small',
-      color = 'Accent',
-      spacing = 'None',
+      size = 'Medium',
     },
     {
       type = 'TextBlock',
-      text = 'Gebannt',
+      text = 'Du bist gebannt',
       weight = 'Bolder',
       size = 'Large',
-      color = 'Attention',
-      spacing = 'Small',
     },
   }
 
@@ -76,40 +59,31 @@ function OrbitBuildBanCard(payload)
     body[#body + 1] = {
       type = 'TextBlock',
       text = serverName,
-      size = 'Medium',
-      weight = 'Bolder',
-      spacing = 'None',
       wrap = true,
     }
   end
 
   body[#body + 1] = {
     type = 'TextBlock',
-    text = 'Dein Zugang zu diesem Server wurde gesperrt.',
-    size = 'Small',
-    spacing = 'Small',
+    text = ('Grund: %s'):format(reason),
     wrap = true,
-    isSubtle = true,
   }
-
   body[#body + 1] = {
-    type = 'FactSet',
-    spacing = 'Medium',
-    facts = {
-      { title = 'Grund:', value = reason },
-      { title = 'Bis:', value = expiresLabel },
-      { title = 'Ban-ID:', value = banId },
-    },
+    type = 'TextBlock',
+    text = ('Bis: %s'):format(expiresLabel),
+    wrap = true,
+  }
+  body[#body + 1] = {
+    type = 'TextBlock',
+    text = ('Ban-ID: %s'):format(banId),
+    wrap = true,
   }
 
   if appeal ~= '' then
     body[#body + 1] = {
       type = 'TextBlock',
       text = appeal,
-      size = 'Small',
-      spacing = 'Medium',
       wrap = true,
-      isSubtle = true,
     }
   end
 
@@ -117,15 +91,19 @@ function OrbitBuildBanCard(payload)
     type = 'AdaptiveCard',
     version = '1.0',
     body = body,
+    actions = {
+      {
+        type = 'Action.Submit',
+        title = 'OK',
+      },
+    },
   }
 
   if invite ~= '' then
-    card.actions = {
-      {
-        type = 'Action.OpenUrl',
-        title = 'Discord beitreten',
-        url = invite,
-      },
+    card.actions[#card.actions + 1] = {
+      type = 'Action.OpenUrl',
+      title = 'Discord',
+      url = invite,
     }
   end
 
@@ -146,37 +124,15 @@ local function shortReject(payload, fallbackText)
 end
 
 --- Zeigt Ban-Card und hält die Deferral offen.
---- KEIN done() außerhalb des Callbacks — sonst Plain-Text „Connection rejected“.
+--- done() erst im presentCard-Callback (User schließt Card) — sonst Plain-Text-Dialog.
 function OrbitPresentBanCard(deferrals, payload, fallbackText)
-  local presentFn = deferrals and deferrals.presentCard
-  -- Falls Key anders/Metatable: tolerant suchen
-  if presentFn == nil and type(deferrals) == 'table' then
-    for k, v in pairs(deferrals) do
-      if type(k) == 'string' and k:lower() == 'presentcard' then
-        presentFn = v
-        break
-      end
-    end
-  end
-
-  if not isCallable(presentFn) then
-    local keys = {}
-    if type(deferrals) == 'table' then
-      for k, v in pairs(deferrals) do
-        keys[#keys + 1] = ('%s=%s'):format(tostring(k), type(v))
-      end
-    end
-    print(('^1[Orbit] Ban-Card: presentCard fehlt (d=%s pc=%s keys={%s}) — Text-Fallback^0'):format(
-      type(deferrals),
-      type(presentFn),
-      table.concat(keys, ', ')
-    ))
+  if type(deferrals) ~= 'table' or deferrals.presentCard == nil then
+    print('^1[Orbit] Ban-Card: presentCard fehlt — Text-Fallback^0')
     safeDone(deferrals, shortReject(payload, fallbackText))
     return false
   end
 
   local card = OrbitBuildBanCard(payload)
-  -- JSON-String: Cookbook-kompatibel; FiveM akzeptiert auch Table
   local okEnc, cardJson = pcall(json.encode, card)
   if not okEnc or type(cardJson) ~= 'string' or cardJson == '' then
     print('^1[Orbit] Ban-Card: json.encode fehlgeschlagen — Text-Fallback^0')
@@ -184,33 +140,33 @@ function OrbitPresentBanCard(deferrals, payload, fallbackText)
     return false
   end
 
-  local rejectMsg = shortReject(payload, fallbackText)
-  local alive = true
+  -- Einmalig exakte JSON-Payload loggen (Debug)
+  if not _G.__orbitBanCardJsonLogged then
+    _G.__orbitBanCardJsonLogged = true
+    print(('^3[Orbit] Ban-Card JSON: %s^0'):format(cardJson))
+  end
 
-  local function show()
-    if not alive then return end
-    local ok, err = pcall(function()
-      presentFn(cardJson, function(_data, _raw)
-        -- Submit/Refresh: Card erneut zeigen. Cancel trennt clientseitig.
-        -- KEIN done() hier — sonst ersetzt Plain-Text die Card.
-        CreateThread(function()
-          Wait(0)
-          if alive then show() end
-        end)
+  local rejectMsg = shortReject(payload, fallbackText)
+  local finished = false
+
+  local ok, err = pcall(function()
+    -- WICHTIG: deferrals.presentCard(...) — nicht lokal extrahierte Ref ohne Kontext
+    deferrals.presentCard(cardJson, function(_data, _raw)
+      if finished then return end
+      finished = true
+      -- User hat Card geschlossen/Submit — kurzer done-Text (Card war sichtbar)
+      pcall(function()
+        deferrals.done('\n' .. rejectMsg)
       end)
     end)
-    if not ok then
-      alive = false
-      print(('^1[Orbit] Ban-Card presentCard fehlgeschlagen: %s^0'):format(tostring(err)))
-      safeDone(deferrals, rejectMsg)
-      return false
-    end
-    return true
+  end)
+
+  if not ok then
+    print(('^1[Orbit] Ban-Card presentCard fehlgeschlagen: %s^0'):format(tostring(err)))
+    safeDone(deferrals, rejectMsg)
+    return false
   end
 
-  local shown = show()
-  if shown then
-    print('^2[Orbit] Ban-Card via presentCard angezeigt^0')
-  end
-  return shown ~= false
+  print('^2[Orbit] Ban-Card via presentCard angezeigt^0')
+  return true
 end
