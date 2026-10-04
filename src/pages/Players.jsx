@@ -6,8 +6,8 @@ import { AreaChart, Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../
 import {
   BAN_DURATION_PRESETS,
   banDurationLabel,
-  hoursToDurationId,
-  parseDurationId,
+  customDurationToId,
+  durationIdToCustomParts,
 } from './banPresets.js';
 import './players.css';
 import { useI18n } from '../i18n/I18nProvider.jsx';
@@ -84,7 +84,8 @@ export default function Players({ user }) {
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [durationId, setDurationId] = useState('2d');
-  const [customHours, setCustomHours] = useState('');
+  const [customDays, setCustomDays] = useState('');
+  const [customHhmm, setCustomHhmm] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [err, setErr] = useState('');
   const [sort, setSort] = useState('status');
@@ -219,13 +220,11 @@ export default function Players({ user }) {
       setDurationId(dur);
       return;
     }
-    const flex = parseDurationId(dur);
-    if (flex?.kind === 'flex') {
-      const hours = flex.unit === 'hours' ? flex.amount
-        : flex.unit === 'weeks' ? flex.amount * 168
-          : flex.amount * 24;
+    const parts = durationIdToCustomParts(dur);
+    if (parts) {
       setDurationId('custom');
-      setCustomHours(String(hours));
+      setCustomDays(parts.days);
+      setCustomHhmm(parts.hhmm);
       return;
     }
     setDurationId(dur);
@@ -357,14 +356,18 @@ export default function Players({ user }) {
 
   async function applyBan() {
     if (!p || reason.length < 3) { setErr(t('players.errBanReason')); return; }
+    let resolvedId = durationId;
     if (durationId === 'custom') {
-      const hours = Math.floor(Number(customHours) || 0);
-      if (hours < 1) { setErr(t('players.errBanHours')); return; }
+      const mapped = customDurationToId(customDays, customHhmm);
+      if (!mapped.ok) {
+        setErr(t(mapped.error === 'hhmm' ? 'players.errBanHhmm' : 'players.errBanDuration'));
+        return;
+      }
+      resolvedId = mapped.id;
     }
     setBusy(true);
     setErr('');
     try {
-      const resolvedId = durationId === 'custom' ? hoursToDurationId(customHours) : durationId;
       await api('/api/bans', {
         method: 'POST',
         body: {
@@ -833,18 +836,32 @@ export default function Players({ user }) {
                     />
                   </label>
                   {durationId === 'custom' && (
-                    <label className="pl-ban-field pl-ban-amt">
-                      <span className="pl-ban-label">{t('common.hours')}</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={9999}
-                        inputMode="numeric"
-                        placeholder={t('ban.hoursPh')}
-                        value={customHours}
-                        onChange={(e) => setCustomHours(e.target.value)}
-                      />
-                    </label>
+                    <div className="pl-ban-custom-row">
+                      <label className="pl-ban-field pl-ban-amt">
+                        <span className="pl-ban-label">{t('common.days')}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={9999}
+                          inputMode="numeric"
+                          placeholder={t('ban.daysPh')}
+                          value={customDays}
+                          onChange={(e) => setCustomDays(e.target.value)}
+                        />
+                      </label>
+                      <label className="pl-ban-field pl-ban-amt">
+                        <span className="pl-ban-label">{t('ban.hhmm')}</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder={t('ban.hhmmPh')}
+                          value={customHhmm}
+                          onChange={(e) => setCustomHhmm(e.target.value)}
+                          maxLength={5}
+                          autoComplete="off"
+                        />
+                      </label>
+                    </div>
                   )}
                   <button type="button" className="btn pl-ban-btn" disabled={busy} onClick={applyBan}>
                     {t('players.applyBan')}

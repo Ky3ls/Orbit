@@ -473,6 +473,12 @@
   align-items: end;
 }
 .pl-ban-amt { width: 100%; }
+.pl-ban-custom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+}
 .pl-ban-row .osel-trigger {
   height: 42px;
   min-height: 42px;
