@@ -319,16 +319,50 @@
   display: inline;
   color: var(--pl-id-val-open);
 }
-/* Hover + click-to-reveal */
-.pl-id-row-line:hover .pl-id-mask,
-.pl-id-row-line:focus-visible .pl-id-mask,
-.pl-id-row-line.is-open .pl-id-mask {
+/* Hover + click-to-reveal (ganze Zeile; nicht bei Segment-IPs) */
+.pl-id-row-line:not(.has-segments):hover .pl-id-mask,
+.pl-id-row-line:not(.has-segments):focus-visible .pl-id-mask,
+.pl-id-row-line:not(.has-segments).is-open .pl-id-mask {
   display: none;
 }
-.pl-id-row-line:hover .pl-id-full,
-.pl-id-row-line:focus-visible .pl-id-full,
-.pl-id-row-line.is-open .pl-id-full {
+.pl-id-row-line:not(.has-segments):hover .pl-id-full,
+.pl-id-row-line:not(.has-segments):focus-visible .pl-id-full,
+.pl-id-row-line:not(.has-segments).is-open .pl-id-full {
   display: inline;
+}
+/* IP-Segmente: nur das gehoverte/offene Segment revealen */
+.pl-id-seg-wrap {
+  display: inline;
+}
+.pl-id-seg-sep {
+  color: var(--pl-id-val);
+  user-select: none;
+}
+.pl-id-seg {
+  display: inline;
+  border-radius: 3px;
+  cursor: pointer;
+  outline: none;
+}
+.pl-id-seg.is-copyable {
+  cursor: copy;
+}
+.pl-id-seg:hover .pl-id-mask,
+.pl-id-seg:focus-visible .pl-id-mask,
+.pl-id-seg.is-open .pl-id-mask {
+  display: none;
+}
+.pl-id-seg:hover .pl-id-full,
+.pl-id-seg:focus-visible .pl-id-full,
+.pl-id-seg.is-open .pl-id-full {
+  display: inline;
+}
+.pl-id-seg.is-copied .pl-id-full,
+.pl-id-seg.is-copied .pl-id-mask {
+  color: var(--ok, #16a34a);
+}
+.pl-ids.copyable .pl-id-row-line.has-segments {
+  cursor: default;
 }
 .pl-ids-sheet {
   gap: 2px;
