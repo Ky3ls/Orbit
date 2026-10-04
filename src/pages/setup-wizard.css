@@ -23,7 +23,7 @@
   flex-shrink: 0;
 }
 
-.setup-check.ok .dot { background: var(--ok); box-shadow: 0 0 12px rgba(61, 214, 140, 0.45); }
+.setup-check.ok .dot { background: var(--ok); box-shadow: none; }
 .setup-check.warn .dot { background: #ffb020; }
 .setup-check.bad .dot { background: var(--bad); }
 

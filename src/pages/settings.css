@@ -44,6 +44,11 @@
   color: var(--text);
   background: var(--accent-dim);
 }
+.st-nav-item:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.25);
+  outline-offset: 2px;
+  box-shadow: none;
+}
 .st-nav-item.active {
   color: var(--text);
   background: var(--accent-dim);
@@ -226,7 +231,7 @@
   gap: 0;
   min-width: 92px;
   padding: 7px 12px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
   color: var(--muted);
@@ -235,7 +240,7 @@
   font-weight: 700;
   cursor: pointer;
   line-height: 1.2;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .st-seg-btn small {
   font-size: 10px;
@@ -246,7 +251,8 @@
 .st-seg-btn.active {
   background: var(--card);
   color: var(--text);
-  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.45);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  box-shadow: none;
 }
 .st-seg-btn.active small { color: var(--accent); }
 
