@@ -165,23 +165,30 @@ export default function Players({ user }) {
       .catch(() => setBanTemplates([]));
   }, []);
 
-  async function openPlayer(p) {
-    setPick(p);
-    setTab('info');
-    setBanReason('');
-    setActionReason('');
-    setTemplateId('');
-    setDurationId('2d');
-    setCustomDays('');
-    setCustomHhmm('');
+  async function openPlayer(row, { keepTab = false } = {}) {
+    setPick(row);
+    if (!keepTab) {
+      setTab('info');
+      setBanReason('');
+      setActionReason('');
+      setTemplateId('');
+      setDurationId('2d');
+      setCustomDays('');
+      setCustomHhmm('');
+    }
     setErr('');
     loadBanTemplates();
     try {
-      const d = await api(`/api/players/detail?id=${encodeURIComponent(p.identifier)}`);
+      const d = await api(`/api/players/detail?id=${encodeURIComponent(row.identifier)}`);
       setDetail(d);
       setNote(d.player?.note || '');
       /* Ban-Vorlagen nur aus Settings-/API-Liste — nie Kick/Warn-Gründe */
       if (Array.isArray(d.banTemplates)) setBanTemplates(d.banTemplates);
+      if (d.player) {
+        setPick((cur) => (cur && cur.identifier === d.player.identifier
+          ? { ...cur, ...d.player }
+          : cur));
+      }
     } catch (e) {
       setDetail(null);
       setErr(e.message);
@@ -304,6 +311,11 @@ export default function Players({ user }) {
 
   const p = detail?.player || pick;
   const ids = p ? playerIds(p) : [];
+  const activeBan = detail?.activeBan
+    || (p?.banned && p?.banId
+      ? { id: p.banId, reason: p.banReason || '', expires: p.banExpires ?? null, author: '' }
+      : null);
+  const isBanned = !!(activeBan || p?.banned);
   const presets = detail?.banPresets || [];
   const durationList = useMemo(() => {
     const list = (presets.length ? presets : BAN_DURATION_PRESETS).map((pr) => ({
@@ -369,6 +381,7 @@ export default function Players({ user }) {
 
   async function applyBan() {
     if (!p || banReason.length < 3) { setErr(t('players.errBanReason')); return; }
+    if (isBanned) { setErr(t('players.errAlreadyBanned')); return; }
     let resolvedId = durationId;
     if (durationId === 'custom') {
       const mapped = customDurationToId(customDays, customHhmm);
@@ -394,7 +407,7 @@ export default function Players({ user }) {
       });
       setBanReason('');
       setTemplateId('');
-      await openPlayer(p);
+      await openPlayer(p, { keepTab: true });
       loadPlayers(true);
       if (filter === 'banned') loadBans(true);
     } catch (e) { setErr(e.message); }
@@ -403,8 +416,10 @@ export default function Players({ user }) {
 
   async function revokeBan(id) {
     setBusy(true);
+    setErr('');
     try {
       await api(`/api/bans/${id}/revoke`, { method: 'POST', body: {} });
+      if (pick) await openPlayer(pick, { keepTab: true });
       loadBans(true);
       loadPlayers(true);
     } catch (e) { setErr(e.message); }
@@ -570,7 +585,7 @@ export default function Players({ user }) {
                       <td className="td-actions" data-label="">
                         {canRevoke && (
                           <button className="btn btn-sm" type="button" disabled={busy} onClick={() => revokeBan(ban.id)}>
-                            Unban
+                            {t('players.revokeBan')}
                           </button>
                         )}
                       </td>
@@ -675,7 +690,7 @@ export default function Players({ user }) {
           title={t('players.modal')}
           onClose={() => { setPick(null); setDetail(null); setErr(''); }}
           wide
-          aside={tab === 'ban' ? (
+          aside={tab === 'ban' && !isBanned ? (
             <aside className="pl-ban-aside" aria-label={t('players.banAside')}>
               <div className="pl-ban-aside-block">
                 <h4 className="pl-ban-aside-title">{t('common.templates')}</h4>
@@ -736,6 +751,7 @@ export default function Players({ user }) {
                   {p.online
                     ? <span className="pl-live">{t('players.liveId', { id: p.serverId })}</span>
                     : <span className="pl-off">{t('status.offline')}</span>}
+                  {isBanned && <span className="pl-banned-badge">{t('players.banned')}</span>}
                 </div>
                 <p className="pl-hero-sub">
                   {p.online ? t('players.session', { ping: p.ping ?? 0, session: fmtPlaytime(p.session_ms || detail?.player?.session_ms) }) : t('players.lastSeen', { when: fmtFull(p.last_seen) })}
@@ -752,6 +768,31 @@ export default function Players({ user }) {
                 {p.whitelisted ? t('players.onAllowlist') : t('players.toAllowlist')}
               </button>
             </header>
+
+            {isBanned && activeBan && (
+              <div className="pl-ban-banner" role="status">
+                <div>
+                  <strong>{t('players.activeBan')}</strong>
+                  <p>{activeBan.reason || '—'}</p>
+                  <small>
+                    {activeBan.author ? `${activeBan.author} · ` : ''}
+                    {activeBan.expires
+                      ? t('players.banUntil', { when: fmtFull(activeBan.expires) })
+                      : t('common.permanent')}
+                  </small>
+                </div>
+                {canRevoke && (
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={busy}
+                    onClick={() => revokeBan(activeBan.id)}
+                  >
+                    {t('players.revokeBan')}
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="pl-rail" aria-hidden="true">
               <div><small>{t('players.joined')}</small><strong>{fmtFull(p.first_seen)}</strong></div>
@@ -809,13 +850,38 @@ export default function Players({ user }) {
                     <p className="muted">{t('players.noHistory')}</p>
                   ) : (
                     <>
-                      {(detail?.history?.bans || []).map((b) => (
-                        <article key={`b${b.id}`} className="pl-hist-card ban">
-                          <header><strong>Ban #{b.id}</strong><span>{fmtFull(b.created)}</span></header>
-                          <p>{b.reason}</p>
-                          <footer>{b.author}</footer>
-                        </article>
-                      ))}
+                      {(detail?.history?.bans || []).map((b) => {
+                        const banLive = !b.revoked && (!b.expires || b.expires > Date.now());
+                        return (
+                          <article key={`b${b.id}`} className={`pl-hist-card ban${banLive ? ' active' : ''}`}>
+                            <header>
+                              <strong>Ban #{b.id}</strong>
+                              <span>{fmtFull(b.created)}</span>
+                            </header>
+                            <p>{b.reason}</p>
+                            <footer>
+                              <div className="pl-hist-meta">
+                                <span>{b.author}</span>
+                                {banLive ? (
+                                  <span className="pl-hist-pill">{t('players.banned')}</span>
+                                ) : b.revoked ? (
+                                  <span className="pl-hist-pill off">{t('players.banRevoked')}</span>
+                                ) : null}
+                              </div>
+                              {banLive && canRevoke && (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  disabled={busy}
+                                  onClick={() => revokeBan(b.id)}
+                                >
+                                  {t('players.revokeBan')}
+                                </button>
+                              )}
+                            </footer>
+                          </article>
+                        );
+                      })}
                       {(detail?.history?.warns || []).map((w) => (
                         <article key={`w${w.id}`} className="pl-hist-card">
                           <header><strong>Warn #{w.id}</strong><span>{fmtFull(w.created)}</span></header>
@@ -830,6 +896,9 @@ export default function Players({ user }) {
 
               {tab === 'ban' && (
                 <div className="pl-panel pl-ban">
+                  {isBanned ? (
+                    <p className="pl-ban-already">{t('players.banActiveHint')}</p>
+                  ) : null}
                   <div className="pl-ban-summary" aria-live="polite">
                     <span className="pl-ban-label">{t('players.selection')}</span>
                     <strong>{durationLabel}</strong>
@@ -846,9 +915,10 @@ export default function Players({ user }) {
                       value={banReason}
                       onChange={(e) => { setBanReason(e.target.value); setTemplateId(''); }}
                       placeholder={t('players.reasonPh')}
+                      disabled={isBanned}
                     />
                   </label>
-                  {durationId === 'custom' && (
+                  {durationId === 'custom' && !isBanned && (
                     <div className="pl-ban-custom-row">
                       <label className="pl-ban-field pl-ban-amt">
                         <span className="pl-ban-label">{t('common.days')}</span>
@@ -876,9 +946,25 @@ export default function Players({ user }) {
                       </label>
                     </div>
                   )}
-                  <button type="button" className="btn pl-ban-btn" disabled={busy} onClick={applyBan}>
-                    {t('players.applyBan')}
-                  </button>
+                  {isBanned && activeBan && canRevoke ? (
+                    <button
+                      type="button"
+                      className="btn pl-ban-btn"
+                      disabled={busy}
+                      onClick={() => revokeBan(activeBan.id)}
+                    >
+                      {t('players.revokeBan')}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn pl-ban-btn"
+                      disabled={busy || isBanned}
+                      onClick={applyBan}
+                    >
+                      {t('players.applyBan')}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

@@ -109,6 +109,7 @@ import {
   deleteBanTemplate,
   ensureModerationSchema,
   isWhitelisted,
+  findActiveBan,
 } from './moderation.js';
 import {
   permissionsCatalog,
@@ -1947,7 +1948,9 @@ async function handleApi(req, res, url) {
       return ids.includes(identifier) || primaryId(ids) === identifier;
     }) || null;
     const ids = mergePlayerIdentifiers(row || { identifier, ids: '[]' }, live);
-    const hist = playerHistory(db, ids.length ? ids : [identifier]);
+    const idList = ids.length ? ids : [identifier];
+    const hist = playerHistory(db, idList);
+    const activeBan = findActiveBan(db, idList);
     return json(res, 200, {
       player: {
         identifier: row?.identifier || identifier,
@@ -1961,10 +1964,23 @@ async function handleApi(req, res, url) {
         serverId: live?.id ?? null,
         ping: live?.ping ?? row?.ping ?? 0,
         session_ms: live?.joinedAt ? Math.max(0, Date.now() - live.joinedAt) : 0,
-        whitelisted: isWhitelisted(db, ids.length ? ids : [identifier]),
+        whitelisted: isWhitelisted(db, idList),
         bans: hist.bans.length,
         warns: hist.warns.length,
+        banned: !!activeBan,
+        banId: activeBan?.id ?? null,
+        banReason: activeBan?.reason || '',
+        banExpires: activeBan?.expires ?? null,
       },
+      activeBan: activeBan
+        ? {
+          id: activeBan.id,
+          reason: activeBan.reason || '',
+          author: activeBan.author || '',
+          expires: activeBan.expires ?? null,
+          created: activeBan.created ?? null,
+        }
+        : null,
       history: hist,
       banPresets: banDurationPresets(),
       banTemplates: listBanTemplates(db),
@@ -2044,6 +2060,13 @@ async function handleApi(req, res, url) {
     let identifiers = normalizeIdentifiers(body.identifiers || []);
     if (!identifiers.length && body.identifier) identifiers = normalizeIdentifiers([body.identifier]);
     if (!identifiers.length) return json(res, 400, { error: 'Identifier fehlt.' });
+    const existing = findActiveBan(db, identifiers);
+    if (existing) {
+      return json(res, 409, {
+        error: 'Spieler ist bereits gebannt.',
+        ban: { id: existing.id, reason: existing.reason, expires: existing.expires },
+      });
+    }
     const name = str(body.name, 64);
     const expires = body.hours !== undefined && [0, 2, 24, 168, 720].includes(Number(body.hours))
       ? (Number(body.hours) === 0 ? null : Date.now() + Number(body.hours) * 3600_000)
