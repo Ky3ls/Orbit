@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { Page, PageHeader, Split } from '../components/Ui.jsx';
+import { Modal, Page, PageHeader, Split } from '../components/Ui.jsx';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
 function formatBytes(n) {
@@ -27,6 +27,13 @@ function findMatches(text, query, caseSensitive) {
   return out;
 }
 
+function normalizeCfgName(raw) {
+  let name = String(raw || '').trim().replace(/\\/g, '/').replace(/^(\.\/)+/, '');
+  if (!name) return '';
+  if (!/\.cfg$/i.test(name)) name = `${name}.cfg`;
+  return name;
+}
+
 export default function CfgEditor() {
   const { t } = useI18n();
   const [files, setFiles] = useState([]);
@@ -44,9 +51,14 @@ export default function CfgEditor() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [matchIdx, setMatchIdx] = useState(0);
   const [caseSensitive, setCaseSensitive] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newTemplate, setNewTemplate] = useState('minimal');
+  const [creating, setCreating] = useState(false);
 
   const taRef = useRef(null);
   const searchRef = useRef(null);
+  const newNameRef = useRef(null);
 
   const matches = useMemo(
     () => findMatches(content, search, caseSensitive),
@@ -129,6 +141,63 @@ export default function CfgEditor() {
     await loadFile(rel);
   }
 
+  function openCreate() {
+    setCreateOpen(true);
+    setNewName('');
+    setNewTemplate('minimal');
+    setErr('');
+    requestAnimationFrame(() => newNameRef.current?.focus());
+  }
+
+  function closeCreate() {
+    if (creating) return;
+    setCreateOpen(false);
+  }
+
+  async function createCfg(e, { overwrite = false } = {}) {
+    e?.preventDefault?.();
+    const file = normalizeCfgName(newName);
+    if (!file) {
+      setErr(t('cfg.newName'));
+      return;
+    }
+    if (dirty && !overwrite && !window.confirm(t('cfg.discard'))) return;
+    setCreating(true);
+    setErr('');
+    setMsg('');
+    try {
+      let d;
+      try {
+        d = await api('/api/cfg', {
+          method: 'POST',
+          body: { file, template: newTemplate, overwrite },
+        });
+      } catch (apiErr) {
+        if (apiErr.status === 409 || /existiert bereits|already exists/i.test(apiErr.message || '')) {
+          if (!window.confirm(t('cfg.newExists'))) {
+            setCreating(false);
+            return;
+          }
+          d = await api('/api/cfg', {
+            method: 'POST',
+            body: { file, template: newTemplate, overwrite: true },
+          });
+        } else {
+          throw apiErr;
+        }
+      }
+      const rel = d.file || file;
+      setCreateOpen(false);
+      setMsg(d.overwritten ? t('cfg.newOverwritten', { file: rel }) : t('cfg.newCreated', { file: rel }));
+      await loadList();
+      await loadFile(rel);
+    } catch (error) {
+      setErr(error.message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function save(e) {
     e?.preventDefault?.();
     setErr('');
@@ -139,7 +208,12 @@ export default function CfgEditor() {
         method: 'PUT',
         body: { content, file: activeFile },
       });
-      setMsg(`Gespeichert · ${d.file}${d.resources ? ` · ${d.resources} Ressourcen` : ''}`);
+      const savedName = d.file || activeFile;
+      setMsg(
+        d.resources
+          ? `${t('cfg.saved', { file: savedName })} · ${t('cfg.ensures', { n: d.resources })}`
+          : t('cfg.saved', { file: savedName }),
+      );
       setDirty(false);
       await loadList();
       await loadFile(activeFile || d.file, { soft: true });
@@ -159,7 +233,6 @@ export default function CfgEditor() {
     const el = taRef.current;
     el.focus();
     el.setSelectionRange(start, end);
-    // Scroll roughly into view
     const before = content.slice(0, start);
     const line = before.split('\n').length;
     const lineHeight = 18.5;
@@ -224,6 +297,14 @@ export default function CfgEditor() {
     <div className="cfg-side">
       <div className="cfg-side-head">
         <span className="cfg-side-title">{t('cfg.files')}</span>
+        <button
+          type="button"
+          className="btn btn-sm btn-primary cfg-side-new"
+          onClick={openCreate}
+          title={t('cfg.newTitle')}
+        >
+          {t('cfg.new')}
+        </button>
       </div>
       <input
         className="cfg-side-filter"
@@ -276,6 +357,13 @@ export default function CfgEditor() {
         actions={(
           <div className="cfg-head-actions">
             <button
+              className="btn btn-sm btn-primary"
+              type="button"
+              onClick={openCreate}
+            >
+              {t('cfg.new')}
+            </button>
+            <button
               className="btn btn-sm"
               type="button"
               onClick={() => {
@@ -283,7 +371,7 @@ export default function CfgEditor() {
                 requestAnimationFrame(() => searchRef.current?.focus());
               }}
             >
-              Suche
+              {t('cfg.search')}
             </button>
             <button
               className="btn btn-sm"
@@ -292,7 +380,7 @@ export default function CfgEditor() {
               onClick={() => reloadAll()}
               disabled={loading}
             >
-              Neu laden
+              {t('cfg.reload')}
             </button>
           </div>
         )}
@@ -374,6 +462,63 @@ export default function CfgEditor() {
           </div>
         </form>
       </Split>
+
+      {createOpen && (
+        <Modal title={t('cfg.newTitle')} onClose={closeCreate}>
+          <form className="cfg-create-form" onSubmit={(e) => createCfg(e)}>
+            <label className="field">
+              <span>{t('cfg.newName')}</span>
+              <input
+                ref={newNameRef}
+                type="text"
+                className="mono"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder={t('cfg.newNamePh')}
+                autoComplete="off"
+                spellCheck={false}
+                required
+              />
+            </label>
+            <p className="cfg-create-hint muted">{t('cfg.newNameHint')}</p>
+            <fieldset className="cfg-create-template">
+              <legend>{t('cfg.newTemplate')}</legend>
+              <label className="cfg-create-opt">
+                <input
+                  type="radio"
+                  name="cfg-template"
+                  value="minimal"
+                  checked={newTemplate === 'minimal'}
+                  onChange={() => setNewTemplate('minimal')}
+                />
+                <span>{t('cfg.newTemplateMinimal')}</span>
+              </label>
+              <label className="cfg-create-opt">
+                <input
+                  type="radio"
+                  name="cfg-template"
+                  value="empty"
+                  checked={newTemplate === 'empty'}
+                  onChange={() => setNewTemplate('empty')}
+                />
+                <span>{t('cfg.newTemplateEmpty')}</span>
+              </label>
+            </fieldset>
+            <div className="cfg-create-actions">
+              <button type="button" className="btn btn-sm" onClick={closeCreate} disabled={creating}>
+                {t('common.cancel')}
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={creating || !newName.trim()}
+              >
+                {creating ? t('cfg.newCreating') : t('cfg.newCreate')}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </Page>
   );
 }

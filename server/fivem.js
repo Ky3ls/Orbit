@@ -208,6 +208,46 @@ export function writeCfgFile(rel, text) {
   return full;
 }
 
+/** Minimal-Template für neu angelegte .cfg (kein server.cfg-Inhalt). */
+export function defaultNewCfgContent(rel) {
+  const name = path.basename(String(rel || 'custom.cfg')).replace(/[^\w.\-]/g, '_') || 'custom.cfg';
+  return `# ${name}\n# exec ${name}\n\n`;
+}
+
+/**
+ * Neue .cfg unter Server-Root anlegen.
+ * @returns {{ full: string, rel: string, created: boolean, overwritten: boolean }}
+ */
+export function createCfgFile(relOrName, text, opts = {}) {
+  const overwrite = opts.overwrite === true;
+  let cleaned = String(relOrName || '').trim().replace(/\\/g, '/');
+  if (!cleaned) throw new Error('Dateiname fehlt.');
+  if (!/\.cfg$/i.test(cleaned)) cleaned = `${cleaned}.cfg`;
+  const full = resolveSafeCfgPath(cleaned);
+  const root = getCfgRoot();
+  const rel = path.relative(root, full).replace(/\\/g, '/');
+  const exists = fs.existsSync(full);
+  if (exists && !overwrite) {
+    const err = new Error('CFG-Datei existiert bereits.');
+    err.code = 'CFG_EXISTS';
+    err.rel = rel;
+    throw err;
+  }
+  if (exists && path.resolve(full) === path.resolve(activeCfgPath) && !overwrite) {
+    const err = new Error('Aktive server.cfg kann nicht überschrieben werden.');
+    err.code = 'CFG_EXISTS';
+    err.rel = rel;
+    throw err;
+  }
+  const body = typeof text === 'string' ? text : defaultNewCfgContent(rel);
+  if (body.length > 512_000) throw new Error('CFG zu groß (max. 512 KB).');
+  if (body.includes('\0')) throw new Error('Ungültige Zeichen.');
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  const cleanedBody = sanitizeCfgMetaComments(body);
+  fs.writeFileSync(full, cleanedBody, { encoding: 'utf8', mode: 0o644 });
+  return { full, rel, created: !exists, overwritten: exists && overwrite };
+}
+
 const SECRET_RE = /^(sv_licenseKey|set\s+steam_webApiKey|set\s+mysql_connection_string|rcon_password|set\s+sv_tebexSecret)\b/i;
 
 export function redactCfg(text) {
