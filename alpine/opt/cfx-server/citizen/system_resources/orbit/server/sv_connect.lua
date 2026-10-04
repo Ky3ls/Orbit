@@ -22,6 +22,16 @@ local function collectTokens(player)
   return tokens
 end
 
+local function rejectJoin(d, resp)
+  local fallback = tostring((resp and resp.reason) or '[Orbit] Zugang verweigert.')
+  if type(resp) == 'table' and resp.kind == 'ban' and type(OrbitPresentBanCard) == 'function' then
+    local ok = pcall(OrbitPresentBanCard, d, resp, fallback)
+    -- Bei Erfolg hat presentCard oder interner Text-Fallback bereits geantwortet
+    if ok then return end
+  end
+  d.done('\n' .. fallback)
+end
+
 local function handleConnecting(name, setKickReason, d)
   -- source MUSS vor defer/Wait gesichert werden (sonst nil → Native-Crash)
   local player = source
@@ -68,7 +78,7 @@ local function handleConnecting(name, setKickReason, d)
     if resp.allow == true then
       d.done()
     else
-      d.done('\n' .. tostring(resp.reason or '[Orbit] Zugang verweigert.'))
+      rejectJoin(d, resp)
     end
   end)
 
