@@ -129,6 +129,17 @@ html[data-theme="light"] .os-sidebar-link:hover {
 }
 html[data-theme="light"] .os-sidebar-link.active {
   color: var(--text);
+  box-shadow: none;
+}
+html[data-theme="light"] .ws-rail-item:hover {
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--text);
+}
+html[data-theme="light"] .ws-rail-item.active,
+html[data-theme="light"] .ws-rail-item.active:hover {
+  background: var(--accent-dim);
+  color: var(--text);
+  box-shadow: none;
 }
 html[data-theme="light"] .dock-item:hover {
   color: var(--text);
@@ -584,7 +595,7 @@ html[data-theme="light"] .cfg-find {
 .ws-rail-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -592,12 +603,15 @@ html[data-theme="light"] .cfg-find {
 }
 
 .ws-rail-group {
-  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
 }
 .ws-rail-group:first-child { margin-top: 0; }
 .ws-rail-group-label {
   display: block;
-  padding: 6px 12px 4px;
+  padding: 6px 12px 2px;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -611,10 +625,10 @@ html[data-theme="light"] .cfg-find {
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 40px;
-  padding: 8px 12px;
+  min-height: 34px;
+  padding: 6px 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   background: transparent;
   color: var(--muted);
   font: inherit;
@@ -623,11 +637,17 @@ html[data-theme="light"] .cfg-find {
   text-decoration: none;
   cursor: pointer;
   text-align: left;
+  box-shadow: none;
   transition: background 0.15s, color 0.15s;
 }
-.ws-rail-item:hover { color: var(--text); background: var(--accent-dim); }
+/* Hover schwächer als Active — sonst wirken zwei Items „aktiv“ */
+.ws-rail-item:hover { color: var(--text); background: rgba(var(--accent-rgb), 0.07); }
 .ws-rail-item.active {
   color: var(--text);
+  background: var(--accent-dim);
+  box-shadow: none;
+}
+.ws-rail-item.active:hover {
   background: var(--accent-dim);
 }
 .ws-rail-item.active .ws-rail-ico { color: var(--accent); }
