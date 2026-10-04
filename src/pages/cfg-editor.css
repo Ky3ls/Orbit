@@ -53,6 +53,94 @@
   color: var(--accent);
 }
 
+.cfg-side-new {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cfg-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 2px;
+}
+
+.cfg-create-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cfg-create-form .field > span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.cfg-create-form input[type="text"],
+.cfg-create-form input.mono {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated, var(--card));
+  color: var(--text);
+  font-size: 13px;
+}
+
+.cfg-create-form input.mono:focus {
+  outline: none;
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.12);
+}
+
+.cfg-create-hint {
+  margin: -4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.cfg-create-template {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.cfg-create-template legend {
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cfg-create-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cfg-create-opt input {
+  accent-color: var(--accent);
+}
+
+.cfg-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
 .cfg-side-filter {
   margin: 8px 10px;
   width: calc(100% - 20px);

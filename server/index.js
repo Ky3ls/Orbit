@@ -42,6 +42,8 @@ import { fxConsoleReady } from './fxCommand.js';
 import { orbitControlMode } from './fxLaunch.js';
 import { patchCfgServerOpts } from './cfgPatch.js';
 import {
+  createCfgFile,
+  defaultNewCfgContent,
   listCfgFiles,
   mergeCfgSecrets,
   parseCfgIntegrations,
@@ -2506,6 +2508,58 @@ async function handleApi(req, res, url) {
     audit(db, me.username, 'cfg.save', `${targetRel} · ${merged.length} bytes`, ip);
     logLine('ok', `${me.username} hat ${targetRel} gespeichert.`);
     return json(res, 200, { ok: true, resources, file: targetRel });
+  }
+
+  if (method === 'POST' && pathname === '/api/cfg') {
+    if (!hasPerm(me, 'cfg') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hit(`cfg-create:${me.id}`, 8, 60_000)) return json(res, 429, { error: 'Zu viele CFG-Anlagen.' });
+    syncActiveCfgPath(settingMap(db));
+    const body = await readBody(req, 600_000);
+    let fileParam = str(body.file || body.name || '', 240);
+    if (!fileParam) return json(res, 400, { error: 'Dateiname fehlt.' });
+    if (!/\.cfg$/i.test(fileParam)) fileParam = `${fileParam}.cfg`;
+    const overwrite = body.overwrite === true || body.overwrite === '1';
+    const template = String(body.template || 'minimal').toLowerCase();
+    let content;
+    if (typeof body.content === 'string') {
+      content = body.content;
+    } else if (template === 'empty') {
+      content = '';
+    } else {
+      content = defaultNewCfgContent(fileParam);
+    }
+    // Neue Dateien sind nie die Primär-CFG → keine endpoint-Pflicht
+    const errors = validateCfg(content, { requireEndpoints: false });
+    if (errors.length && content.length > 0) {
+      return json(res, 400, { error: errors[0], errors });
+    }
+    try {
+      const created = createCfgFile(fileParam, content, { overwrite });
+      audit(
+        db,
+        me.username,
+        created.overwritten ? 'cfg.overwrite' : 'cfg.create',
+        `${created.rel} · ${content.length} bytes`,
+        ip,
+      );
+      logLine('ok', `${me.username} hat ${created.rel} ${created.overwritten ? 'überschrieben' : 'angelegt'}.`);
+      return json(res, created.overwritten ? 200 : 201, {
+        ok: true,
+        file: created.rel,
+        created: created.created,
+        overwritten: created.overwritten,
+      });
+    } catch (err) {
+      if (err.code === 'CFG_EXISTS') {
+        return json(res, 409, {
+          error: err.message,
+          exists: true,
+          file: err.rel || fileParam,
+        });
+      }
+      const code = /Ungültig|außerhalb|Nur \.cfg|fehlt|zu groß|Zeichen/i.test(err.message) ? 400 : 500;
+      return json(res, code, { error: err.message || 'CFG konnte nicht angelegt werden.' });
+    }
   }
 
   if (method === 'GET' && pathname === '/api/console/download') {
