@@ -81,7 +81,8 @@ export default function Players({ user }) {
   const [pick, setPick] = useState(null);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState('info');
-  const [reason, setReason] = useState('');
+  const [banReason, setBanReason] = useState('');
+  const [actionReason, setActionReason] = useState('');
   const [note, setNote] = useState('');
   const [durationId, setDurationId] = useState('2d');
   const [customDays, setCustomDays] = useState('');
@@ -167,7 +168,8 @@ export default function Players({ user }) {
   async function openPlayer(p) {
     setPick(p);
     setTab('info');
-    setReason('');
+    setBanReason('');
+    setActionReason('');
     setTemplateId('');
     setDurationId('2d');
     setCustomDays('');
@@ -178,6 +180,7 @@ export default function Players({ user }) {
       const d = await api(`/api/players/detail?id=${encodeURIComponent(p.identifier)}`);
       setDetail(d);
       setNote(d.player?.note || '');
+      /* Ban-Vorlagen nur aus Settings-/API-Liste — nie Kick/Warn-Gründe */
       if (Array.isArray(d.banTemplates)) setBanTemplates(d.banTemplates);
     } catch (e) {
       setDetail(null);
@@ -224,7 +227,7 @@ export default function Players({ user }) {
     const fromList = banTemplates.find((x) => String(x.id) === String(id));
     const reasonText = opt?.reason ?? fromList?.reason;
     const dur = opt?.durationId ?? fromList?.duration_id;
-    if (reasonText) setReason(reasonText);
+    if (reasonText) setBanReason(reasonText);
     if (!dur) return;
     if (BAN_DURATION_PRESETS.some((p) => p.id === dur)) {
       setDurationId(dur);
@@ -313,10 +316,9 @@ export default function Players({ user }) {
   const templateList = useMemo(() => banTemplates.map((tpl) => ({
     id: String(tpl.id),
     label: tpl.reason,
-    hint: banDurationLabel(tpl.duration_id, t),
     reason: tpl.reason,
     durationId: tpl.duration_id,
-  })), [banTemplates, t]);
+  })), [banTemplates]);
   const durationLabel = useMemo(
     () => durationList.find((d) => d.id === durationId)?.label || banDurationLabel(durationId, t),
     [durationList, durationId, t],
@@ -351,22 +353,22 @@ export default function Players({ user }) {
       setErr(t('players.errOffline'));
       return;
     }
-    if (reason.length < 2) { setErr(t('players.errReason')); return; }
+    if (actionReason.length < 2) { setErr(t('players.errReason')); return; }
     setBusy(true);
     setErr('');
     try {
       await api('/api/players/action', {
         method: 'POST',
-        body: { action, id: p.serverId, reason },
+        body: { action, id: p.serverId, reason: actionReason },
       });
-      setReason('');
+      setActionReason('');
       loadPlayers(true);
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
 
   async function applyBan() {
-    if (!p || reason.length < 3) { setErr(t('players.errBanReason')); return; }
+    if (!p || banReason.length < 3) { setErr(t('players.errBanReason')); return; }
     let resolvedId = durationId;
     if (durationId === 'custom') {
       const mapped = customDurationToId(customDays, customHhmm);
@@ -385,12 +387,13 @@ export default function Players({ user }) {
           identifiers: ids,
           identifier: p.identifier,
           name: p.name,
-          reason,
+          reason: banReason,
           durationId: resolvedId,
           id: p.serverId,
         },
       });
-      setReason('');
+      setBanReason('');
+      setTemplateId('');
       await openPlayer(p);
       loadPlayers(true);
       if (filter === 'banned') loadBans(true);
@@ -676,16 +679,15 @@ export default function Players({ user }) {
             <aside className="pl-ban-aside" aria-label={t('players.banAside')}>
               <div className="pl-ban-aside-block">
                 <h4 className="pl-ban-aside-title">{t('common.templates')}</h4>
-                <div className="pl-ban-aside-list" role="listbox" aria-label={t('players.banTemplates')}>
+                <div className="pl-ban-tags" role="listbox" aria-label={t('players.banTemplates')}>
                   <button
                     type="button"
                     role="option"
                     aria-selected={!templateId}
-                    className={`pl-ban-aside-item${!templateId ? ' active' : ''}`}
+                    className={`pl-ban-tag${!templateId ? ' active' : ''}`}
                     onClick={() => applyTemplate('')}
                   >
-                    <span className="pl-ban-aside-item-label">{t('players.noTemplate')}</span>
-                    <span className="pl-ban-aside-item-hint">{t('players.manualFill')}</span>
+                    {t('players.noTemplate')}
                   </button>
                   {templateList.map((tpl) => (
                     <button
@@ -693,11 +695,11 @@ export default function Players({ user }) {
                       type="button"
                       role="option"
                       aria-selected={templateId === tpl.id}
-                      className={`pl-ban-aside-item${templateId === tpl.id ? ' active' : ''}`}
+                      className={`pl-ban-tag${templateId === tpl.id ? ' active' : ''}`}
                       onClick={() => applyTemplate(tpl.id, tpl)}
+                      title={tpl.label}
                     >
-                      <span className="pl-ban-aside-item-label">{tpl.label}</span>
-                      {tpl.hint && <span className="pl-ban-aside-item-hint">{tpl.hint}</span>}
+                      {tpl.label}
                     </button>
                   ))}
                   {templateList.length === 0 && (
@@ -841,8 +843,8 @@ export default function Players({ user }) {
                     <span className="pl-ban-label">{t('common.reason')}</span>
                     <textarea
                       rows={3}
-                      value={reason}
-                      onChange={(e) => { setReason(e.target.value); setTemplateId(''); }}
+                      value={banReason}
+                      onChange={(e) => { setBanReason(e.target.value); setTemplateId(''); }}
                       placeholder={t('players.reasonPh')}
                     />
                   </label>
@@ -886,8 +888,8 @@ export default function Players({ user }) {
                 <input
                   className="pl-actions-reason"
                   placeholder={t('players.actionPh')}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
+                  value={actionReason}
+                  onChange={(e) => setActionReason(e.target.value)}
                 />
                 <div className="pl-actions-btns">
                   <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('message')}>DM</button>
