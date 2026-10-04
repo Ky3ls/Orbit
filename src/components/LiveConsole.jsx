@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, mergeLines } from '../api.js';
 import { consoleLineVisible } from '../appearance.js';
-import { stripAnsi } from '../consoleFormat.js';
+import { splitOrbitPlayerLine, stripAnsi } from '../consoleFormat.js';
 import { fmtTime } from '../format.js';
 import { useAppearance } from '../hooks/useAppearance.js';
 import { useFxStatus } from '../hooks/useFxStatus.js';
@@ -12,6 +12,29 @@ const MIN_H = 220;
 const MAX_H = 620;
 const DEFAULT_H = 340;
 const QUICK = ['status', 'players', 'refresh', 'say Willkommen auf dem Server'];
+
+function ConsoleLineText({ text, onPlayerClick }) {
+  const parts = splitOrbitPlayerLine(text);
+  if (!parts) return stripAnsi(text);
+  return (
+    <>
+      {parts.before}
+      <button
+        type="button"
+        className="lc-player-link"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onPlayerClick?.(parts);
+        }}
+        title="Spieler öffnen"
+      >
+        {parts.linkText}
+      </button>
+      {parts.after}
+    </>
+  );
+}
 
 /**
  * @param {{
@@ -30,6 +53,7 @@ export default function LiveConsole({
   onHeight,
 }) {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const active = variant === 'page' || variant === 'side' || variant === 'cockpit' || open;
   const fx = useFxStatus(active ? 8000 : 60_000);
   const [prefs] = useAppearance();
@@ -185,6 +209,19 @@ export default function LiveConsole({
     }
   }
 
+  function openPlayerFromConsole(ref) {
+    if (!ref) return;
+    const params = new URLSearchParams();
+    if (ref.name) params.set('open', ref.name);
+    if (ref.serverId != null && Number.isFinite(ref.serverId)) {
+      params.set('sid', String(ref.serverId));
+    }
+    const qs = params.toString();
+    if (!qs) return;
+    navigate(`/players?${qs}`);
+    onClose?.();
+  }
+
   if (variant === 'drawer' && !open) return null;
 
   const h = height || DEFAULT_H;
@@ -277,7 +314,9 @@ export default function LiveConsole({
           <div key={line.id} className={`lc-line ${line.level || 'info'}`}>
             <span className="lc-ts">{fmtTime(line.t)}</span>
             <span className="lc-prompt">›</span>
-            <span className="lc-text">{stripAnsi(line.text)}</span>
+            <span className="lc-text">
+              <ConsoleLineText text={line.text} onPlayerClick={openPlayerFromConsole} />
+            </span>
           </div>
         ))}
         <div className="lc-caret" aria-hidden="true">▌</div>

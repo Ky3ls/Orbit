@@ -91,6 +91,9 @@ local function tokenReady()
   return ORBIT_TOKEN ~= '' and ORBIT_TOKEN ~= 'removed'
 end
 
+--- Namen für Offline-Log cachen (GetPlayerName bei Drop oft schon weg)
+local KNOWN_NAMES = {}
+
 local function pushPlayers(payload)
   if not tokenReady() then return end
   payload.token = ORBIT_TOKEN
@@ -99,7 +102,13 @@ local function pushPlayers(payload)
       print(('^1players-sync HTTP %s^7'):format(tostring(code)))
     elseif payload.event == 'playerDropped' then
       -- Connect-Log kommt aus sv_hardcap; hier nur Offline (kein Doppel-„online“)
-      print(('^3Spieler offline: #%s^7'):format(tostring(payload.id or '?')))
+      local id = tostring(payload.id or '?')
+      local name = payload.name and tostring(payload.name) or ''
+      if name ~= '' then
+        print(('^3Spieler offline: %s (#%s)^7'):format(name, id))
+      else
+        print(('^3Spieler offline: #%s^7'):format(id))
+      end
     end
   end)
 end
@@ -121,11 +130,13 @@ local function syncJoin(src)
   local okName, pname = pcall(GetPlayerName, src)
   if not okName or pname == nil then return end
   local okPing, ping = pcall(GetPlayerPing, src)
+  local display = pname or ('#' .. src)
+  KNOWN_NAMES[src] = display
   pushPlayers({
     event = 'playerJoining',
     player = {
       id = src,
-      name = pname or ('#' .. src),
+      name = display,
       ping = (okPing and ping) or 0,
       identifiers = GetPlayerIdentifiers(src) or {},
     },
@@ -135,9 +146,16 @@ end
 local function syncDrop(src, reason)
   src = tonumber(src)
   if not src then return end
+  local name = KNOWN_NAMES[src]
+  if not name then
+    local okName, pname = pcall(GetPlayerName, src)
+    if okName and pname then name = pname end
+  end
+  KNOWN_NAMES[src] = nil
   pushPlayers({
     event = 'playerDropped',
     id = src,
+    name = name or '',
     reason = reason and tostring(reason) or '',
   })
 end
@@ -196,10 +214,6 @@ end)
 
 AddEventHandler('onResourceStart', function(res)
   if res ~= RESOURCE then return end
-  print(('^2v4 · Panel %s · Token %s · Live-Playerlist · Slot-Cap^7'):format(
-    PANEL,
-    tokenReady() and 'ok' or 'fehlt'
-  ))
   CreateThread(function()
     Wait(1500)
     syncFull()
