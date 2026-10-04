@@ -107,6 +107,20 @@ html[data-theme="light"] .search,
 html[data-theme="light"] th {
   background: var(--bg-elevated);
 }
+/* Spieler-Modal: Restflächen elevated/card — kein Canvas-Schwarz in Dark via Token-Fallback */
+html[data-theme="light"] .pl-rail > div,
+html[data-theme="light"] .pl-seg,
+html[data-theme="light"] .pl-ban-field textarea,
+html[data-theme="light"] .pl-ban-field input,
+html[data-theme="light"] .pl-ban-aside-item,
+html[data-theme="light"] .pl-ban-tag {
+  background: var(--bg-elevated);
+}
+html[data-theme="light"] .pl-ban-summary {
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.1), transparent 60%),
+    var(--bg-elevated);
+}
 html[data-theme="light"] .modal-back {
   background: rgba(20, 28, 36, 0.32);
 }
