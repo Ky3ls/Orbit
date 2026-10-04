@@ -844,7 +844,14 @@ export default function Players({ user }) {
                 ids.length === 0 ? (
                   <p className="muted">{t('players.noIds')}</p>
                 ) : (
-                  <PlayerIdentifiers ids={ids} mask className="pl-ids-sheet" />
+                  <PlayerIdentifiers
+                    ids={ids}
+                    mask
+                    copyable
+                    className="pl-ids-sheet"
+                    copyLabel={t('common.copy')}
+                    copiedLabel={t('common.copied')}
+                  />
                 )
               )}
 

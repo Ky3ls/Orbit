@@ -347,6 +347,44 @@
 .pl-ids-sheet .pl-id-row-line.is-open {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
+.pl-ids.copyable .pl-id-row-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: stretch;
+}
+.pl-ids.copyable .pl-id-row-line {
+  cursor: copy;
+}
+.pl-id-copy {
+  flex-shrink: 0;
+  align-self: center;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.pl-id-copy:hover,
+.pl-id-copy:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  outline: none;
+}
+.pl-id-copy.is-copied,
+.pl-id-row-line.is-copied,
+.pl-id-row-wrap.is-copied .pl-id-copy {
+  color: var(--ok, #16a34a);
+  border-color: color-mix(in srgb, var(--ok, #16a34a) 40%, var(--line));
+}
 
 html[data-theme="light"] .pl-card {
   --pl-card-bg: #f4f6f8;
