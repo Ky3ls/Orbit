@@ -326,21 +326,17 @@ export default function LiveConsole({
         className="lc-form"
         onSubmit={(e) => { e.preventDefault(); send(); }}
       >
-        <span className="lc-prompt" aria-hidden="true">fx</span>
         <input
           ref={inputRef}
           className="mono"
-          placeholder={fx.fxCommandReady ? t('console.phReady') : t('console.phOffline')}
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={onKeyDown}
           autoComplete="off"
           spellCheck={false}
           disabled={!fx.fxCommandReady}
+          aria-label={t('console.aria')}
         />
-        <button className="btn btn-primary btn-sm" type="submit" disabled={sending || !fx.fxCommandReady}>
-          {sending ? '…' : t('console.send')}
-        </button>
       </form>
     </div>
   );
