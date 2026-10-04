@@ -102,7 +102,7 @@
 .sch-stat strong {
   font-size: 17px;
   font-weight: 800;
-  color: var(--text);
+  color: var(--accent-ink, var(--accent));
   line-height: 1.15;
 }
 
@@ -427,10 +427,6 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1;
-  color: var(--text);
-}
-
-.sch-job.is-on .sch-job-time b {
   color: var(--accent-ink, var(--accent));
 }
 
