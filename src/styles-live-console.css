@@ -1,36 +1,72 @@
 /* Live-Konsole (Drawer + Vollbild) — unabhängig vom Panel-Theme */
 
 .live-console {
-  /* Grid statt Flex: Head/Term/Form können nicht mehr kollabieren/wandern */
+  /* 3-Row-Grid: Head oben, Term scrollt, Form unten — nie mittig */
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
     "head"
     "term"
-    "err"
     "form";
-  align-content: stretch;
+  /* stretch würde auto-Rows aufblasen wenn 1fr kurz 0 ist → Head mittig + Pulse-Linie */
+  align-content: start;
+  align-items: stretch;
   justify-items: stretch;
   width: 100%;
   min-width: 0;
   min-height: 0;
   height: 100%;
   max-height: 100%;
-  overflow: hidden;
+  /* clip: Ancestor-Scroll unmöglich (hidden erlaubt scrollTop) */
+  overflow: clip;
+  border: 0;
   border-left: 0;
   box-shadow: none;
+  /* kein contain:size — %-Höhe kann sonst zu 0 kollabieren */
+  contain: layout style;
 }
 
-.live-console > .lc-head { grid-area: head; }
-.live-console > .lc-term { grid-area: term; }
-.live-console > .lc-err { grid-area: err; }
-.live-console > .lc-form { grid-area: form; }
+.live-console > .lc-head {
+  grid-area: head;
+  grid-row: 1;
+  align-self: start;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  flex: none;
+  z-index: 2;
+}
 
-.live-console > .lc-head,
-.live-console > .lc-form,
-.live-console > .lc-err {
+.live-console > .lc-term {
+  grid-area: term;
+  grid-row: 2;
   min-height: 0;
+  min-width: 0;
+  align-self: stretch;
+}
+
+.live-console > .lc-form {
+  grid-area: form;
+  grid-row: 3;
+  align-self: end;
+  width: 100%;
+  height: auto;
+  flex: none;
+  z-index: 2;
+}
+
+/* Fehler über der Form, ohne extra Grid-Row (verhindert Row-Stretch-Bugs) */
+.live-console > .lc-err {
+  grid-area: form;
+  grid-row: 3;
+  align-self: start;
+  width: auto;
+  max-width: calc(100% - 32px);
+  margin: 0 16px;
+  transform: translateY(calc(-100% - 8px));
+  z-index: 3;
+  pointer-events: none;
 }
 
 .live-console-drawer {
@@ -39,23 +75,25 @@
   right: 0;
   bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   z-index: 46;
-  /* behält display:grid aus .live-console */
   border-top: 1px solid rgba(var(--accent-rgb), 0.28);
   background: rgba(5, 5, 5, 0.98);
   backdrop-filter: blur(18px);
   box-shadow: 0 -24px 80px rgba(0, 0, 0, 0.55);
+  /* fixed drawer: contain:strict braucht explizite Höhe via inline style */
+  contain: layout style;
 }
 
 .live-console-page {
   min-height: min(72vh, 720px);
   border-radius: 20px;
   border: 1px solid var(--line);
-  overflow: hidden;
+  overflow: clip;
   background: rgba(0, 0, 0, 0.35);
+  contain: layout style;
 }
 
 .live-console-side {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   height: 100%;
   background: #030303;
@@ -86,16 +124,38 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  align-content: center;
   gap: 10px 14px;
   padding: 10px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(var(--accent-rgb), 0.04);
+  box-sizing: border-box;
 }
-.lc-title { display: flex; align-items: center; gap: 10px; }
+.lc-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-height: 0;
+  height: auto;
+  align-self: center;
+}
 .lc-title strong { font-size: 13px; display: block; }
+/* Boot-Pulse darf NIEMALS mitwachsen → sonst gelbe Vollhöhen-Linie */
 .lc-pulse {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--bad); flex-shrink: 0;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  min-height: 10px;
+  max-width: 10px;
+  max-height: 10px;
+  border-radius: 50%;
+  background: var(--bad);
+  flex: 0 0 10px;
+  align-self: center;
+  display: inline-block;
+  overflow: hidden;
 }
 .lc-pulse.on {
   background: var(--ok);
@@ -112,7 +172,7 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
 }
-.lc-quick { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+.lc-quick { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
 .lc-chip {
   padding: 5px 10px;
   border-radius: 8px;
@@ -153,6 +213,7 @@
   min-height: 0;
   min-width: 0;
   width: 100%;
+  height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -164,9 +225,10 @@
   background: #101010;
   color: #e4e4e4;
   -webkit-font-smoothing: antialiased;
-  /* kein scrollbar-gutter: kann links/rechts „Streifen“ erzeugen */
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  border: 0;
+  box-shadow: none;
 }
 .lc-empty { color: #888; text-align: center; padding: 28px 0; }
 .lc-soft-clear-cue {
@@ -199,14 +261,6 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 .lc-ts { color: #777; font-size: 11px; flex-shrink: 0; }
-/* Nie Accent: gestapelte › würden sonst als orange Vollhöhen-Kante wirken */
-.lc-prompt {
-  color: #6a6a6a;
-  font-weight: 600;
-  flex-shrink: 0;
-  line-height: inherit;
-  align-self: baseline;
-}
 .lc-text {
   flex: 1 1 12rem;
   min-width: 0;
@@ -241,12 +295,12 @@
   border-radius: 2px;
 }
 .lc-err {
-  margin: 0 16px 8px;
   padding: 8px 12px;
   border-radius: 10px;
   background: rgba(255, 93, 115, 0.12);
   color: var(--bad);
   font-size: 12px;
+  pointer-events: auto;
 }
 .lc-form {
   display: flex;
@@ -256,6 +310,7 @@
   padding: 10px 16px 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
 }
 .lc-form input {
   flex: 1 1 auto;

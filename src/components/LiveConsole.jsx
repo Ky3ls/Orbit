@@ -70,6 +70,7 @@ export default function LiveConsole({
   const [sending, setSending] = useState(false);
   const [history, setHistory] = useState([]);
   const [histIdx, setHistIdx] = useState(-1);
+  const shellRef = useRef(null);
   const box = useRef(null);
   const endRef = useRef(null);
   const drag = useRef(null);
@@ -78,6 +79,7 @@ export default function LiveConsole({
   /** true während programmatischem Scroll → onScroll darf Auto nicht ausknipsen */
   const progScrollRef = useRef(false);
   const scrollRafRef = useRef(0);
+  const pinRafRef = useRef(0);
   const inputRef = useRef(null);
   const consoleBuf = useRef([]);
   const consoleRaf = useRef(0);
@@ -89,6 +91,8 @@ export default function LiveConsole({
   const wasLiveRef = useRef(false);
   /** Endpoint online — Logs auch ohne Supervisor-Pipe behalten */
   const onlineRef = useRef(false);
+  /** Remount-Key: Reset bei Start/Restart (console_clear) gegen Layout-Collapse */
+  const [shellEpoch, setShellEpoch] = useState(0);
 
   function setBootGate(open) {
     bootOpenRef.current = open;
@@ -115,8 +119,6 @@ export default function LiveConsole({
     || fx.controlPhase === 'starting' || fx.controlPhase === 'restarting'
     || fx.supervisorPhase === 'starting'
     || bootOpen;
-  const unsupervisedOnline = !!(fx.online && !fx.fxCommandReady && fx.fxControlMode === 'orbit');
-
   function wipeConsole() {
     consoleBuf.current = [];
     consoleRaf.current = 0;
@@ -143,18 +145,17 @@ export default function LiveConsole({
     }
   }
 
-  /** Nur .lc-term scrollen — nie scrollIntoView (scrollt overflow:hidden-Ancestors → Layout-Collapse). */
+  /** Alle scrollbaren Ancestors auf 0 — nur .lc-term darf scrollen. */
   function pinConsoleShell() {
-    let p = box.current?.parentElement;
-    while (p && p !== document.body) {
-      if (p.classList?.contains('live-console')
-        || p.classList?.contains('ck-term-frame')
-        || p.classList?.contains('ck-terminal')
-        || p.classList?.contains('ws-main')) {
-        if (p.scrollTop) p.scrollTop = 0;
-      }
+    const start = shellRef.current || box.current;
+    let p = start;
+    while (p && p !== document.documentElement) {
+      if (p.scrollTop) p.scrollTop = 0;
+      if (p.scrollLeft) p.scrollLeft = 0;
       p = p.parentElement;
     }
+    if (document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
+    if (document.body?.scrollTop) document.body.scrollTop = 0;
   }
 
   function scrollToEnd() {
@@ -233,6 +234,7 @@ export default function LiveConsole({
       suppressLogsRef.current = false;
       setBootGate(true);
       wipeConsole();
+      setShellEpoch((n) => n + 1);
       enableAutoScroll();
     });
     es.addEventListener('console', (e) => {
@@ -270,6 +272,8 @@ export default function LiveConsole({
       setSseFx(null);
       if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
       scrollRafRef.current = 0;
+      if (pinRafRef.current) cancelAnimationFrame(pinRafRef.current);
+      pinRafRef.current = 0;
       progScrollRef.current = false;
     };
   }, [active]);
@@ -297,6 +301,32 @@ export default function LiveConsole({
     scrollToEnd();
     return undefined;
   }, [visible, active, autoScroll]);
+
+  // Während Boot: Ancestors bei jedem Paint auf scrollTop=0 pinnen
+  useLayoutEffect(() => {
+    if (!active || !booting) {
+      if (pinRafRef.current) cancelAnimationFrame(pinRafRef.current);
+      pinRafRef.current = 0;
+      return undefined;
+    }
+    let frames = 0;
+    const tick = () => {
+      pinConsoleShell();
+      frames += 1;
+      // ~2s bei 60fps — Layout-Collapse während Start unterbinden
+      if (frames < 120 && bootOpenRef.current) {
+        pinRafRef.current = requestAnimationFrame(tick);
+      } else {
+        pinRafRef.current = 0;
+      }
+    };
+    pinConsoleShell();
+    pinRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (pinRafRef.current) cancelAnimationFrame(pinRafRef.current);
+      pinRafRef.current = 0;
+    };
+  }, [active, booting, shellEpoch]);
 
   // Soft-Historie eingeblendet: Scrollposition halten (alte Zeilen darüber)
   useLayoutEffect(() => {
@@ -458,6 +488,8 @@ export default function LiveConsole({
 
   return (
     <div
+      key={shellEpoch}
+      ref={shellRef}
       className={rootClass}
       style={variant === 'drawer' ? { height: h } : undefined}
       role={variant === 'drawer' ? 'dialog' : 'region'}
@@ -538,23 +570,20 @@ export default function LiveConsole({
         )}
         {visible.length === 0 && (
           <div className="lc-empty">
-            {unsupervisedOnline
-              ? t('console.emptyUnsupervised')
-              : fx.ready && !consoleLive && !booting
-                ? t('console.emptyOffline')
-                : booting && !lines.length
-                  ? t('console.emptyStarting')
-                  : hasSoftHidden
-                    ? t('console.softClearEmpty')
-                    : lines.length
-                      ? t('console.emptyFilter')
-                      : t('console.emptyWait')}
+            {fx.ready && !consoleLive && !booting
+              ? t('console.emptyOffline')
+              : booting && !lines.length
+                ? t('console.emptyStarting')
+                : hasSoftHidden
+                  ? t('console.softClearEmpty')
+                  : lines.length
+                    ? t('console.emptyFilter')
+                    : t('console.emptyWait')}
           </div>
         )}
         {(consoleLive || !fx.ready || booting) && visible.map((line) => (
           <div key={line.id} className={`lc-line ${line.level || 'info'}`}>
             <span className="lc-ts">{fmtTime(line.t)}</span>
-            <span className="lc-prompt">›</span>
             <span className="lc-text">
               <ConsoleLineText text={line.text} onPlayerClick={openPlayerFromConsole} />
             </span>

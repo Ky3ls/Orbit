@@ -255,11 +255,6 @@ const de = {
   'ctl.start': 'Start',
   'ctl.stop': 'Stop',
   'ctl.restart': 'Restart',
-  'ctl.hintPrefix': 'Konsole/Ressourcen',
-  'ctl.hintOrbit': 'Orbit hält den Prozess nicht',
-  'ctl.hintRcon': 'RCON oder Orbit-Modus',
-  'ctl.hintReattach': 'Restart bindet Konsole neu an',
-  'ctl.setup': 'Setup',
 
   // Format
   'fmt.days': '{n} Tage',
@@ -510,11 +505,6 @@ const en = {
   'ctl.start': 'Start',
   'ctl.stop': 'Stop',
   'ctl.restart': 'Restart',
-  'ctl.hintPrefix': 'Console/resources',
-  'ctl.hintOrbit': 'Orbit is not holding the process',
-  'ctl.hintRcon': 'RCON or Orbit mode',
-  'ctl.hintReattach': 'Restart reattaches the console',
-  'ctl.setup': 'Setup',
 
   'fmt.days': '{n} days',
 };

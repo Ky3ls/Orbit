@@ -14,7 +14,7 @@
 }
 .ws[data-cockpit='1'] .ws-main {
   padding: 0;
-  overflow: hidden;
+  overflow: clip;
   min-height: 0;
   flex: 1 1 0;
   display: flex;
@@ -245,9 +245,12 @@
   height: 100%;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
+  align-content: start;
+  justify-items: stretch;
   padding: 12px;
   background: var(--bg-elevated);
-  overflow: hidden;
+  overflow: clip;
+  border: 0;
   border-left: 0;
   box-shadow: none;
 }
@@ -259,13 +262,12 @@
   width: 100%;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  align-content: stretch;
+  align-content: start;
   justify-items: stretch;
   border-radius: 12px;
   border: 1px solid var(--line);
-  /* explizit: keine Accent-Kante (Bug: orange Vollhöhen-Linie) */
   border-left-color: var(--line);
-  overflow: hidden;
+  overflow: clip;
   background: var(--bg-elevated);
   box-shadow: none;
 }
@@ -280,8 +282,8 @@
   max-height: 100%;
   align-self: stretch;
   justify-self: stretch;
-  /* erbt Grid aus .live-console — kein Flex-Collapse mehr */
-  overflow: hidden;
+  overflow: clip;
+  border: 0;
   border-left: 0;
   box-shadow: none;
 }
