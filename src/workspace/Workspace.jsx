@@ -25,6 +25,13 @@ const DOCK_PATHS = new Set([
 
 const RAIL_PRIMARY = new Set(['/panel', '/players', '/resources', '/monitoring']);
 
+/** Exact match for `end`, otherwise self or child path — avoids dual-active via broad prefixes. */
+function pathMatchesNav(pathname, to, end) {
+  if (!to) return false;
+  if (end || to === '/') return pathname === to;
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
 function RailLink({ to, end, icon, label, active, onClick, asButton, pressed, pri }) {
   const cls = `ws-rail-item${active ? ' active' : ''}`;
   const inner = (
@@ -43,10 +50,13 @@ function RailLink({ to, end, icon, label, active, onClick, asButton, pressed, pr
   return (
     <NavLink
       to={to}
-      end={end}
+      end={!!end}
       title={label}
       data-pri={pri ? '1' : '0'}
-      className={({ isActive }) => `ws-rail-item${(active ?? isActive) ? ' active' : ''}`}
+      className={({ isActive }) => {
+        const on = active !== undefined ? active : isActive;
+        return `ws-rail-item${on ? ' active' : ''}`;
+      }}
       onClick={onClick}
     >
       {inner}
@@ -298,7 +308,7 @@ export default function Workspace({ user, onLogout }) {
                       icon={item.icon}
                       label={item.label}
                       pri={RAIL_PRIMARY.has(item.to)}
-                      active={item.end ? onCockpit : undefined}
+                      active={pathMatchesNav(loc.pathname, item.to, item.end)}
                     />
                   );
                 })}

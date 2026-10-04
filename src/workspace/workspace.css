@@ -67,7 +67,7 @@ body.orbit-ws {
 .ws-nav {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
   overflow-x: auto;
@@ -76,7 +76,7 @@ body.orbit-ws {
 .ws-nav::-webkit-scrollbar { display: none; }
 
 .ws-nav-link {
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
@@ -86,12 +86,15 @@ body.orbit-ws {
   background: transparent;
   white-space: nowrap;
   cursor: pointer;
+  box-shadow: none;
 }
-.ws-nav-link:hover { color: var(--text); background: var(--accent-dim); }
+.ws-nav-link:hover { color: var(--text); background: rgba(var(--accent-rgb), 0.07); }
 .ws-nav-link.active {
   color: var(--accent);
   background: var(--accent-dim);
+  box-shadow: none;
 }
+.ws-nav-link.active:hover { background: var(--accent-dim); }
 
 .ws-nav-drop { position: relative; }
 .ws-drop-panel {
