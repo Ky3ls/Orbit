@@ -503,7 +503,7 @@
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--bg-elevated);
-  box-shadow: var(--shadow);
+  box-shadow: none;
   overflow: hidden;
 }
 .pl-ban-aside-block {

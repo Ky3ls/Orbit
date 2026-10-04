@@ -121,7 +121,7 @@ html[data-theme="light"] .orbit-veil::after {
 html[data-theme="light"] .os-sidebar,
 html[data-theme="light"] .ws-rail {
   background: var(--bg-elevated);
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 html[data-theme="light"] .os-sidebar-link:hover {
   background: rgba(20, 28, 36, 0.05);
@@ -186,7 +186,7 @@ html[data-theme="light"] .ob-tile,
 html[data-theme="light"] .nx-panel {
   background: var(--card) !important;
   border-color: var(--line) !important;
-  box-shadow: var(--shadow) !important;
+  box-shadow: none !important;
 }
 html[data-theme="light"] .o-card::before,
 html[data-theme="light"] .nx-panel::before {
@@ -455,9 +455,21 @@ html[data-theme="light"] .cfg-find {
   border-radius: 20px;
   border: 1px solid var(--line);
   background: var(--bg-elevated);
-  /* Kein Drop-/Inset-Shadow: gegen den schwarzen Gap wirkt der linke Rand sonst wie Glow */
+  /* Kein Drop-/Inset-Shadow: gegen den Gap wirkt der Rand sonst wie Glow */
   box-shadow: none;
   overflow: hidden;
+}
+
+/* Modul-Content / Cards: keine Schatten-/Inset-Kante (Spieler & andere Module) */
+.ws-module,
+.ws-module-content,
+.ws-module .o-card,
+.ws-module .ob-tile,
+.ws-module .nx-panel,
+.ws-module .sch-card,
+.ws-module .pl-ban-aside,
+.ws-module .tm-identity-aside {
+  box-shadow: none;
 }
 
 /* Desktop: doppelte Top-Bar entfernen — Status/User sitzen in der Sidebar */
@@ -498,7 +510,7 @@ html[data-theme="light"] .cfg-find {
   border-radius: 20px;
   border: 1px solid var(--line);
   background: var(--bg-elevated);
-  box-shadow: var(--shadow);
+  box-shadow: none;
   z-index: 40;
   transition: width 0.2s ease, flex-basis 0.2s ease;
   min-height: 0;
