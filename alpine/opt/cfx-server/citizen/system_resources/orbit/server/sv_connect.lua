@@ -24,20 +24,28 @@ end
 
 local function rejectJoin(d, resp)
   local fallback = tostring((resp and resp.reason) or '[Orbit] Zugang verweigert.')
-  -- Ban: presentCard aus eigenem Tick (HTTP-Callback → Wait(0)), nie sofort done(longText)
+  -- Ban: presentCard halten — NIEMALS sync/kurz danach done() (killt die Card-UI)
   if type(resp) == 'table' and tostring(resp.kind or '') == 'ban' then
     CreateThread(function()
       Wait(0)
+      if d.update then
+        pcall(d.update, 'Orbit…')
+      end
+      Wait(0)
       if type(OrbitPresentBanCard) == 'function' then
         local ok, presented = pcall(OrbitPresentBanCard, d, resp, fallback)
-        if ok and presented ~= false then return end
+        if ok and presented ~= false then
+          -- Card sichtbar; kein done() außerhalb des presentCard-Callbacks
+          return
+        end
         print('^1[Orbit] Ban-Card pcall/present fehlgeschlagen — kurzer Text-Reject^0')
       else
         print('^1[Orbit] OrbitPresentBanCard fehlt (sv_ban_card.lua?) — Text-Reject^0')
       end
-      -- Kurz halten: langer Multi-Line-Text ersetzt Card-UI im Client-Dialog
       local banId = resp.banId and (' (Ban-ID #' .. tostring(resp.banId) .. ')') or ''
-      d.done('\n[Orbit] Du bist gebannt.' .. banId)
+      if d.done then
+        pcall(d.done, '\n[Orbit] Du bist gebannt.' .. banId)
+      end
     end)
     return
   end
@@ -64,6 +72,23 @@ local function handleConnecting(name, setKickReason, d)
 
   d.defer()
   Wait(0)
+
+  -- Einmalig: echte Types der Deferral-Callbacks (FiveM-Refs ≠ immer type function)
+  if not _G.__orbitDeferralTypesLogged then
+    _G.__orbitDeferralTypesLogged = true
+    local keys = {}
+    if type(d) == 'table' then
+      for k, v in pairs(d) do
+        keys[#keys + 1] = ('%s=%s'):format(tostring(k), type(v))
+      end
+    end
+    print(('^3[Orbit] deferral-types d=%s presentCard=%s done=%s keys={%s}^0'):format(
+      type(d),
+      type(d and d.presentCard),
+      type(d and d.done),
+      table.concat(keys, ', ')
+    ))
+  end
 
   local ids = GetPlayerIdentifiers(player) or {}
   local tokens = collectTokens(player)

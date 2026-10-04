@@ -10,8 +10,31 @@ local function truncate(s, max)
   return s:sub(1, math.max(0, max - 1)) .. '...'
 end
 
+--- FiveM-Callbacks sind oft `function` ODER callable table (`__cfx_functionReference`).
+--- Striktes `type(x) == 'function'` war Root-Cause: Card nie gezeigt → done()-Text-Dialog.
+local function isCallable(v)
+  if v == nil then return false end
+  local t = type(v)
+  if t == 'function' then return true end
+  if t == 'table' then
+    local mt = getmetatable(v)
+    if mt and (type(mt.__call) == 'function' or mt.__call ~= nil) then return true end
+    local ok, ref = pcall(rawget, v, '__cfx_functionReference')
+    if ok and ref ~= nil then return true end
+    -- Manche Runtimes: table ohne sichtbares Metatable, aber trotzdem aufrufbar
+    return true
+  end
+  -- userdata / sonstige Ref-Wrapper: per pcall testen
+  return t == 'userdata'
+end
+
+local function safeDone(deferrals, msg)
+  if deferrals and isCallable(deferrals.done) then
+    pcall(deferrals.done, '\n' .. tostring(msg or '[Orbit] Du bist gebannt.'))
+  end
+end
+
 --- Einfache Adaptive Card (v1.0) — ohne $schema/Container/Action.style
---- (komplexere Schemas → Renderer-Fehler → Text-Fallback).
 function OrbitBuildBanCard(payload)
   payload = type(payload) == 'table' and payload or {}
   local serverName = trim(payload.serverName)
@@ -122,28 +145,54 @@ local function shortReject(payload, fallbackText)
   return '[Orbit] Du bist gebannt.'
 end
 
---- Zeigt Ban-Card und haelt die Deferral offen (Cancel = Client trennt).
---- Nie sofort done(longText): das ersetzt die Card durch den Plain-Text-Dialog.
+--- Zeigt Ban-Card und hält die Deferral offen.
+--- KEIN done() außerhalb des Callbacks — sonst Plain-Text „Connection rejected“.
 function OrbitPresentBanCard(deferrals, payload, fallbackText)
-  if type(deferrals) ~= 'table' or type(deferrals.presentCard) ~= 'function' then
-    print('^1[Orbit] Ban-Card: presentCard nicht verfuegbar — Text-Fallback^0')
-    if type(deferrals) == 'table' and type(deferrals.done) == 'function' then
-      deferrals.done('\n' .. shortReject(payload, fallbackText))
+  local presentFn = deferrals and deferrals.presentCard
+  -- Falls Key anders/Metatable: tolerant suchen
+  if presentFn == nil and type(deferrals) == 'table' then
+    for k, v in pairs(deferrals) do
+      if type(k) == 'string' and k:lower() == 'presentcard' then
+        presentFn = v
+        break
+      end
     end
+  end
+
+  if not isCallable(presentFn) then
+    local keys = {}
+    if type(deferrals) == 'table' then
+      for k, v in pairs(deferrals) do
+        keys[#keys + 1] = ('%s=%s'):format(tostring(k), type(v))
+      end
+    end
+    print(('^1[Orbit] Ban-Card: presentCard fehlt (d=%s pc=%s keys={%s}) — Text-Fallback^0'):format(
+      type(deferrals),
+      type(presentFn),
+      table.concat(keys, ', ')
+    ))
+    safeDone(deferrals, shortReject(payload, fallbackText))
     return false
   end
 
   local card = OrbitBuildBanCard(payload)
+  -- JSON-String: Cookbook-kompatibel; FiveM akzeptiert auch Table
+  local okEnc, cardJson = pcall(json.encode, card)
+  if not okEnc or type(cardJson) ~= 'string' or cardJson == '' then
+    print('^1[Orbit] Ban-Card: json.encode fehlgeschlagen — Text-Fallback^0')
+    safeDone(deferrals, shortReject(payload, fallbackText))
+    return false
+  end
+
   local rejectMsg = shortReject(payload, fallbackText)
   local alive = true
 
   local function show()
     if not alive then return end
     local ok, err = pcall(function()
-      -- Tabelle (nicht vorencodeter String) — FiveM encodiert selbst
-      deferrals.presentCard(card, function(_data, _raw)
-        -- Callback oft bei Submit/Refresh; Cancel trennt clientseitig.
-        -- Re-present NUR verzögert — sync Re-entry killt presentCard → Text-Fallback.
+      presentFn(cardJson, function(_data, _raw)
+        -- Submit/Refresh: Card erneut zeigen. Cancel trennt clientseitig.
+        -- KEIN done() hier — sonst ersetzt Plain-Text die Card.
         CreateThread(function()
           Wait(0)
           if alive then show() end
@@ -153,7 +202,7 @@ function OrbitPresentBanCard(deferrals, payload, fallbackText)
     if not ok then
       alive = false
       print(('^1[Orbit] Ban-Card presentCard fehlgeschlagen: %s^0'):format(tostring(err)))
-      deferrals.done('\n' .. rejectMsg)
+      safeDone(deferrals, rejectMsg)
       return false
     end
     return true
