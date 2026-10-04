@@ -1656,8 +1656,6 @@ input:focus, select:focus, textarea:focus {
 .cd-line.warn { color: var(--warn); }
 .cd-line.bad { color: var(--bad); }
 .cd-line.info { color: #d7d7de; }
-.cd-caret { color: var(--accent); animation: blink 1s steps(1) infinite; margin-top: 4px; }
-@keyframes blink { 50% { opacity: 0; } }
 .cd-err {
   margin: 0 12px 8px;
   padding: 8px 10px;

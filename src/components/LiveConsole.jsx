@@ -417,10 +417,7 @@ export default function LiveConsole({
             </span>
           </div>
         ))}
-        {(consoleLive || !fx.ready) && visible.length > 0 && (
-          <div className="lc-caret" ref={endRef} aria-hidden="true">▌</div>
-        )}
-        {(consoleLive || !fx.ready) && visible.length === 0 && (
+        {(consoleLive || !fx.ready) && (
           <div ref={endRef} aria-hidden="true" style={{ height: 0, overflow: 'hidden' }} />
         )}
       </div>
