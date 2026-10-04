@@ -24,10 +24,22 @@ end
 
 local function rejectJoin(d, resp)
   local fallback = tostring((resp and resp.reason) or '[Orbit] Zugang verweigert.')
-  if type(resp) == 'table' and resp.kind == 'ban' and type(OrbitPresentBanCard) == 'function' then
-    local ok = pcall(OrbitPresentBanCard, d, resp, fallback)
-    -- Bei Erfolg hat presentCard oder interner Text-Fallback bereits geantwortet
-    if ok then return end
+  -- Ban: presentCard aus eigenem Tick (HTTP-Callback → Wait(0)), nie sofort done(longText)
+  if type(resp) == 'table' and tostring(resp.kind or '') == 'ban' then
+    CreateThread(function()
+      Wait(0)
+      if type(OrbitPresentBanCard) == 'function' then
+        local ok, presented = pcall(OrbitPresentBanCard, d, resp, fallback)
+        if ok and presented ~= false then return end
+        print('^1[Orbit] Ban-Card pcall/present fehlgeschlagen — kurzer Text-Reject^0')
+      else
+        print('^1[Orbit] OrbitPresentBanCard fehlt (sv_ban_card.lua?) — Text-Reject^0')
+      end
+      -- Kurz halten: langer Multi-Line-Text ersetzt Card-UI im Client-Dialog
+      local banId = resp.banId and (' (Ban-ID #' .. tostring(resp.banId) .. ')') or ''
+      d.done('\n[Orbit] Du bist gebannt.' .. banId)
+    end)
+    return
   end
   d.done('\n' .. fallback)
 end
