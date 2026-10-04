@@ -103,6 +103,10 @@ html[data-theme="light"] .modal {
   border-color: var(--line);
   box-shadow: var(--shadow);
 }
+html[data-theme="light"] .search,
+html[data-theme="light"] th {
+  background: var(--bg-elevated);
+}
 html[data-theme="light"] .modal-back {
   background: rgba(20, 28, 36, 0.32);
 }
