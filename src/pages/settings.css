@@ -195,6 +195,11 @@
 .st-fields .osel {
   grid-column: 1 / -1;
 }
+.st-custom-dur {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
 
 .st-row {
   display: grid;

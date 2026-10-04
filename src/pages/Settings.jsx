@@ -16,7 +16,7 @@ import { useI18n } from '../i18n/I18nProvider.jsx';
 import { LANGUAGE_OPTIONS } from '../i18n/catalog.js';
 import { toBcp47, toSettingsValue } from '../i18n/core.js';
 import { GAME_BUILD_OPTIONS, ONESYNC_OPTIONS } from './settingsOptions.js';
-import { BAN_DURATION_PRESETS, banDurationLabel, hoursToDurationId } from './banPresets.js';
+import { BAN_DURATION_PRESETS, banDurationLabel, customDurationToId } from './banPresets.js';
 
 const HOST_TABS = new Set(['servers', 'artifacts', 'prod']);
 
@@ -136,7 +136,8 @@ export default function Settings({ user, onUser, onSetupReset }) {
   const [templates, setTemplates] = useState([]);
   const [tplReason, setTplReason] = useState('');
   const [tplDuration, setTplDuration] = useState('2d');
-  const [tplHours, setTplHours] = useState('');
+  const [tplDays, setTplDays] = useState('');
+  const [tplHhmm, setTplHhmm] = useState('');
   const [tplBusy, setTplBusy] = useState(false);
   const [cleanOpts, setCleanOpts] = useState(null);
   const [cleanForm, setCleanForm] = useState({ players: '60d', bans: 'revoked', warns: '30d', hwids: 'none' });
@@ -204,24 +205,26 @@ export default function Settings({ user, onUser, onSetupReset }) {
 
   async function addTemplate(e) {
     e.preventDefault();
+    let durationId = tplDuration;
     if (tplDuration === 'custom') {
-      const hours = Math.floor(Number(tplHours) || 0);
-      if (hours < 1) {
-        setErr(t('players.errBanHours'));
+      const mapped = customDurationToId(tplDays, tplHhmm);
+      if (!mapped.ok) {
+        setErr(t(mapped.error === 'hhmm' ? 'players.errBanHhmm' : 'players.errBanDuration'));
         return;
       }
+      durationId = mapped.id;
     }
     setTplBusy(true);
     setErr('');
     try {
-      const durationId = tplDuration === 'custom' ? hoursToDurationId(tplHours) : tplDuration;
       await api('/api/ban-templates', {
         method: 'POST',
         body: { reason: tplReason, durationId },
       });
       setTplReason('');
       setTplDuration('2d');
-      setTplHours('');
+      setTplDays('');
+      setTplHhmm('');
       setMsg(t('settings.tplSaved'));
       loadTemplates();
     } catch (error) {
@@ -512,19 +515,32 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       ]}
                     />
                     {tplDuration === 'custom' && (
-                      <label className="field">
-                        <span>{t('common.hours')}</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={9999}
-                          inputMode="numeric"
-                          placeholder={t('ban.hoursPh')}
-                          value={tplHours}
-                          onChange={(e) => setTplHours(e.target.value)}
-                          required
-                        />
-                      </label>
+                      <div className="st-custom-dur">
+                        <label className="field">
+                          <span>{t('common.days')}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={9999}
+                            inputMode="numeric"
+                            placeholder={t('ban.daysPh')}
+                            value={tplDays}
+                            onChange={(e) => setTplDays(e.target.value)}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>{t('ban.hhmm')}</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={t('ban.hhmmPh')}
+                            value={tplHhmm}
+                            onChange={(e) => setTplHhmm(e.target.value)}
+                            maxLength={5}
+                            autoComplete="off"
+                          />
+                        </label>
+                      </div>
                     )}
                     <button
                       type="submit"
@@ -532,7 +548,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       disabled={
                         tplBusy
                         || tplReason.trim().length < 3
-                        || (tplDuration === 'custom' && !(Math.floor(Number(tplHours) || 0) >= 1))
+                        || (tplDuration === 'custom' && !customDurationToId(tplDays, tplHhmm).ok)
                       }
                     >
                       {tplBusy ? '…' : t('settings.tplAdd')}

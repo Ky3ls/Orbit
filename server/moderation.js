@@ -13,6 +13,8 @@ const DURATION_PRESETS = [
 ];
 
 const UNIT_MS = {
+  m: 60_000,
+  minutes: 60_000,
   h: 3600_000,
   hours: 3600_000,
   d: 24 * 3600_000,
@@ -25,13 +27,22 @@ export function banDurationPresets() {
   return DURATION_PRESETS;
 }
 
-/** Flex-IDs wie 12h / 3d / 2w (Custom + Legacy-Vorlagen). */
+/** Flex-IDs: 12h / 3d / 2w / 45m oder Kombi 2d3h30m (Custom). */
 function flexDurationMs(durationId) {
-  const m = /^(\d{1,4})(h|d|w)$/i.exec(String(durationId || '').trim());
-  if (!m) return null;
-  const amount = Math.max(1, Math.min(9999, Number(m[1]) || 0));
-  const mult = UNIT_MS[m[2].toLowerCase()];
-  return amount * mult;
+  const s = String(durationId || '').trim();
+  const simple = /^(\d{1,4})(h|d|w|m)$/i.exec(s);
+  if (simple) {
+    const amount = Math.max(1, Math.min(9999, Number(simple[1]) || 0));
+    const mult = UNIT_MS[simple[2].toLowerCase()];
+    return amount * mult;
+  }
+  const compound = /^(?:(\d{1,4})d)?(?:(\d{1,4})h)?(?:(\d{1,4})m)?$/i.exec(s);
+  if (!compound || !(compound[1] || compound[2] || compound[3])) return null;
+  const days = Math.min(9999, Number(compound[1] || 0));
+  const hours = Math.min(9999, Number(compound[2] || 0));
+  const minutes = Math.min(9999, Number(compound[3] || 0));
+  const ms = days * UNIT_MS.d + hours * UNIT_MS.h + minutes * UNIT_MS.m;
+  return ms > 0 ? ms : null;
 }
 
 export function resolveBanExpiry(durationId, customAmount, customUnit) {
