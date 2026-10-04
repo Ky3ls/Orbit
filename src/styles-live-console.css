@@ -82,6 +82,12 @@
   box-shadow: 0 0 0 4px rgba(var(--accent-rgb), 0.15);
   animation: lc-pulse 1.5s ease-in-out infinite;
 }
+.lc-pulse.on.boot,
+.lc-pulse.boot {
+  background: var(--warn);
+  box-shadow: 0 0 0 4px rgba(245, 193, 108, 0.18);
+  animation: lc-pulse 1.1s ease-in-out infinite;
+}
 @keyframes lc-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }

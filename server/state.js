@@ -20,6 +20,8 @@ export const runtime = {
   onlineSince: null,
   /** @type {'idle'|'starting'|'stopping'|'restarting'} */
   controlPhase: 'idle',
+  /** Wann controlPhase gesetzt wurde (Timeout gegen hängendes „Startet…“) */
+  controlPhaseAt: 0,
   controlEnabled: false,
   unitActive: false,
   fxVersion: '',
@@ -115,6 +117,27 @@ export function clearConsole() {
   runtime.consoleClearedAt = Date.now();
   runtime.consoleClearId = runtime.consoleSeq;
   notifyConsoleWake();
+}
+
+/** FX läuft, bootet oder fährt herunter — Konsole nicht als idle-offline behandeln. */
+export function fxConsoleLive() {
+  const phase = runtime.controlPhase;
+  const sup = runtime.supervisorPhase;
+  return !!(
+    runtime.online
+    || runtime.unitActive
+    || phase === 'starting'
+    || phase === 'stopping'
+    || phase === 'restarting'
+    || sup === 'starting'
+    || sup === 'running'
+    || sup === 'stopping'
+  );
+}
+
+export function setControlPhase(phase) {
+  runtime.controlPhase = phase;
+  runtime.controlPhaseAt = phase === 'idle' ? 0 : Date.now();
 }
 
 export function snapshot() {

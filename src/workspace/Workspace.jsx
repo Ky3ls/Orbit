@@ -168,9 +168,12 @@ export default function Workspace({ user, onLogout }) {
 
   useEffect(() => {
     refreshStatus();
-    const id = setInterval(refreshStatus, 10_000);
+    // Während Start/Stop häufiger — sonst bleibt „Startet…“ ohne Live-Feedback
+    const id = setInterval(() => {
+      refreshStatus();
+    }, status === 'starting' || status === 'stopping' || status === 'restarting' ? 2000 : 10_000);
     return () => clearInterval(id);
-  }, [refreshStatus]);
+  }, [refreshStatus, status]);
 
   useEffect(() => {
     setMenuOpen(false);

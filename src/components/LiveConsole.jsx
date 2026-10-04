@@ -5,7 +5,7 @@ import { consoleLineVisible } from '../appearance.js';
 import { splitOrbitPlayerLine, stripAnsi } from '../consoleFormat.js';
 import { fmtTime } from '../format.js';
 import { useAppearance } from '../hooks/useAppearance.js';
-import { useFxStatus } from '../hooks/useFxStatus.js';
+import { isFxConsoleLive, normalizeFx, useFxStatus } from '../hooks/useFxStatus.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const MIN_H = 220;
@@ -57,7 +57,10 @@ export default function LiveConsole({
   const { t } = useI18n();
   const navigate = useNavigate();
   const active = variant === 'page' || variant === 'side' || variant === 'cockpit' || open;
-  const fx = useFxStatus(active ? 8000 : 60_000);
+  const polledFx = useFxStatus(active ? 8000 : 60_000);
+  /** SSE-State ist frischer als der 8s-Poll — gewinnt während Start/Boot */
+  const [sseFx, setSseFx] = useState(null);
+  const fx = sseFx || polledFx;
   const [prefs] = useAppearance();
   const [targets, setTargets] = useState([]);
   const [targetId, setTargetId] = useState('');
@@ -78,9 +81,17 @@ export default function LiveConsole({
   const inputRef = useRef(null);
   const consoleBuf = useRef([]);
   const consoleRaf = useRef(0);
-  /** true = offline bestätigt → keine (Alt-)Logs annehmen */
+  /** true = idle-offline bestätigt → keine Alt-Logs annehmen */
   const suppressLogsRef = useRef(false);
+  /** nach console_clear / ersten Boot-Logs — Konsole nicht als offline behandeln */
+  const [bootOpen, setBootOpen] = useState(false);
+  const bootOpenRef = useRef(false);
   const wasLiveRef = useRef(false);
+
+  function setBootGate(open) {
+    bootOpenRef.current = open;
+    setBootOpen(open);
+  }
   /** Soft-Clear: Zeilen mit id ≤ Marker ausblenden (Buffer bleibt erhalten) */
   const [softHiddenBefore, setSoftHiddenBefore] = useState(0);
   /** true = archivierte Soft-Clear-Zeilen wieder einblenden */
@@ -95,16 +106,12 @@ export default function LiveConsole({
   softHiddenBeforeRef.current = softHiddenBefore;
   revealHistoryRef.current = revealHistory;
 
-  /** FX läuft / startet — sonst Konsole leer halten (keine Alt-Logs). */
-  const consoleLive = !!(
-    fx.online
-    || fx.processActive
-    || fx.unitActive
-    || fx.status === 'starting'
-    || fx.status === 'restarting'
+  /** FX läuft / startet / stoppt — sonst Konsole leer halten (keine Alt-Logs). */
+  const consoleLive = isFxConsoleLive(fx) || bootOpen;
+  const booting = fx.status === 'starting' || fx.status === 'restarting'
+    || fx.controlPhase === 'starting' || fx.controlPhase === 'restarting'
     || fx.supervisorPhase === 'starting'
-    || fx.supervisorPhase === 'restarting'
-  );
+    || bootOpen;
 
   function wipeConsole() {
     consoleBuf.current = [];
@@ -173,40 +180,63 @@ export default function LiveConsole({
     setTargetId(String(id || ''));
   }
 
-  // Erst nach Status-Hydration: offline → clear + suppress; live → Logs erlauben
+  // Erst nach Status-Hydration: idle-offline → clear + suppress; live/boot → Logs erlauben
   useEffect(() => {
-    if (!fx.ready) return;
-    if (consoleLive) {
+    if (!fx.ready && !sseFx) return;
+    if (isFxConsoleLive(fx) || bootOpen) {
       suppressLogsRef.current = false;
-      // Offline→Online: Auto wieder an (User hatte Sticky-Bottom-Modus)
+      // Sobald Status live ist, Boot-Gate nicht mehr nötig
+      if (isFxConsoleLive(fx) && bootOpen) setBootGate(false);
       if (!wasLiveRef.current) enableAutoScroll();
       wasLiveRef.current = true;
       return;
     }
+    // Wirklich idle offline — Boot-Gate zu
+    if (bootOpen) setBootGate(false);
     wasLiveRef.current = false;
     suppressLogsRef.current = true;
     wipeConsole();
     enableAutoScroll();
-  }, [fx.ready, consoleLive]);
+  }, [fx.ready, fx.online, fx.processActive, fx.unitActive, fx.status, fx.controlPhase, fx.supervisorPhase, sseFx, bootOpen]);
 
   useEffect(() => {
     if (!active) return undefined;
     const es = new EventSource('/api/stream');
+    es.addEventListener('state', (e) => {
+      let data;
+      try { data = JSON.parse(e.data); } catch { return; }
+      const next = normalizeFx(data);
+      setSseFx(next);
+      if (isFxConsoleLive(next)) {
+        // Start/Boot sofort entperren — nicht auf Poll warten
+        suppressLogsRef.current = false;
+        if (bootOpenRef.current) setBootGate(false);
+      } else if (bootOpenRef.current) {
+        // Bestätigt idle/offline → Boot-Gate zu (Effect leert Konsole)
+        setBootGate(false);
+      }
+    });
     es.addEventListener('console_clear', () => {
+      // Start/Restart leert Buffer serverseitig → ab jetzt Live-Logs zeigen
+      suppressLogsRef.current = false;
+      setBootGate(true);
       wipeConsole();
       enableAutoScroll();
     });
     es.addEventListener('console', (e) => {
-      if (suppressLogsRef.current) return;
+      if (suppressLogsRef.current && !bootOpenRef.current) return;
       let incoming;
       try { incoming = JSON.parse(e.data); } catch { return; }
       if (!Array.isArray(incoming) || !incoming.length) return;
+      // Eingehende Zeilen = Boot/Live läuft → nicht als offline suppressen
+      suppressLogsRef.current = false;
+      if (!bootOpenRef.current) setBootGate(true);
       consoleBuf.current.push(...incoming);
       if (consoleRaf.current) return;
       consoleRaf.current = 1;
       queueMicrotask(() => {
         consoleRaf.current = 0;
-        if (suppressLogsRef.current) {
+        if (suppressLogsRef.current && !bootOpenRef.current) {
           consoleBuf.current = [];
           return;
         }
@@ -224,6 +254,7 @@ export default function LiveConsole({
       es.close();
       consoleRaf.current = 0;
       consoleBuf.current = [];
+      setSseFx(null);
       if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
       scrollRafRef.current = 0;
       progScrollRef.current = false;
@@ -424,7 +455,10 @@ export default function LiveConsole({
       )}
       <header className="lc-head">
         <div className="lc-title">
-          <span className={`lc-pulse${consoleLive ? ' on' : ''}`} aria-hidden="true" />
+          <span
+            className={`lc-pulse${consoleLive ? ' on' : ''}${booting && !fx.online ? ' boot' : ''}`}
+            aria-hidden="true"
+          />
           <strong>{t('console.live')}</strong>
         </div>
         {targets.length > 0 && (
@@ -479,7 +513,7 @@ export default function LiveConsole({
         </div>
       </header>
       <div className="lc-term" ref={box} onScroll={onScroll} onWheel={onTermWheel}>
-        {hasSoftHidden && (consoleLive || !fx.ready) && (
+        {hasSoftHidden && (consoleLive || booting || !fx.ready) && (
           <button
             type="button"
             className="lc-soft-clear-cue"
@@ -491,16 +525,18 @@ export default function LiveConsole({
         )}
         {visible.length === 0 && (
           <div className="lc-empty">
-            {fx.ready && !consoleLive
+            {fx.ready && !consoleLive && !booting
               ? t('console.emptyOffline')
-              : hasSoftHidden
-                ? t('console.softClearEmpty')
-                : lines.length
-                  ? t('console.emptyFilter')
-                  : t('console.emptyWait')}
+              : booting && !lines.length
+                ? t('console.emptyStarting')
+                : hasSoftHidden
+                  ? t('console.softClearEmpty')
+                  : lines.length
+                    ? t('console.emptyFilter')
+                    : t('console.emptyWait')}
           </div>
         )}
-        {(consoleLive || !fx.ready) && visible.map((line) => (
+        {(consoleLive || !fx.ready || booting) && visible.map((line) => (
           <div key={line.id} className={`lc-line ${line.level || 'info'}`}>
             <span className="lc-ts">{fmtTime(line.t)}</span>
             <span className="lc-prompt">›</span>
@@ -509,7 +545,7 @@ export default function LiveConsole({
             </span>
           </div>
         ))}
-        {(consoleLive || !fx.ready) && (
+        {(consoleLive || !fx.ready || booting) && (
           <div ref={endRef} aria-hidden="true" style={{ height: 0, overflow: 'hidden' }} />
         )}
       </div>
@@ -522,7 +558,13 @@ export default function LiveConsole({
           ref={inputRef}
           className="mono"
           type="text"
-          placeholder={fx.fxCommandReady ? t('console.phReady') : t('console.phOffline')}
+          placeholder={
+            fx.fxCommandReady
+              ? t('console.phReady')
+              : booting || consoleLive
+                ? t('console.phStarting')
+                : t('console.phOffline')
+          }
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={onKeyDown}

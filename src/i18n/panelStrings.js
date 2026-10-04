@@ -23,8 +23,10 @@ export const panelDe = {
   'console.softClearEmpty': 'Konsole geleert — nach oben scrollen für Historie',
   'console.emptyFilter': 'Keine Zeilen — Filter aktiv (Aussehen).',
   'console.emptyWait': 'Warte auf FX-Ausgabe…',
+  'console.emptyStarting': 'Server startet — Logs erscheinen gleich…',
   'console.emptyOffline': 'Server offline',
   'console.phReady': 'Sende einen Befehl…',
+  'console.phStarting': 'Server startet — Befehle nach Ready',
   'console.phOffline': 'Server offline — kein Befehl möglich',
   'console.send': 'Senden',
 
@@ -504,8 +506,10 @@ export const panelEn = {
   'console.softClearEmpty': 'Console cleared — scroll up for history',
   'console.emptyFilter': 'No lines — filter active (Appearance).',
   'console.emptyWait': 'Waiting for FX output…',
+  'console.emptyStarting': 'Server starting — logs will appear…',
   'console.emptyOffline': 'Server offline',
   'console.phReady': 'Send a command…',
+  'console.phStarting': 'Server starting — commands after ready',
   'console.phOffline': 'Server offline — can’t send commands',
   'console.send': 'Send',
 
