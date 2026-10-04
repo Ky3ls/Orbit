@@ -348,42 +348,49 @@
   border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 .pl-ids.copyable .pl-id-row-wrap {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
-  align-items: stretch;
+  display: block;
 }
 .pl-ids.copyable .pl-id-row-line {
   cursor: copy;
+  grid-template-columns: 96px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
 }
-.pl-id-copy {
+.pl-ids.copyable.compact .pl-id-row-line {
+  grid-template-columns: 76px minmax(0, 1fr) 16px;
+}
+.pl-id-floppy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
-  align-self: center;
-  margin: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg-2);
-  color: var(--muted);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  color: color-mix(in srgb, var(--muted) 85%, var(--accent));
+  opacity: 0.72;
+  pointer-events: none;
+  transition: color 0.12s ease, opacity 0.12s ease;
 }
-.pl-id-copy:hover,
-.pl-id-copy:focus-visible {
+.pl-id-floppy-svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.pl-id-row-line:hover .pl-id-floppy,
+.pl-id-row-line:focus-visible .pl-id-floppy {
+  opacity: 1;
   color: var(--text);
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
-  outline: none;
 }
-.pl-id-copy.is-copied,
-.pl-id-row-line.is-copied,
-.pl-id-row-wrap.is-copied .pl-id-copy {
+.pl-id-floppy.is-copied,
+.pl-id-row-line.is-copied .pl-id-floppy,
+.pl-id-row-line.is-copied {
   color: var(--ok, #16a34a);
   border-color: color-mix(in srgb, var(--ok, #16a34a) 40%, var(--line));
+}
+.pl-id-floppy.is-copied {
+  opacity: 1;
+  border-color: transparent;
 }
 
 html[data-theme="light"] .pl-card {
