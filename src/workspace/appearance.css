@@ -279,9 +279,21 @@ html[data-theme="light"] .fx-log {
 html[data-theme="light"] .fx-log-line {
   border-bottom-color: var(--line);
 }
-html[data-theme="light"] .cfg-area {
-  background: var(--code-bg);
-  color: var(--code-fg);
+html[data-theme="light"] .cfg-area,
+html[data-theme="light"] .cfg-workspace,
+html[data-theme="light"] .cfg-workspace .cfg-area {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: none;
+  text-shadow: none;
+}
+html[data-theme="light"] .cfg-toolbar {
+  background: var(--bg-2);
+  border-bottom-color: var(--line);
+}
+html[data-theme="light"] .cfg-find {
+  background: var(--card, var(--bg-elevated));
+  border-color: var(--line);
 }
 
 /* —— Settings: Aussehen —— */
