@@ -167,7 +167,7 @@
   background:
     linear-gradient(160deg, rgba(var(--accent-rgb), 0.1), transparent 48%),
     var(--bg-elevated);
-  box-shadow: var(--shadow);
+  box-shadow: none;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;

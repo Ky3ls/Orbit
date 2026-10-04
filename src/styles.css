@@ -1417,7 +1417,8 @@ input:focus, select:focus, textarea:focus {
   border-radius: 16px;
   border: 1px solid var(--line);
   background: var(--card);
-  box-shadow: var(--shadow);
+  /* Kein Drop-Shadow: gegen Panel-Rand/Gap wirkt sonst linker Glow */
+  box-shadow: none;
 }
 .o-card-flush { padding: 0; overflow: hidden; }
 .o-card h3 {
