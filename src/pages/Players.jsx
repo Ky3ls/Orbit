@@ -87,6 +87,7 @@ export default function Players({ user }) {
   const [customDays, setCustomDays] = useState('');
   const [customHhmm, setCustomHhmm] = useState('');
   const [templateId, setTemplateId] = useState('');
+  const [banTemplates, setBanTemplates] = useState([]);
   const [err, setErr] = useState('');
   const [sort, setSort] = useState('status');
   const [busy, setBusy] = useState(false);
@@ -157,19 +158,27 @@ export default function Players({ user }) {
       .catch((e) => { if (!silent) setErr(e.message); });
   }
 
+  const loadBanTemplates = useCallback(() => {
+    api('/api/ban-templates')
+      .then((d) => setBanTemplates(Array.isArray(d.templates) ? d.templates : []))
+      .catch(() => setBanTemplates([]));
+  }, []);
+
   async function openPlayer(p) {
     setPick(p);
     setTab('info');
     setReason('');
     setTemplateId('');
     setDurationId('2d');
-    setCustomAmt('');
-    setCustomUnit('days');
+    setCustomDays('');
+    setCustomHhmm('');
     setErr('');
+    loadBanTemplates();
     try {
       const d = await api(`/api/players/detail?id=${encodeURIComponent(p.identifier)}`);
       setDetail(d);
       setNote(d.player?.note || '');
+      if (Array.isArray(d.banTemplates)) setBanTemplates(d.banTemplates);
     } catch (e) {
       setDetail(null);
       setErr(e.message);
@@ -212,8 +221,9 @@ export default function Players({ user }) {
   function applyTemplate(id, opt) {
     setTemplateId(id);
     if (!id) return;
-    const reasonText = opt?.reason ?? (detail?.banTemplates || []).find((x) => String(x.id) === String(id))?.reason;
-    const dur = opt?.durationId ?? (detail?.banTemplates || []).find((x) => String(x.id) === String(id))?.duration_id;
+    const fromList = banTemplates.find((x) => String(x.id) === String(id));
+    const reasonText = opt?.reason ?? fromList?.reason;
+    const dur = opt?.durationId ?? fromList?.duration_id;
     if (reasonText) setReason(reasonText);
     if (!dur) return;
     if (BAN_DURATION_PRESETS.some((p) => p.id === dur)) {
@@ -259,6 +269,10 @@ export default function Players({ user }) {
     if (filter === 'allowlist') loadWl();
   }, [filter]);
 
+  useEffect(() => {
+    if (tab === 'ban' && pick) loadBanTemplates();
+  }, [tab, pick, loadBanTemplates]);
+
   const rows = useMemo(() => {
     let list = [...(data.list || [])];
     if (filter === 'banned') list = list.filter((r) => r.banned);
@@ -296,16 +310,13 @@ export default function Players({ user }) {
     list.push({ id: 'custom', label: t('players.custom') });
     return list;
   }, [presets, t]);
-  const templateList = useMemo(() => {
-    const tpls = detail?.banTemplates || [];
-    return tpls.map((tpl) => ({
-      id: String(tpl.id),
-      label: tpl.reason,
-      hint: banDurationLabel(tpl.duration_id, t),
-      reason: tpl.reason,
-      durationId: tpl.duration_id,
-    }));
-  }, [detail?.banTemplates, t]);
+  const templateList = useMemo(() => banTemplates.map((tpl) => ({
+    id: String(tpl.id),
+    label: tpl.reason,
+    hint: banDurationLabel(tpl.duration_id, t),
+    reason: tpl.reason,
+    durationId: tpl.duration_id,
+  })), [banTemplates, t]);
   const durationLabel = useMemo(
     () => durationList.find((d) => d.id === durationId)?.label || banDurationLabel(durationId, t),
     [durationList, durationId, t],
