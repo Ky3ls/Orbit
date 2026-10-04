@@ -25,7 +25,6 @@ export function localizedGroups(t) {
         { to: '/cfg', label: t('nav.cfg') },
         { to: '/schedule', label: t('nav.schedule') },
         { to: '/server-log', label: t('nav.serverLog') },
-        { to: '/ingame', label: t('nav.ingame') },
       ],
     },
     {
@@ -49,7 +48,6 @@ export const GROUPS = [
       { to: '/cfg', label: 'CFG' },
       { to: '/schedule', label: 'Automationen' },
       { to: '/server-log', label: 'Server-/FX-Log' },
-      { to: '/ingame', label: 'Ingame' },
     ],
   },
   {
@@ -65,7 +63,7 @@ export const GROUPS = [
 
 export function pathInGroup(pathname) {
   const groups = [
-    { id: 'server', items: [{ to: '/cfg' }, { to: '/schedule' }, { to: '/server-log' }, { to: '/ingame' }] },
+    { id: 'server', items: [{ to: '/cfg' }, { to: '/schedule' }, { to: '/server-log' }] },
     { id: 'system', items: MODULES.find((m) => m.id === 'sys').items },
   ];
   for (const g of groups) {
