@@ -4,8 +4,9 @@ import { useI18n } from '../i18n/I18nProvider.jsx';
 import './orbitSelect.css';
 
 const MENU_GAP = 6;
-const MENU_MAX_VH = 0.46;
-const MENU_MAX_PX = 280;
+/** Genug für 6 Allowlist-Modi mit Subtext; Viewport begrenzt weiter. */
+const MENU_MAX_VH = 0.7;
+const MENU_MAX_PX = 480;
 
 function menuMaxHeight() {
   if (typeof window === 'undefined') return MENU_MAX_PX;
@@ -47,8 +48,9 @@ function OrbitSelect({
     const maxH = menuMaxHeight();
     const spaceBelow = window.innerHeight - rect.bottom - MENU_GAP;
     const spaceAbove = rect.top - MENU_GAP;
-    const placeAbove = spaceBelow < Math.min(maxH, 160) && spaceAbove > spaceBelow;
-    const available = Math.max(80, placeAbove ? spaceAbove : spaceBelow);
+    // Unten öffnen, wenn Platz reicht; sonst nach oben, wenn dort mehr Viewport frei ist
+    const placeAbove = spaceBelow < maxH && spaceAbove > spaceBelow;
+    const available = Math.max(120, placeAbove ? spaceAbove : spaceBelow);
     const height = Math.min(maxH, available);
     setCoords({
       left: rect.left,

@@ -61,7 +61,7 @@
   border: 1px solid rgba(var(--accent-rgb), 0.35);
   background: var(--bg-2);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  max-height: min(280px, 46vh);
+  max-height: min(480px, 70vh);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
