@@ -2086,6 +2086,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     try {
       const row = createBanTemplate(db, {
+        title: body.title ?? body.label,
         reason: body.reason,
         durationId: body.durationId || body.duration_id,
         sort: body.sort,
@@ -2104,6 +2105,7 @@ async function handleApi(req, res, url) {
     const body = await readBody(req);
     try {
       const row = updateBanTemplate(db, tplPatch[1], {
+        title: body.title ?? body.label,
         reason: body.reason,
         durationId: body.durationId || body.duration_id,
         sort: body.sort,

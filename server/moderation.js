@@ -265,35 +265,61 @@ export function playerHistory(db, identifiers) {
   return { bans, warns };
 }
 
+/** Kurzer Tag-Titel aus altem reason/label ableiten (Migration). */
+export function deriveBanTemplateTitle(reasonOrLabel) {
+  const raw = String(reasonOrLabel || '').trim();
+  if (!raw) return 'Vorlage';
+  const head = raw.split(/[|/—–\n]/)[0].trim() || raw;
+  return head.slice(0, 48);
+}
+
+function normalizeBanTemplateRow(row) {
+  if (!row) return row;
+  const reason = String(row.reason || '').trim();
+  const title = String(row.title || '').trim() || deriveBanTemplateTitle(reason);
+  return { ...row, title, reason };
+}
+
 export function listBanTemplates(db) {
   try {
-    return db.prepare('SELECT * FROM ban_templates ORDER BY sort ASC, id ASC').all();
+    return db.prepare('SELECT * FROM ban_templates ORDER BY sort ASC, id ASC')
+      .all()
+      .map(normalizeBanTemplateRow);
   } catch {
     return [];
   }
 }
 
-export function createBanTemplate(db, { reason, durationId = '2d', sort = 0 }) {
+export function createBanTemplate(db, { title, reason, durationId = '2d', sort = 0 }) {
   const r = String(reason || '').trim().slice(0, 280);
   if (r.length < 3) throw new Error('Vorlagen-Grund mind. 3 Zeichen.');
+  let ttl = String(title || '').trim().slice(0, 48);
+  if (!ttl) ttl = deriveBanTemplateTitle(r);
+  if (ttl.length < 1) throw new Error('Vorlagen-Title erforderlich.');
   const dur = String(durationId || '2d').slice(0, 16);
   const info = db.prepare(`
-    INSERT INTO ban_templates (reason, duration_id, sort, created)
-    VALUES (?, ?, ?, ?)
-  `).run(r, dur, Number(sort) || 0, Date.now());
-  return db.prepare('SELECT * FROM ban_templates WHERE id = ?').get(info.lastInsertRowid);
+    INSERT INTO ban_templates (title, reason, duration_id, sort, created)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(ttl, r, dur, Number(sort) || 0, Date.now());
+  return normalizeBanTemplateRow(
+    db.prepare('SELECT * FROM ban_templates WHERE id = ?').get(info.lastInsertRowid),
+  );
 }
 
-export function updateBanTemplate(db, id, { reason, durationId, sort }) {
+export function updateBanTemplate(db, id, { title, reason, durationId, sort }) {
   const row = db.prepare('SELECT * FROM ban_templates WHERE id = ?').get(Number(id));
   if (!row) throw new Error('Vorlage nicht gefunden.');
   const r = reason !== undefined ? String(reason).trim().slice(0, 280) : row.reason;
   if (r.length < 3) throw new Error('Vorlagen-Grund mind. 3 Zeichen.');
+  let ttl = title !== undefined ? String(title).trim().slice(0, 48) : (row.title || '');
+  if (!ttl) ttl = deriveBanTemplateTitle(r);
   const dur = durationId !== undefined ? String(durationId).slice(0, 16) : row.duration_id;
   const s = sort !== undefined ? Number(sort) || 0 : row.sort;
-  db.prepare('UPDATE ban_templates SET reason = ?, duration_id = ?, sort = ? WHERE id = ?')
-    .run(r, dur, s, Number(id));
-  return db.prepare('SELECT * FROM ban_templates WHERE id = ?').get(Number(id));
+  db.prepare('UPDATE ban_templates SET title = ?, reason = ?, duration_id = ?, sort = ? WHERE id = ?')
+    .run(ttl, r, dur, s, Number(id));
+  return normalizeBanTemplateRow(
+    db.prepare('SELECT * FROM ban_templates WHERE id = ?').get(Number(id)),
+  );
 }
 
 export function deleteBanTemplate(db, id) {
@@ -308,17 +334,30 @@ export function ensureModerationSchema(db) {
     'ALTER TABLE users ADD COLUMN discord_id TEXT',
     `CREATE TABLE IF NOT EXISTS ban_templates (
       id INTEGER PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
       reason TEXT NOT NULL,
       duration_id TEXT NOT NULL DEFAULT '2d',
       sort INTEGER NOT NULL DEFAULT 0,
       created INTEGER NOT NULL
     )`,
+    'ALTER TABLE ban_templates ADD COLUMN title TEXT NOT NULL DEFAULT \'\'',
   ]) {
     try { db.exec(sql); } catch (err) {
       if (!String(err.message).includes('duplicate column') && !String(err.message).includes('already exists')) {
         /* ignore */
       }
     }
+  }
+  try {
+    const rows = db.prepare(
+      `SELECT id, reason, title FROM ban_templates WHERE title IS NULL OR TRIM(title) = ''`,
+    ).all();
+    const upd = db.prepare('UPDATE ban_templates SET title = ? WHERE id = ?');
+    for (const row of rows) {
+      upd.run(deriveBanTemplateTitle(row.reason), row.id);
+    }
+  } catch {
+    /* ignore */
   }
 }
 

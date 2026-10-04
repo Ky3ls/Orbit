@@ -134,6 +134,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
   const [err, setErr] = useState('');
   const [resetBusy, setResetBusy] = useState(false);
   const [templates, setTemplates] = useState([]);
+  const [tplTitle, setTplTitle] = useState('');
   const [tplReason, setTplReason] = useState('');
   const [tplDuration, setTplDuration] = useState('2d');
   const [tplDays, setTplDays] = useState('');
@@ -219,8 +220,9 @@ export default function Settings({ user, onUser, onSetupReset }) {
     try {
       await api('/api/ban-templates', {
         method: 'POST',
-        body: { reason: tplReason, durationId },
+        body: { title: tplTitle, reason: tplReason, durationId },
       });
+      setTplTitle('');
       setTplReason('');
       setTplDuration('2d');
       setTplDays('');
@@ -499,8 +501,26 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 <ModuleCard title={t('settings.bans.templates')} lead={t('settings.bans.templatesLead')}>
                   <form className="st-fields st-fields-1" onSubmit={addTemplate}>
                     <label className="field">
+                      <span>{t('settings.bans.tplTitle')}</span>
+                      <input
+                        value={tplTitle}
+                        onChange={(e) => setTplTitle(e.target.value)}
+                        placeholder={t('settings.bans.tplTitlePh')}
+                        required
+                        minLength={1}
+                        maxLength={48}
+                      />
+                    </label>
+                    <label className="field">
                       <span>{t('settings.bans.reason')}</span>
-                      <input value={tplReason} onChange={(e) => setTplReason(e.target.value)} placeholder={t('settings.bans.reasonPh')} required minLength={3} />
+                      <input
+                        value={tplReason}
+                        onChange={(e) => setTplReason(e.target.value)}
+                        placeholder={t('settings.bans.reasonPh')}
+                        required
+                        minLength={3}
+                        maxLength={280}
+                      />
                     </label>
                     <OrbitSelect
                       label={t('settings.bans.duration')}
@@ -547,6 +567,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       className="btn btn-primary"
                       disabled={
                         tplBusy
+                        || !tplTitle.trim()
                         || tplReason.trim().length < 3
                         || (tplDuration === 'custom' && !customDurationToId(tplDays, tplHhmm).ok)
                       }
@@ -561,8 +582,12 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       {templates.map((tpl) => (
                         <li key={tpl.id}>
                           <div>
-                            <strong>{tpl.reason}</strong>
-                            <span className="muted">{banDurationLabel(tpl.duration_id, t)}</span>
+                            <strong>{tpl.title || tpl.reason}</strong>
+                            <span className="muted">
+                              {tpl.reason}
+                              {tpl.reason ? ' · ' : ''}
+                              {banDurationLabel(tpl.duration_id, t)}
+                            </span>
                           </div>
                           <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(tpl.id)}>{t('common.delete')}</button>
                         </li>

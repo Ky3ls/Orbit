@@ -141,12 +141,31 @@ export function getDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS ban_templates (
       id INTEGER PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
       reason TEXT NOT NULL,
       duration_id TEXT NOT NULL DEFAULT '2d',
       sort INTEGER NOT NULL DEFAULT 0,
       created INTEGER NOT NULL
     );
   `);
+  try {
+    db.exec("ALTER TABLE ban_templates ADD COLUMN title TEXT NOT NULL DEFAULT ''");
+  } catch (err) {
+    if (!String(err.message).includes('duplicate column')) throw err;
+  }
+  try {
+    const rows = db.prepare(
+      `SELECT id, reason, title FROM ban_templates WHERE title IS NULL OR TRIM(title) = ''`,
+    ).all();
+    const upd = db.prepare('UPDATE ban_templates SET title = ? WHERE id = ?');
+    for (const row of rows) {
+      const raw = String(row.reason || '').trim();
+      const head = raw.split(/[|/—–\n]/)[0].trim() || raw || 'Vorlage';
+      upd.run(head.slice(0, 48), row.id);
+    }
+  } catch {
+    /* ignore */
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS ingame_web_tickets (
       token_hash TEXT PRIMARY KEY,

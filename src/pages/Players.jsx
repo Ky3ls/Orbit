@@ -226,7 +226,7 @@ export default function Players({ user }) {
     if (!id) return;
     const fromList = banTemplates.find((x) => String(x.id) === String(id));
     const reasonText = opt?.reason ?? fromList?.reason;
-    const dur = opt?.durationId ?? fromList?.duration_id;
+    const dur = opt?.durationId ?? opt?.duration_id ?? fromList?.duration_id;
     if (reasonText) setBanReason(reasonText);
     if (!dur) return;
     if (BAN_DURATION_PRESETS.some((p) => p.id === dur)) {
@@ -315,7 +315,7 @@ export default function Players({ user }) {
   }, [presets, t]);
   const templateList = useMemo(() => banTemplates.map((tpl) => ({
     id: String(tpl.id),
-    label: tpl.reason,
+    label: tpl.title || tpl.reason,
     reason: tpl.reason,
     durationId: tpl.duration_id,
   })), [banTemplates]);
@@ -697,7 +697,7 @@ export default function Players({ user }) {
                       aria-selected={templateId === tpl.id}
                       className={`pl-ban-tag${templateId === tpl.id ? ' active' : ''}`}
                       onClick={() => applyTemplate(tpl.id, tpl)}
-                      title={tpl.label}
+                      title={tpl.reason || tpl.label}
                     >
                       {tpl.label}
                     </button>
