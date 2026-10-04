@@ -278,13 +278,8 @@ export default function LiveConsole({
       )}
       <header className="lc-head">
         <div className="lc-title">
-          <span className={`lc-pulse${active ? ' on' : ''}`} aria-hidden="true" />
-          <div>
-            <strong>{t('console.live')}</strong>
-            <span className="lc-sub">
-              {fx.fxCommandReady ? t('console.streamReady') : t('console.streamOnly')}
-            </span>
-          </div>
+          <span className={`lc-pulse${consoleLive ? ' on' : ''}`} aria-hidden="true" />
+          <strong>{t('console.live')}</strong>
         </div>
         {targets.length > 0 && (
           <select
