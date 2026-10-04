@@ -493,7 +493,10 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       label={t('settings.bans.duration')}
                       value={tplDuration}
                       onChange={setTplDuration}
-                      options={BAN_DURATION_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+                      options={BAN_DURATION_PRESETS.map((p) => ({
+                        value: p.id,
+                        label: banDurationLabel(p.id, t),
+                      }))}
                     />
                     <button type="submit" className="btn btn-primary" disabled={tplBusy || tplReason.trim().length < 3}>
                       {tplBusy ? '…' : t('settings.tplAdd')}
@@ -507,7 +510,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                         <li key={tpl.id}>
                           <div>
                             <strong>{tpl.reason}</strong>
-                            <span className="muted">{banDurationLabel(tpl.duration_id)}</span>
+                            <span className="muted">{banDurationLabel(tpl.duration_id, t)}</span>
                           </div>
                           <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(tpl.id)}>{t('common.delete')}</button>
                         </li>
