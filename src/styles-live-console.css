@@ -139,6 +139,25 @@
   -webkit-font-smoothing: antialiased;
 }
 .lc-empty { color: #888; text-align: center; padding: 28px 0; }
+.lc-soft-clear-cue {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: #777;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-align: center;
+  cursor: pointer;
+}
+.lc-soft-clear-cue:hover {
+  color: var(--accent);
+  border-bottom-color: rgba(var(--accent-rgb), 0.35);
+}
 .lc-line {
   display: flex;
   flex-wrap: wrap;
@@ -252,6 +271,14 @@ html[data-theme="light"] .lc-term {
 }
 html[data-theme="light"] .lc-empty {
   color: var(--muted);
+}
+html[data-theme="light"] .lc-soft-clear-cue {
+  color: var(--muted);
+  border-bottom-color: rgba(20, 28, 36, 0.12);
+}
+html[data-theme="light"] .lc-soft-clear-cue:hover {
+  color: var(--accent);
+  border-bottom-color: rgba(var(--accent-rgb), 0.4);
 }
 html[data-theme="light"] .lc-line {
   border-bottom-color: rgba(20, 28, 36, 0.06);
