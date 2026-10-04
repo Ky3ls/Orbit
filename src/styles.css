@@ -1952,7 +1952,7 @@ td .badge { margin-left: 8px; }
 }
 .modal {
   width: min(440px, 100%);
-  padding: 18px;
+  padding: 24px 20px 20px;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: rgba(12,12,16,0.96);
@@ -1964,9 +1964,9 @@ td .badge { margin-left: 8px; }
   contain: layout paint;
 }
 .modal-head {
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 4px;
+  margin-bottom: 10px;
 }
 .modal-head h3 {
   margin: 0;
@@ -1979,7 +1979,7 @@ td .badge { margin-left: 8px; }
   place-items: center;
   width: 32px;
   height: 32px;
-  margin: -4px -6px -4px 0;
+  margin: 0 -4px 0 0;
   padding: 0;
   border: 1px solid transparent;
   border-radius: 10px;
