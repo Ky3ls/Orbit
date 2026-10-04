@@ -3,8 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
 import { fmtFull, fmtPlaytime } from '../format.js';
 import { AreaChart, Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
-import OrbitSelect from '../components/OrbitSelect.jsx';
-import { BAN_DURATION_PRESETS, banDurationLabel } from './banPresets.js';
+import {
+  BAN_DURATION_PRESETS,
+  banDurationLabel,
+  hoursToDurationId,
+  parseDurationId,
+} from './banPresets.js';
 import './players.css';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
@@ -80,8 +84,7 @@ export default function Players({ user }) {
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [durationId, setDurationId] = useState('2d');
-  const [customAmt, setCustomAmt] = useState('');
-  const [customUnit, setCustomUnit] = useState('days');
+  const [customHours, setCustomHours] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [err, setErr] = useState('');
   const [sort, setSort] = useState('status');
@@ -211,7 +214,21 @@ export default function Players({ user }) {
     const reasonText = opt?.reason ?? (detail?.banTemplates || []).find((x) => String(x.id) === String(id))?.reason;
     const dur = opt?.durationId ?? (detail?.banTemplates || []).find((x) => String(x.id) === String(id))?.duration_id;
     if (reasonText) setReason(reasonText);
-    if (dur) setDurationId(dur);
+    if (!dur) return;
+    if (BAN_DURATION_PRESETS.some((p) => p.id === dur)) {
+      setDurationId(dur);
+      return;
+    }
+    const flex = parseDurationId(dur);
+    if (flex?.kind === 'flex') {
+      const hours = flex.unit === 'hours' ? flex.amount
+        : flex.unit === 'weeks' ? flex.amount * 168
+          : flex.amount * 24;
+      setDurationId('custom');
+      setCustomHours(String(hours));
+      return;
+    }
+    setDurationId(dur);
   }
 
   useEffect(() => {
@@ -340,9 +357,14 @@ export default function Players({ user }) {
 
   async function applyBan() {
     if (!p || reason.length < 3) { setErr(t('players.errBanReason')); return; }
+    if (durationId === 'custom') {
+      const hours = Math.floor(Number(customHours) || 0);
+      if (hours < 1) { setErr(t('players.errBanHours')); return; }
+    }
     setBusy(true);
     setErr('');
     try {
+      const resolvedId = durationId === 'custom' ? hoursToDurationId(customHours) : durationId;
       await api('/api/bans', {
         method: 'POST',
         body: {
@@ -350,9 +372,7 @@ export default function Players({ user }) {
           identifier: p.identifier,
           name: p.name,
           reason,
-          durationId: durationId === 'custom' ? undefined : durationId,
-          amount: durationId === 'custom' ? customAmt : undefined,
-          unit: durationId === 'custom' ? customUnit : undefined,
+          durationId: resolvedId,
           id: p.serverId,
         },
       });
@@ -813,30 +833,18 @@ export default function Players({ user }) {
                     />
                   </label>
                   {durationId === 'custom' && (
-                    <div className="pl-ban-row custom">
-                      <label className="pl-ban-field pl-ban-amt">
-                        <span className="pl-ban-label">{t('common.value')}</span>
-                        <input
-                          type="number"
-                          min={1}
-                          inputMode="numeric"
-                          placeholder={t('players.amtPh')}
-                          value={customAmt}
-                          onChange={(e) => setCustomAmt(e.target.value)}
-                        />
-                      </label>
-                      <OrbitSelect
-                        label={t('common.unit')}
-                        value={customUnit}
-                        onChange={setCustomUnit}
-                        options={[
-                          { value: 'hours', label: t('common.hours') },
-                          { value: 'days', label: t('common.days') },
-                          { value: 'weeks', label: t('common.weeks') },
-                        ]}
-                        className="pl-ban-unit"
+                    <label className="pl-ban-field pl-ban-amt">
+                      <span className="pl-ban-label">{t('common.hours')}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={9999}
+                        inputMode="numeric"
+                        placeholder={t('ban.hoursPh')}
+                        value={customHours}
+                        onChange={(e) => setCustomHours(e.target.value)}
                       />
-                    </div>
+                    </label>
                   )}
                   <button type="button" className="btn pl-ban-btn" disabled={busy} onClick={applyBan}>
                     {t('players.applyBan')}

@@ -155,11 +155,21 @@ RegisterNetEvent('orbit:banPlayer', function(targetId, reason, durationId)
   if not targetId then return end
   reason = tostring(reason or 'Orbit Ban')
   local hours = 48
-  if durationId == '2h' then hours = 2
-  elseif durationId == '8h' then hours = 8
-  elseif durationId == '1d' then hours = 24
-  elseif durationId == '7d' then hours = 168
-  elseif durationId == 'perm' then hours = 0
+  local id = tostring(durationId or '')
+  local n, unit = id:match('^(%d+)([hdw])$')
+  if id == 'perm' then
+    hours = 0
+  elseif n and unit then
+    n = tonumber(n) or 1
+    if unit == 'h' then hours = n
+    elseif unit == 'w' then hours = n * 168
+    else hours = n * 24
+    end
+  elseif id == '1d' then hours = 24
+  elseif id == '2d' then hours = 48
+  elseif id == '7d' then hours = 168
+  elseif id == '14d' then hours = 336
+  elseif id == '30d' then hours = 720
   end
   panelAction(src, 'ban', {
     playerId = targetId,
