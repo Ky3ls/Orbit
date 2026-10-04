@@ -18,6 +18,7 @@ files {
 server_scripts {
     'server/sv_main.lua',
     'server/sv_hardcap.lua',
+    'server/sv_ban_card.lua',
     'server/sv_connect.lua',
     'server/sv_events.lua',
     'server/sv_actions.lua',

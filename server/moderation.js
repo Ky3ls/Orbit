@@ -140,9 +140,32 @@ function allowlistModeOf(settings) {
   return 'disabled';
 }
 
+/** Discord-Invite aus Ban-/Allowlist-Text (bestehende Settings-Felder). */
+export function extractDiscordInvite(...texts) {
+  const re = /https?:\/\/(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite)\/([A-Za-z0-9-]+)/gi;
+  for (const text of texts) {
+    const src = String(text || '');
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(src)) !== null) {
+      const code = m[1];
+      if (!code || /^example$/i.test(code)) continue;
+      return `https://discord.gg/${code}`;
+    }
+  }
+  return null;
+}
+
+function stripUrls(text) {
+  return String(text || '')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 /**
  * txAdmin-Style checkJoin: Ban + Allowlist-Modi.
- * @returns {{ allow: boolean, reason?: string }}
+ * @returns {{ allow: boolean, reason?: string, kind?: string }}
  */
 export function checkPlayerJoin(db, settings, {
   playerIds = [],
@@ -161,12 +184,22 @@ export function checkPlayerJoin(db, settings, {
       : Math.max(1, Number(settings.requiredHwidMatches) || 1);
     const ban = findActiveBanWithHwid(db, ids, hwids, need);
     if (ban) {
-      const until = ban.expires
-        ? new Date(ban.expires).toLocaleString('de-DE')
-        : 'permanent';
+      const permanent = !ban.expires;
+      const until = permanent
+        ? 'Permanent'
+        : new Date(ban.expires).toLocaleString('de-DE');
       const extra = String(settings.banRejectionMessage || '').trim();
+      const discordInvite = extractDiscordInvite(
+        extra,
+        settings.allowlistInstructions,
+      );
+      const appealHint = stripUrls(extra);
+      const serverName = String(
+        settings.serverName || settings.serverLabel || settings.hostname || '',
+      ).trim().slice(0, 48);
       return {
         allow: false,
+        kind: 'ban',
         reason: [
           `[Orbit] Du bist gebannt.`,
           `Grund: ${ban.reason}`,
@@ -174,6 +207,14 @@ export function checkPlayerJoin(db, settings, {
           `Ban-ID: #${ban.id}`,
           extra || '',
         ].filter(Boolean).join('\n'),
+        banId: ban.id,
+        banReason: String(ban.reason || '').slice(0, 280),
+        banExpires: ban.expires ?? null,
+        banExpiresLabel: until,
+        permanent,
+        appealMessage: appealHint || '',
+        discordInvite: discordInvite || '',
+        serverName,
       };
     }
   }
