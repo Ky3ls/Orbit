@@ -20,8 +20,9 @@ export const panelDe = {
   'console.clr': 'CLR',
   'console.emptyFilter': 'Keine Zeilen — Filter aktiv (Aussehen).',
   'console.emptyWait': 'Warte auf FX-Ausgabe…',
-  'console.phReady': '',
-  'console.phOffline': '',
+  'console.emptyOffline': 'Server offline',
+  'console.phReady': 'Sende einen Befehl…',
+  'console.phOffline': '…',
   'console.send': 'Senden',
 
   // FX strip / meta
@@ -497,8 +498,9 @@ export const panelEn = {
   'console.clr': 'CLR',
   'console.emptyFilter': 'No lines — filter active (Appearance).',
   'console.emptyWait': 'Waiting for FX output…',
-  'console.phReady': '',
-  'console.phOffline': '',
+  'console.emptyOffline': 'Server offline',
+  'console.phReady': 'Send a command…',
+  'console.phOffline': '…',
   'console.send': 'Send',
 
   'fx.aria': 'FX controls',
