@@ -73,6 +73,7 @@ export default function Players({ user }) {
   const [banReason, setBanReason] = useState('');
   const [actionReason, setActionReason] = useState('');
   const [note, setNote] = useState('');
+  const [noteStatus, setNoteStatus] = useState('idle'); /* idle | saving | saved | error */
   const [noteErr, setNoteErr] = useState('');
   const [durationId, setDurationId] = useState('2d');
   const [customDays, setCustomDays] = useState('');
@@ -91,39 +92,6 @@ export default function Players({ user }) {
   const noteSavedRef = useRef('');
   const noteTimerRef = useRef(null);
   const noteReqIdRef = useRef(0);
-  const noteRef = useRef('');
-  noteRef.current = note;
-  const notePlayerRef = useRef(null);
-
-  /** Sofort speichern wenn dirty (Blur / Tab / Modal-Close). Still — kein Status-Label. */
-  const flushNoteSave = useCallback(() => {
-    if (noteTimerRef.current) {
-      clearTimeout(noteTimerRef.current);
-      noteTimerRef.current = null;
-    }
-    const player = notePlayerRef.current;
-    const payload = noteRef.current;
-    if (!player?.identifier || payload === noteSavedRef.current) return;
-    const { identifier, name } = player;
-    const reqId = ++noteReqIdRef.current;
-    api('/api/players/note', {
-      method: 'POST',
-      body: { identifier, name, note: payload },
-    })
-      .then(() => {
-        if (reqId !== noteReqIdRef.current) return;
-        if (notePlayerRef.current?.identifier !== identifier) return;
-        noteSavedRef.current = payload;
-        setNoteErr('');
-        setPick((cur) => (cur && cur.identifier === identifier ? { ...cur, note: payload } : cur));
-        loadPlayers(true);
-      })
-      .catch((e) => {
-        if (reqId !== noteReqIdRef.current) return;
-        if (notePlayerRef.current?.identifier !== identifier) return;
-        setNoteErr(e.message || t('common.error'));
-      });
-  }, [t]);
 
   const canRevoke = user?.role === 'owner' || user?.role === 'admin'
     || (user?.permissions || []).includes('bans.revoke')
@@ -192,7 +160,6 @@ export default function Players({ user }) {
   }, []);
 
   async function openPlayer(row, { keepTab = false } = {}) {
-    flushNoteSave();
     setPick(row);
     if (!keepTab) {
       setTab('info');
@@ -211,6 +178,7 @@ export default function Players({ user }) {
       const nextNote = d.player?.note || '';
       noteSavedRef.current = nextNote;
       setNote(nextNote);
+      setNoteStatus('idle');
       setNoteErr('');
       /* Ban-Vorlagen nur aus Settings-/API-Liste — nie Kick/Warn-Gründe */
       if (Array.isArray(d.banTemplates)) setBanTemplates(d.banTemplates);
@@ -340,7 +308,6 @@ export default function Players({ user }) {
   }, [wlEntries, q]);
 
   const p = detail?.player || pick;
-  notePlayerRef.current = p ? { identifier: p.identifier, name: p.name } : null;
   const ids = p ? playerIds(p) : [];
   const activeBan = detail?.activeBan
     || (p?.banned && p?.banId
@@ -367,7 +334,7 @@ export default function Players({ user }) {
     [durationList, durationId, t],
   );
 
-  /* Interne Notiz: Debounce Auto-Save an /api/players/note (ohne UI-Status) */
+  /* Interne Notiz: Debounce Auto-Save an /api/players/note */
   useEffect(() => {
     if (!p?.identifier) return undefined;
     if (note === noteSavedRef.current) {
@@ -385,21 +352,22 @@ export default function Players({ user }) {
       noteTimerRef.current = null;
       const reqId = ++noteReqIdRef.current;
       const payload = note;
+      setNoteStatus('saving');
       api('/api/players/note', {
         method: 'POST',
         body: { identifier, name, note: payload },
       })
         .then(() => {
           if (reqId !== noteReqIdRef.current) return;
-          if (notePlayerRef.current?.identifier !== identifier) return;
           noteSavedRef.current = payload;
+          setNoteStatus('saved');
           setNoteErr('');
           setPick((cur) => (cur && cur.identifier === identifier ? { ...cur, note: payload } : cur));
           loadPlayers(true);
         })
         .catch((e) => {
           if (reqId !== noteReqIdRef.current) return;
-          if (notePlayerRef.current?.identifier !== identifier) return;
+          setNoteStatus('error');
           setNoteErr(e.message || t('common.error'));
         });
     }, 500);
@@ -410,6 +378,12 @@ export default function Players({ user }) {
       }
     };
   }, [note, p?.identifier, p?.name, t]);
+
+  useEffect(() => {
+    if (noteStatus !== 'saved') return undefined;
+    const hide = setTimeout(() => setNoteStatus('idle'), 1800);
+    return () => clearTimeout(hide);
+  }, [noteStatus]);
 
   async function toggleWl() {
     if (!p) return;
@@ -773,12 +747,7 @@ export default function Players({ user }) {
       {pick && p && (
         <Modal
           title={t('players.modal')}
-          onClose={() => {
-            flushNoteSave();
-            setPick(null);
-            setDetail(null);
-            setErr('');
-          }}
+          onClose={() => { setPick(null); setDetail(null); setErr(''); }}
           wide
           aside={tab === 'ban' && !isBanned ? (
             <aside className="pl-ban-aside" aria-label={t('players.banAside')}>
@@ -899,10 +868,7 @@ export default function Players({ user }) {
                   role="tab"
                   aria-selected={tab === s.id}
                   className={tab === s.id ? 'active' : ''}
-                  onClick={() => {
-                    if (s.id !== tab) flushNoteSave();
-                    setTab(s.id);
-                  }}
+                  onClick={() => setTab(s.id)}
                 >
                   {t(s.labelKey)}
                 </button>
@@ -917,7 +883,13 @@ export default function Players({ user }) {
                   <label className="field">
                     <span className="pl-note-label">
                       <span>{t('players.note')}</span>
-                      {noteErr && (
+                      {noteStatus === 'saving' && (
+                        <span className="pl-note-status" aria-live="polite">{t('common.saving')}</span>
+                      )}
+                      {noteStatus === 'saved' && (
+                        <span className="pl-note-status is-ok" aria-live="polite">{t('common.saved')}</span>
+                      )}
+                      {noteStatus === 'error' && noteErr && (
                         <span className="pl-note-status is-err" role="alert">{noteErr}</span>
                       )}
                     </span>
@@ -925,7 +897,6 @@ export default function Players({ user }) {
                       rows={4}
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
-                      onBlur={() => flushNoteSave()}
                       placeholder={t('players.notePh')}
                     />
                   </label>
