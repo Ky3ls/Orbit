@@ -338,11 +338,13 @@ export default function LiveConsole({
         </div>
       </header>
       <div className="lc-term" ref={box} onScroll={onScroll}>
-        {visible.length === 0 && !(fx.ready && !consoleLive) && (
+        {visible.length === 0 && (
           <div className="lc-empty">
-            {lines.length
-              ? t('console.emptyFilter')
-              : t('console.emptyWait')}
+            {fx.ready && !consoleLive
+              ? t('console.emptyOffline')
+              : lines.length
+                ? t('console.emptyFilter')
+                : t('console.emptyWait')}
           </div>
         )}
         {(consoleLive || !fx.ready) && visible.map((line) => (
@@ -367,6 +369,7 @@ export default function LiveConsole({
           ref={inputRef}
           className="mono"
           type="text"
+          placeholder={fx.fxCommandReady ? t('console.phReady') : t('console.phOffline')}
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           onKeyDown={onKeyDown}
