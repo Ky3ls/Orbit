@@ -18,8 +18,7 @@ const HOST_TABS = new Set(['servers', 'artifacts', 'prod']);
 const SECTION_DEFS = [
   { id: 'general', labelKey: 'settings.sec.general', hintKey: 'settings.sec.generalHint', owner: false },
   { id: 'fxserver', labelKey: 'settings.sec.fxserver', hintKey: 'settings.sec.fxserverHint', owner: true },
-  { id: 'bans', labelKey: 'settings.sec.bans', hintKey: 'settings.sec.bansHint', owner: false, admin: true },
-  { id: 'allowlist', labelKey: 'settings.sec.allowlist', hintKey: 'settings.sec.allowlistHint', owner: false, admin: true },
+  { id: 'moderation', labelKey: 'settings.sec.moderation', hintKey: 'settings.sec.moderationHint', owner: false, admin: true },
   { id: 'discord', labelKey: 'settings.sec.discord', hintKey: 'settings.sec.discordHint', owner: true },
   { id: 'game', labelKey: 'settings.sec.game', hintKey: 'settings.sec.gameHint', owner: false, admin: true },
   { id: 'system', labelKey: 'settings.sec.system', hintKey: 'settings.sec.systemHint', owner: true },
@@ -52,8 +51,10 @@ const SECTION_FIELDS = {
     'onesync', 'resourceStartingTolerance', 'quietMode', 'fxAutostart', 'autoRestartEnabled',
     'rconPort', 'rconPassword',
   ],
-  bans: ['banChecking', 'banRejectionMessage', 'requiredHwidMatches'],
-  allowlist: ['allowlistMode', 'allowlistEnabled', 'allowlistInstructions', 'allowlistDiscordRoles'],
+  moderation: [
+    'allowlistMode', 'allowlistEnabled', 'allowlistInstructions', 'allowlistDiscordRoles', 'ipAllowlist',
+    'banChecking', 'banRejectionMessage', 'requiredHwidMatches',
+  ],
   discord: [
     'discordEnabled', 'discordNotifyDrops', 'discordWebhook', 'discordGuild',
     'discordWarningsChannel', 'discordStatusEmbedJson', 'discordStatusConfigJson',
@@ -166,7 +167,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
   );
 
   const sectionParam = params.get('section');
-  const legacyMap = { server: 'general', moderation: 'bans', fx: 'fxserver' };
+  const legacyMap = { server: 'general', bans: 'moderation', allowlist: 'moderation', fx: 'fxserver' };
   const mapped = legacyMap[sectionParam] || sectionParam;
   const section = nav.some((s) => s.id === mapped)
     ? mapped
@@ -195,7 +196,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
-    if (section === 'bans' && isAdmin) loadTemplates();
+    if (section === 'moderation' && isAdmin) loadTemplates();
   }, [section, isAdmin]);
   useEffect(() => {
     if (section === 'system' && isOwner) {
@@ -440,115 +441,122 @@ export default function Settings({ user, onUser, onSetupReset }) {
           </form>
         )}
 
-        {section === 'bans' && isAdmin && (
-          <div className="st-stack">
-            <form onSubmit={save}>
-              <ModuleCard
-                title={t('settings.bans.title')}
-                lead={t('settings.bans.lead')}
-                actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
-              >
-                <Toggle checked={form.banChecking !== false} onChange={(v) => set({ banChecking: v })} onLabel={t('settings.bans.checkOnShort')} offLabel={t('settings.bans.checkOffShort')} />
-                <label className="field" style={{ marginTop: 12 }}>
-                  <span>Ablehnungs-Hinweis</span>
-                  <textarea rows={3} value={form.banRejectionMessage || ''} onChange={(e) => set({ banRejectionMessage: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Erforderliche HWID-Treffer</span>
-                  <select value={String(form.requiredHwidMatches ?? '1')} onChange={(e) => set({ requiredHwidMatches: e.target.value })}>
-                    <option value="0">0 — HWID-Bans aus</option>
-                    <option value="1">1 — empfohlen</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                  </select>
-                </label>
-              </ModuleCard>
-            </form>
-            <ModuleCard title={t('settings.bans.templates')} lead={t('settings.bans.templatesLead')}>
-              <form className="st-fields st-fields-1" onSubmit={addTemplate}>
-                <label className="field">
-                  <span>Grund</span>
-                  <input value={tplReason} onChange={(e) => setTplReason(e.target.value)} placeholder="z. B. RDM / FailRP" required minLength={3} />
-                </label>
-                <OrbitSelect
-                  label="Dauer"
-                  value={tplDuration}
-                  onChange={setTplDuration}
-                  options={BAN_DURATION_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
-                />
-                <button type="submit" className="btn btn-primary" disabled={tplBusy || tplReason.trim().length < 3}>
-                  {tplBusy ? '…' : t('settings.tplAdd')}
-                </button>
-              </form>
-              {templates.length === 0 ? (
-                <p className="muted" style={{ marginTop: 16 }}>Noch keine Vorlagen.</p>
-              ) : (
-                <ul className="st-tpl-list">
-                  {templates.map((tpl) => (
-                    <li key={tpl.id}>
-                      <div>
-                        <strong>{tpl.reason}</strong>
-                        <span className="muted">{banDurationLabel(tpl.duration_id)}</span>
-                      </div>
-                      <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(tpl.id)}>{t('common.delete')}</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </ModuleCard>
-          </div>
-        )}
-
-        {section === 'allowlist' && isAdmin && (
-          <form className="st-stack" onSubmit={save}>
-            <ModuleCard
-              wide
-              title={t('settings.allowlist.title')}
-              lead={t('settings.allowlist.lead')}
-              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
-            >
-              <div className="st-radio-list">
-                {modes.map((m) => (
-                  <label key={m.value} className={`st-radio${(form.allowlistMode || 'disabled') === m.value ? ' on' : ''}`}>
-                    <input
-                      type="radio"
-                      name="allowlistMode"
-                      checked={(form.allowlistMode || 'disabled') === m.value}
-                      onChange={() => set({ allowlistMode: m.value })}
+        {section === 'moderation' && isAdmin && (
+          <div className="st-mod-split">
+            <div className="st-mod-split-pane">
+              <form className="st-mod-split-stack" onSubmit={save}>
+                <ModuleCard
+                  title={t('settings.allowlist.title')}
+                  lead={t('settings.allowlist.lead')}
+                  actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
+                >
+                  <div className="st-radio-list">
+                    {modes.map((m) => (
+                      <label key={m.value} className={`st-radio${(form.allowlistMode || 'disabled') === m.value ? ' on' : ''}`}>
+                        <input
+                          type="radio"
+                          name="allowlistMode"
+                          checked={(form.allowlistMode || 'disabled') === m.value}
+                          onChange={() => set({ allowlistMode: m.value })}
+                        />
+                        <span>{m.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <label className="field">
+                    <span>{t('settings.allowlist.instructions')}</span>
+                    <textarea
+                      rows={3}
+                      value={form.allowlistInstructions || ''}
+                      onChange={(e) => set({ allowlistInstructions: e.target.value })}
+                      disabled={(form.allowlistMode || 'disabled') === 'disabled' || form.allowlistMode === 'admin_only'}
                     />
-                    <span>{m.label}</span>
                   </label>
-                ))}
+                  <label className="field">
+                    <span>{t('settings.allowlist.roles')}</span>
+                    <input
+                      value={form.allowlistDiscordRoles || ''}
+                      onChange={(e) => set({ allowlistDiscordRoles: e.target.value })}
+                      placeholder={t('settings.allowlist.rolesPh')}
+                      disabled={form.allowlistMode !== 'discord_roles'}
+                    />
+                  </label>
+                  {isOwner && (
+                    <label className="field">
+                      <span>{t('settings.allowlist.ip')}</span>
+                      <textarea
+                        placeholder={t('settings.allowlist.ipPh')}
+                        value={form.ipAllowlist || ''}
+                        onChange={(e) => set({ ipAllowlist: e.target.value })}
+                        rows={2}
+                      />
+                    </label>
+                  )}
+                </ModuleCard>
+              </form>
+            </div>
+            <div className="st-mod-split-pane">
+              <div className="st-mod-split-stack">
+                <form onSubmit={save}>
+                  <ModuleCard
+                    title={t('settings.bans.title')}
+                    lead={t('settings.bans.lead')}
+                    actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
+                  >
+                    <Toggle checked={form.banChecking !== false} onChange={(v) => set({ banChecking: v })} onLabel={t('settings.bans.checkOnShort')} offLabel={t('settings.bans.checkOffShort')} />
+                    <label className="field">
+                      <span>{t('settings.bans.reject')}</span>
+                      <textarea rows={3} value={form.banRejectionMessage || ''} onChange={(e) => set({ banRejectionMessage: e.target.value })} />
+                    </label>
+                    <label className="field">
+                      <span>{t('settings.bans.hwid')}</span>
+                      <select value={String(form.requiredHwidMatches ?? '1')} onChange={(e) => set({ requiredHwidMatches: e.target.value })}>
+                        <option value="0">{t('settings.bans.hwidOff')}</option>
+                        <option value="1">{t('settings.bans.hwidRec')}</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                      </select>
+                    </label>
+                  </ModuleCard>
+                </form>
+                <ModuleCard title={t('settings.bans.templates')} lead={t('settings.bans.templatesLead')}>
+                  <form className="st-fields st-fields-1" onSubmit={addTemplate}>
+                    <label className="field">
+                      <span>{t('settings.bans.reason')}</span>
+                      <input value={tplReason} onChange={(e) => setTplReason(e.target.value)} placeholder={t('settings.bans.reasonPh')} required minLength={3} />
+                    </label>
+                    <OrbitSelect
+                      label={t('settings.bans.duration')}
+                      value={tplDuration}
+                      onChange={setTplDuration}
+                      options={BAN_DURATION_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+                    />
+                    <button type="submit" className="btn btn-primary" disabled={tplBusy || tplReason.trim().length < 3}>
+                      {tplBusy ? '…' : t('settings.tplAdd')}
+                    </button>
+                  </form>
+                  {templates.length === 0 ? (
+                    <p className="muted st-tpl-empty">{t('settings.bans.noTpl')}</p>
+                  ) : (
+                    <ul className="st-tpl-list">
+                      {templates.map((tpl) => (
+                        <li key={tpl.id}>
+                          <div>
+                            <strong>{tpl.reason}</strong>
+                            <span className="muted">{banDurationLabel(tpl.duration_id)}</span>
+                          </div>
+                          <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(tpl.id)}>{t('common.delete')}</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </ModuleCard>
               </div>
-              <label className="field" style={{ marginTop: 14 }}>
-                <span>Allowlist-Hinweis</span>
-                <textarea
-                  rows={3}
-                  value={form.allowlistInstructions || ''}
-                  onChange={(e) => set({ allowlistInstructions: e.target.value })}
-                  disabled={(form.allowlistMode || 'disabled') === 'disabled' || form.allowlistMode === 'admin_only'}
-                />
-              </label>
-              <label className="field">
-                <span>Erlaubte Discord-Rollen (IDs, Komma)</span>
-                <input
-                  value={form.allowlistDiscordRoles || ''}
-                  onChange={(e) => set({ allowlistDiscordRoles: e.target.value })}
-                  placeholder="000000000000000000, …"
-                  disabled={form.allowlistMode !== 'discord_roles'}
-                />
-              </label>
-              {isOwner && (
-                <label className="field">
-                  <span>IP-Allowlist (Panel)</span>
-                  <textarea placeholder="Leer = alle. Eine IP pro Zeile." value={form.ipAllowlist || ''} onChange={(e) => set({ ipAllowlist: e.target.value })} rows={2} />
-                </label>
-              )}
-            </ModuleCard>
-          </form>
+            </div>
+          </div>
         )}
 
         {section === 'discord' && isOwner && (
