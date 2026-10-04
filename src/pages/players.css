@@ -557,6 +557,29 @@ html[data-theme="light"] .pl-card {
 
 .pl-body { min-height: 160px; }
 .pl-panel { display: flex; flex-direction: column; gap: 12px; }
+.pl-note-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.pl-note-status {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  text-transform: none;
+}
+.pl-note-status.is-ok { color: #3dd68c; }
+.pl-note-status.is-err {
+  color: #f07178;
+  font-weight: 700;
+  max-width: 60%;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .pl-id-stack { display: flex; flex-direction: column; gap: 8px; }
 .pl-id-row {

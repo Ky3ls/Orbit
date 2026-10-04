@@ -73,6 +73,8 @@ export default function Players({ user }) {
   const [banReason, setBanReason] = useState('');
   const [actionReason, setActionReason] = useState('');
   const [note, setNote] = useState('');
+  const [noteStatus, setNoteStatus] = useState('idle'); /* idle | saving | saved | error */
+  const [noteErr, setNoteErr] = useState('');
   const [durationId, setDurationId] = useState('2d');
   const [customDays, setCustomDays] = useState('');
   const [customHhmm, setCustomHhmm] = useState('');
@@ -87,6 +89,9 @@ export default function Players({ user }) {
   dataRef.current = data;
   const dropsRef = useRef(drops);
   dropsRef.current = drops;
+  const noteSavedRef = useRef('');
+  const noteTimerRef = useRef(null);
+  const noteReqIdRef = useRef(0);
 
   const canRevoke = user?.role === 'owner' || user?.role === 'admin'
     || (user?.permissions || []).includes('bans.revoke')
@@ -170,7 +175,11 @@ export default function Players({ user }) {
     try {
       const d = await api(`/api/players/detail?id=${encodeURIComponent(row.identifier)}`);
       setDetail(d);
-      setNote(d.player?.note || '');
+      const nextNote = d.player?.note || '';
+      noteSavedRef.current = nextNote;
+      setNote(nextNote);
+      setNoteStatus('idle');
+      setNoteErr('');
       /* Ban-Vorlagen nur aus Settings-/API-Liste — nie Kick/Warn-Gründe */
       if (Array.isArray(d.banTemplates)) setBanTemplates(d.banTemplates);
       if (d.player) {
@@ -325,15 +334,56 @@ export default function Players({ user }) {
     [durationList, durationId, t],
   );
 
-  async function saveNote() {
-    if (!p) return;
-    setBusy(true);
-    try {
-      await api('/api/players/note', { method: 'POST', body: { identifier: p.identifier, name: p.name, note } });
-      loadPlayers(true);
-    } catch (e) { setErr(e.message); }
-    setBusy(false);
-  }
+  /* Interne Notiz: Debounce Auto-Save an /api/players/note */
+  useEffect(() => {
+    if (!p?.identifier) return undefined;
+    if (note === noteSavedRef.current) {
+      if (noteTimerRef.current) {
+        clearTimeout(noteTimerRef.current);
+        noteTimerRef.current = null;
+      }
+      return undefined;
+    }
+    const identifier = p.identifier;
+    const name = p.name;
+    setNoteErr('');
+    if (noteTimerRef.current) clearTimeout(noteTimerRef.current);
+    noteTimerRef.current = setTimeout(() => {
+      noteTimerRef.current = null;
+      const reqId = ++noteReqIdRef.current;
+      const payload = note;
+      setNoteStatus('saving');
+      api('/api/players/note', {
+        method: 'POST',
+        body: { identifier, name, note: payload },
+      })
+        .then(() => {
+          if (reqId !== noteReqIdRef.current) return;
+          noteSavedRef.current = payload;
+          setNoteStatus('saved');
+          setNoteErr('');
+          setPick((cur) => (cur && cur.identifier === identifier ? { ...cur, note: payload } : cur));
+          loadPlayers(true);
+        })
+        .catch((e) => {
+          if (reqId !== noteReqIdRef.current) return;
+          setNoteStatus('error');
+          setNoteErr(e.message || t('common.error'));
+        });
+    }, 500);
+    return () => {
+      if (noteTimerRef.current) {
+        clearTimeout(noteTimerRef.current);
+        noteTimerRef.current = null;
+      }
+    };
+  }, [note, p?.identifier, p?.name, t]);
+
+  useEffect(() => {
+    if (noteStatus !== 'saved') return undefined;
+    const hide = setTimeout(() => setNoteStatus('idle'), 1800);
+    return () => clearTimeout(hide);
+  }, [noteStatus]);
 
   async function toggleWl() {
     if (!p) return;
@@ -831,12 +881,25 @@ export default function Players({ user }) {
               {tab === 'info' && (
                 <div className="pl-panel">
                   <label className="field">
-                    <span>{t('players.note')}</span>
-                    <textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('players.notePh')} />
+                    <span className="pl-note-label">
+                      <span>{t('players.note')}</span>
+                      {noteStatus === 'saving' && (
+                        <span className="pl-note-status" aria-live="polite">{t('common.saving')}</span>
+                      )}
+                      {noteStatus === 'saved' && (
+                        <span className="pl-note-status is-ok" aria-live="polite">{t('common.saved')}</span>
+                      )}
+                      {noteStatus === 'error' && noteErr && (
+                        <span className="pl-note-status is-err" role="alert">{noteErr}</span>
+                      )}
+                    </span>
+                    <textarea
+                      rows={4}
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder={t('players.notePh')}
+                    />
                   </label>
-                  <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={saveNote}>
-                    {t('common.save')}
-                  </button>
                 </div>
               )}
 
