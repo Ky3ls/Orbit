@@ -21,6 +21,7 @@
   --info: #60a5fa;
   --shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   --glow: none;
+  --focus-ring: 0 0 0 2px rgba(var(--accent-rgb), 0.25);
   --chart-grid: rgba(255, 255, 255, 0.06);
   --chart-axis: rgba(255, 255, 255, 0.08);
   --chart-plot-bg: rgba(0, 0, 0, 0.22);
@@ -70,21 +71,30 @@
   stroke: none !important;
 }
 
-.btn-primary {
+.btn-primary,
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:focus-visible,
+.btn-primary:active {
   background: var(--accent) !important;
-  border-color: var(--accent) !important;
+  border: 1px solid var(--accent) !important;
   color: #0a0a0a !important;
   font-weight: 700;
   box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
 }
-.btn-primary::after {
-  content: none !important;
-  animation: none !important;
-}
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary:focus-visible {
   background: var(--accent-2) !important;
   border-color: var(--accent-2) !important;
+}
+.btn-primary::after,
+.btn-primary::before {
+  content: none !important;
+  animation: none !important;
   box-shadow: none !important;
+  filter: none !important;
 }
 
 .o-metric-bar {

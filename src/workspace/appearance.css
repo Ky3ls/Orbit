@@ -21,6 +21,7 @@ html[data-theme="light"] {
   --info: #336090;
   --shadow: 0 4px 16px rgba(20, 28, 36, 0.07), 0 1px 3px rgba(20, 28, 36, 0.04);
   --glow: none;
+  --focus-ring: 0 0 0 2px rgba(var(--accent-rgb), 0.25);
   --chart-grid: rgba(20, 28, 36, 0.08);
   --chart-axis: rgba(20, 28, 36, 0.14);
   --chart-plot-bg: var(--bg);
@@ -642,6 +643,11 @@ html[data-theme="light"] .cfg-find {
 }
 /* Hover schwächer als Active — sonst wirken zwei Items „aktiv“ */
 .ws-rail-item:hover { color: var(--text); background: rgba(var(--accent-rgb), 0.07); }
+.ws-rail-item:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.25);
+  outline-offset: 2px;
+  box-shadow: none;
+}
 .ws-rail-item.active {
   color: var(--text);
   background: var(--accent-dim);

@@ -18,7 +18,7 @@
   --info: #5eb8ff;
   --radius: 16px;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-  --glow: 0 0 48px rgba(46, 230, 197, 0.08);
+  --glow: none;
 }
 
 body {
@@ -212,7 +212,7 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: rgba(46, 230, 197, 0.45);
-  box-shadow: 0 0 0 3px rgba(46, 230, 197, 0.1);
+  box-shadow: 0 0 0 2px rgba(46, 230, 197, 0.25);
 }
 
 .badge.ok { background: rgba(46, 230, 197, 0.15); color: var(--ok); }

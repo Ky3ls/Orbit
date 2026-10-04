@@ -136,7 +136,7 @@
   border-radius: 50%;
   background: var(--faint);
 }
-.ob-chip.tone-online .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.ob-chip.tone-online .dot { background: var(--ok); box-shadow: none; }
 .ob-chip.tone-offline .dot { background: var(--bad); }
 .ob-chip.tone-starting .dot { background: var(--warn); }
 

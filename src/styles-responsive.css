@@ -844,7 +844,7 @@ button,
 .res-search:focus {
   outline: none;
   border-color: rgba(var(--accent-rgb), 0.55);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+  box-shadow: var(--focus-ring, 0 0 0 2px rgba(var(--accent-rgb), 0.25));
 }
 .res-search-clear {
   flex-shrink: 0;
@@ -1036,7 +1036,7 @@ button,
 .res-status.tone-ok { color: var(--ok); }
 .res-status.tone-ok .res-status-dot {
   background: var(--ok);
-  box-shadow: 0 0 0 3px rgba(61, 214, 140, 0.15);
+  box-shadow: none;
 }
 .res-status.tone-bad { color: var(--bad); }
 .res-status.tone-bad .res-status-dot { background: var(--bad); }
