@@ -1,0 +1,140 @@
+/* Allowlist-Settings — Light/Dark über Theme-Tokens */
+
+.al-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.al-mode-select {
+  width: 100%;
+}
+
+.al-roles {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-2) 88%, var(--bg));
+  overflow: hidden;
+}
+
+.al-roles.open {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.al-roles-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.al-roles-toggle:hover {
+  background: color-mix(in srgb, var(--accent-dim) 55%, transparent);
+}
+
+.al-roles-toggle-label {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.al-roles-count {
+  min-width: 1.5rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.al-roles-caret {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--accent);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.al-roles.open .al-roles-caret {
+  transform: rotate(180deg);
+}
+
+.al-roles-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 70%, var(--bg-2));
+}
+
+.al-roles-hint {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.al-roles-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.al-roles-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.al-roles-field {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.al-roles-field input {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.al-roles-remove {
+  flex-shrink: 0;
+  width: 34px;
+  padding-inline: 0;
+  line-height: 1;
+}
+
+.al-roles-add {
+  align-self: flex-start;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
