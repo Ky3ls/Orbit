@@ -139,23 +139,31 @@ export default function LiveConsole({
     }
   }
 
+  /** Nur .lc-term scrollen — nie scrollIntoView (scrollt overflow:hidden-Ancestors → Layout-Collapse). */
+  function pinConsoleShell() {
+    let p = box.current?.parentElement;
+    while (p && p !== document.body) {
+      if (p.classList?.contains('live-console')
+        || p.classList?.contains('ck-term-frame')
+        || p.classList?.contains('ck-terminal')
+        || p.classList?.contains('ws-main')) {
+        if (p.scrollTop) p.scrollTop = 0;
+      }
+      p = p.parentElement;
+    }
+  }
+
   function scrollToEnd() {
     const el = box.current;
     if (!el) return;
     progScrollRef.current = true;
-    if (endRef.current) {
-      endRef.current.scrollIntoView({ block: 'end', behavior: 'auto' });
-    } else {
-      el.scrollTop = el.scrollHeight;
-    }
+    pinConsoleShell();
+    el.scrollTop = el.scrollHeight;
     // nach Layout nochmal anheften (Burst/Start), Flag danach freigeben
     if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
     scrollRafRef.current = requestAnimationFrame(() => {
-      if (endRef.current) {
-        endRef.current.scrollIntoView({ block: 'end', behavior: 'auto' });
-      } else if (box.current) {
-        box.current.scrollTop = box.current.scrollHeight;
-      }
+      pinConsoleShell();
+      if (box.current) box.current.scrollTop = box.current.scrollHeight;
       scrollRafRef.current = requestAnimationFrame(() => {
         progScrollRef.current = false;
         scrollRafRef.current = 0;

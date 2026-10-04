@@ -4,7 +4,14 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  /* clip: kein programmatisches Ancestor-Scroll (scrollIntoView-/Burst-Schutz) */
+  overflow: clip;
+}
+
+.live-console > .lc-head,
+.live-console > .lc-form,
+.live-console > .lc-err {
+  flex-shrink: 0;
 }
 
 .live-console-drawer {
@@ -143,6 +150,8 @@
   background: #101010;
   color: #e4e4e4;
   -webkit-font-smoothing: antialiased;
+  /* eigener Scrollport — Head/Form bleiben pinnt */
+  scrollbar-gutter: stable;
 }
 .lc-empty { color: #888; text-align: center; padding: 28px 0; }
 .lc-soft-clear-cue {

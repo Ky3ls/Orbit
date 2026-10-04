@@ -14,7 +14,7 @@
 }
 .ws[data-cockpit='1'] .ws-main {
   padding: 0;
-  overflow: hidden;
+  overflow: clip;
   min-height: 0;
   flex: 1 1 0;
   display: flex;
@@ -240,17 +240,17 @@
   flex-direction: column;
   padding: 12px;
   background: var(--bg-elevated);
-  overflow: hidden;
+  overflow: clip;
 }
 
 .ck-term-frame {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   border-radius: 12px;
   border: 1px solid var(--line);
-  overflow: hidden;
+  overflow: clip;
   background: var(--bg-elevated);
 }
 
@@ -262,7 +262,8 @@
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  overflow: hidden;
+  max-height: 100%;
+  overflow: clip;
 }
 .live-console-cockpit .lc-head,
 .live-console-cockpit .lc-form {
@@ -282,7 +283,7 @@
   color: var(--muted);
 }
 .live-console-cockpit .lc-term {
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   background: var(--bg-elevated);
 }
