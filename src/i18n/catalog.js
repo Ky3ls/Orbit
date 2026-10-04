@@ -6,7 +6,6 @@ const de = {
   // Nav / modules
   'nav.ops': 'Betrieb',
   'nav.sys': 'System',
-  'nav.extra': 'Extra',
   'nav.overview': 'Übersicht',
   'nav.home': 'Home',
   'nav.players': 'Spieler',
@@ -249,7 +248,6 @@ const en = {
   ...panelEn,
   'nav.ops': 'Operations',
   'nav.sys': 'System',
-  'nav.extra': 'Extra',
   'nav.overview': 'Overview',
   'nav.home': 'Home',
   'nav.players': 'Players',

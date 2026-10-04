@@ -32,21 +32,7 @@ function pathMatchesNav(pathname, to, end) {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-function RailLink({ to, end, icon, label, active, onClick, asButton, pressed, pri }) {
-  const cls = `ws-rail-item${active ? ' active' : ''}`;
-  const inner = (
-    <>
-      <span className="ws-rail-ico"><NavIcon name={icon} /></span>
-      <span className="ws-rail-label">{label}</span>
-    </>
-  );
-  if (asButton) {
-    return (
-      <button type="button" className={cls} data-pri={pri ? '1' : '0'} aria-pressed={pressed} title={label} onClick={onClick}>
-        {inner}
-      </button>
-    );
-  }
+function RailLink({ to, end, icon, label, active, onClick, pri }) {
   return (
     <NavLink
       to={to}
@@ -59,7 +45,8 @@ function RailLink({ to, end, icon, label, active, onClick, asButton, pressed, pr
       }}
       onClick={onClick}
     >
-      {inner}
+      <span className="ws-rail-ico"><NavIcon name={icon} /></span>
+      <span className="ws-rail-label">{label}</span>
     </NavLink>
   );
 }
@@ -313,23 +300,6 @@ export default function Workspace({ user, onLogout }) {
                 })}
               </div>
             ))}
-            {canControl && (
-              <div className="ws-rail-group">
-                <span className="ws-rail-group-label">{t('nav.extra')}</span>
-                <div className="ws-rail-power" ref={powerRef}>
-                  <RailLink
-                    asButton
-                    icon="power"
-                    label={t('nav.power')}
-                    pri
-                    active={powerOpen}
-                    pressed={powerOpen}
-                    onClick={() => { setPowerOpen((v) => !v); setMenuOpen(false); }}
-                  />
-                  {powerMenu}
-                </div>
-              </div>
-            )}
           </nav>
 
           <div className="ws-rail-foot">
