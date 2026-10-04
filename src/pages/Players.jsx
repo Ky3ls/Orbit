@@ -59,6 +59,8 @@ export default function Players({ user }) {
   const initialFilter = FILTERS.some((f) => f.id === searchParams.get('filter'))
     ? searchParams.get('filter')
     : 'all';
+  const deepOpen = searchParams.get('open') || searchParams.get('name') || '';
+  const deepSid = searchParams.get('sid') || '';
 
   const [data, setData] = useState({
     online: false, players: [], list: [], series: [], stats: {}, maxClients: 48, fxCommandReady: false,
@@ -67,8 +69,11 @@ export default function Players({ user }) {
   const [bans, setBans] = useState([]);
   const [wlEntries, setWlEntries] = useState([]);
   const [wlForm, setWlForm] = useState({ identifier: '', note: '' });
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(deepOpen);
   const [filter, setFilter] = useState(initialFilter);
+  const pendingOpen = useRef(
+    deepOpen || deepSid ? { open: deepOpen, sid: deepSid } : null,
+  );
   const [pick, setPick] = useState(null);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState('info');
@@ -166,6 +171,39 @@ export default function Players({ user }) {
       setErr(e.message);
     }
   }
+
+  /* Deep-Link aus Live-Konsole: /players?open=Name&sid=1 → Modal */
+  useEffect(() => {
+    const open = searchParams.get('open') || searchParams.get('name') || '';
+    const sid = searchParams.get('sid') || '';
+    if (open || sid) pendingOpen.current = { open, sid };
+  }, [searchParams]);
+
+  useEffect(() => {
+    const pending = pendingOpen.current;
+    if (!pending) return;
+    const list = data.list || [];
+    if (!list.length) return;
+    let match = null;
+    if (pending.sid) {
+      const n = Number(pending.sid);
+      if (Number.isFinite(n)) match = list.find((p) => Number(p.serverId) === n) || null;
+    }
+    if (!match && pending.open) {
+      const needle = String(pending.open).toLowerCase();
+      match = list.find((p) => String(p.name || '').toLowerCase() === needle)
+        || list.find((p) => String(p.name || '').toLowerCase().includes(needle))
+        || null;
+    }
+    if (!match) return;
+    pendingOpen.current = null;
+    openPlayer(match);
+    const next = new URLSearchParams(searchParams);
+    next.delete('open');
+    next.delete('name');
+    next.delete('sid');
+    setSearchParams(next, { replace: true });
+  }, [data.list, searchParams, setSearchParams]);
 
   function applyTemplate(id, opt) {
     setTemplateId(id);

@@ -155,6 +155,28 @@
 .lc-line.warn .lc-text { color: #e8c468; }
 .lc-line.bad .lc-text { color: #f08080; }
 .lc-line.info .lc-text { color: #e8e8e8; }
+.lc-player-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent, #a78bfa) 55%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.lc-player-link:hover {
+  color: var(--accent, #a78bfa);
+  text-decoration-color: var(--accent, #a78bfa);
+}
+.lc-player-link:focus-visible {
+  outline: 2px solid var(--accent, #a78bfa);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 .lc-caret { color: var(--accent); animation: blink 1s steps(1) infinite; margin-top: 6px; }
 .lc-err {
   margin: 0 16px 8px;
