@@ -118,20 +118,18 @@ export default function Cockpit() {
           <Link to="/cfg">CFG</Link>
         </nav>
 
-        <div className="ck-feed">
-          <p className="ck-feed-label">ONLINE</p>
-          <div className="ck-feed-scroll">
-            {(data?.players || []).length === 0 ? (
-              <span className="ck-feed-empty">— niemand im Orbit —</span>
-            ) : (
-              data.players.map((p) => (
+        {(data?.players || []).length > 0 && (
+          <div className="ck-feed">
+            <p className="ck-feed-label">ONLINE</p>
+            <div className="ck-feed-scroll">
+              {data.players.map((p) => (
                 <Link key={p.id} to="/players" className="ck-chip">
                   {p.name} <em>{p.ping}ms</em>
                 </Link>
-              ))
-            )}
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="ck-terminal" aria-label="Live-Konsole">
