@@ -24,8 +24,8 @@
   --focus-ring: 0 0 0 2px rgba(var(--accent-rgb), 0.25);
   --chart-grid: rgba(255, 255, 255, 0.06);
   --chart-axis: rgba(255, 255, 255, 0.08);
-  --chart-plot-bg: rgba(0, 0, 0, 0.22);
-  --surface-inset: rgba(0, 0, 0, 0.28);
+  --chart-plot-bg: var(--bg-2);
+  --surface-inset: var(--bg-2);
   --code-bg: #050505;
   --code-fg: #e8e8e8;
   --radius: 12px;

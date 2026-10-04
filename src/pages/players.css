@@ -206,12 +206,12 @@
   align-items: center;
   padding: 16px;
   border-radius: 16px;
-  border: 1px solid rgba(var(--accent-rgb), 0.28);
+  border: 1px solid var(--line);
   background:
-    radial-gradient(120% 80% at 0% 0%, rgba(var(--accent-rgb), 0.18), transparent 55%),
-    linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, var(--card)) 0%, var(--card) 55%);
+    linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--bg-elevated, var(--card))) 0%, var(--card) 60%);
   min-width: 0;
   overflow: hidden;
+  box-shadow: none;
 }
 .pl-hero-mark {
   width: 52px;
