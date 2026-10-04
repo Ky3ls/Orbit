@@ -77,8 +77,20 @@ export default function ServerControls({
       </div>
       {!fxCommandReady && status === 'online' && (
         <p className="srv-hint muted">
-          {t('ctl.hintPrefix')}: {hintMode} —
-          <Link to="/settings"> {t('ctl.setup')}</Link>
+          {t('ctl.hintPrefix')}: {hintMode}
+          {fxControlMode === 'orbit' ? (
+            <>
+              {' — '}
+              {t('ctl.hintReattach')}
+              {' · '}
+              <Link to="/settings">{t('ctl.setup')}</Link>
+            </>
+          ) : (
+            <>
+              {' — '}
+              <Link to="/settings">{t('ctl.setup')}</Link>
+            </>
+          )}
         </p>
       )}
       {canControl && (

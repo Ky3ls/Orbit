@@ -90,7 +90,9 @@ export default function Cockpit() {
             <div key={k} className="ck-tile">
               <span>{k}</span>
               <strong>{v}</strong>
-              <i style={{ width: `${Math.min(100, bar || 0)}%` }} />
+              {(bar || 0) > 0 && (
+                <i data-empty="0" style={{ width: `${Math.min(100, bar || 0)}%` }} />
+              )}
             </div>
           ))}
         </div>

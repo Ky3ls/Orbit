@@ -258,6 +258,7 @@ const de = {
   'ctl.hintPrefix': 'Konsole/Ressourcen',
   'ctl.hintOrbit': 'Orbit hält den Prozess nicht',
   'ctl.hintRcon': 'RCON oder Orbit-Modus',
+  'ctl.hintReattach': 'Restart bindet Konsole neu an',
   'ctl.setup': 'Setup',
 
   // Format
@@ -512,6 +513,7 @@ const en = {
   'ctl.hintPrefix': 'Console/resources',
   'ctl.hintOrbit': 'Orbit is not holding the process',
   'ctl.hintRcon': 'RCON or Orbit mode',
+  'ctl.hintReattach': 'Restart reattaches the console',
   'ctl.setup': 'Setup',
 
   'fmt.days': '{n} days',

@@ -87,6 +87,8 @@ export default function LiveConsole({
   const [bootOpen, setBootOpen] = useState(false);
   const bootOpenRef = useRef(false);
   const wasLiveRef = useRef(false);
+  /** Endpoint online — Logs auch ohne Supervisor-Pipe behalten */
+  const onlineRef = useRef(false);
 
   function setBootGate(open) {
     bootOpenRef.current = open;
@@ -107,11 +109,13 @@ export default function LiveConsole({
   revealHistoryRef.current = revealHistory;
 
   /** FX läuft / startet / stoppt — sonst Konsole leer halten (keine Alt-Logs). */
-  const consoleLive = isFxConsoleLive(fx) || bootOpen;
+  const consoleLive = isFxConsoleLive(fx) || bootOpen || fx.online;
+  onlineRef.current = !!(fx.online || isFxConsoleLive(fx) || bootOpen);
   const booting = fx.status === 'starting' || fx.status === 'restarting'
     || fx.controlPhase === 'starting' || fx.controlPhase === 'restarting'
     || fx.supervisorPhase === 'starting'
     || bootOpen;
+  const unsupervisedOnline = !!(fx.online && !fx.fxCommandReady && fx.fxControlMode === 'orbit');
 
   function wipeConsole() {
     consoleBuf.current = [];
@@ -191,9 +195,9 @@ export default function LiveConsole({
   // Erst nach Status-Hydration: idle-offline → clear + suppress; live/boot → Logs erlauben
   useEffect(() => {
     if (!fx.ready && !sseFx) return;
-    if (isFxConsoleLive(fx) || bootOpen) {
+    // Online (Endpoint) oder Supervisor/Boot → Logs immer erlauben, nie soft-wipen
+    if (isFxConsoleLive(fx) || bootOpen || fx.online) {
       suppressLogsRef.current = false;
-      // Sobald Status live ist, Boot-Gate nicht mehr nötig
       if (isFxConsoleLive(fx) && bootOpen) setBootGate(false);
       if (!wasLiveRef.current) enableAutoScroll();
       wasLiveRef.current = true;
@@ -232,7 +236,8 @@ export default function LiveConsole({
       enableAutoScroll();
     });
     es.addEventListener('console', (e) => {
-      if (suppressLogsRef.current && !bootOpenRef.current) return;
+      // Online-Endpoint: Logs nie verwerfen (auch wenn Supervisor kurz „idle“ meldet)
+      if (suppressLogsRef.current && !bootOpenRef.current && !onlineRef.current) return;
       let incoming;
       try { incoming = JSON.parse(e.data); } catch { return; }
       if (!Array.isArray(incoming) || !incoming.length) return;
@@ -244,7 +249,7 @@ export default function LiveConsole({
       consoleRaf.current = 1;
       queueMicrotask(() => {
         consoleRaf.current = 0;
-        if (suppressLogsRef.current && !bootOpenRef.current) {
+        if (suppressLogsRef.current && !bootOpenRef.current && !onlineRef.current) {
           consoleBuf.current = [];
           return;
         }
@@ -533,15 +538,17 @@ export default function LiveConsole({
         )}
         {visible.length === 0 && (
           <div className="lc-empty">
-            {fx.ready && !consoleLive && !booting
-              ? t('console.emptyOffline')
-              : booting && !lines.length
-                ? t('console.emptyStarting')
-                : hasSoftHidden
-                  ? t('console.softClearEmpty')
-                  : lines.length
-                    ? t('console.emptyFilter')
-                    : t('console.emptyWait')}
+            {unsupervisedOnline
+              ? t('console.emptyUnsupervised')
+              : fx.ready && !consoleLive && !booting
+                ? t('console.emptyOffline')
+                : booting && !lines.length
+                  ? t('console.emptyStarting')
+                  : hasSoftHidden
+                    ? t('console.softClearEmpty')
+                    : lines.length
+                      ? t('console.emptyFilter')
+                      : t('console.emptyWait')}
           </div>
         )}
         {(consoleLive || !fx.ready || booting) && visible.map((line) => (

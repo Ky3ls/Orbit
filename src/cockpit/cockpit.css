@@ -14,7 +14,7 @@
 }
 .ws[data-cockpit='1'] .ws-main {
   padding: 0;
-  overflow: clip;
+  overflow: hidden;
   min-height: 0;
   flex: 1 1 0;
   display: flex;
@@ -172,6 +172,13 @@
   background: var(--accent);
   display: block;
   max-width: 100%;
+  /* kein Glow / Schatten unter der Bar */
+  box-shadow: none;
+  filter: none;
+}
+.ck-tile i[style*="width: 0"],
+.ck-tile i[data-empty="1"] {
+  display: none;
 }
 
 .ck-power {
@@ -236,38 +243,47 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   padding: 12px;
   background: var(--bg-elevated);
-  overflow: clip;
+  overflow: hidden;
+  border-left: 0;
+  box-shadow: none;
 }
 
 .ck-term-frame {
-  flex: 1 1 0;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+  justify-items: stretch;
   border-radius: 12px;
   border: 1px solid var(--line);
-  overflow: clip;
+  /* explizit: keine Accent-Kante (Bug: orange Vollhöhen-Linie) */
+  border-left-color: var(--line);
+  overflow: hidden;
   background: var(--bg-elevated);
+  box-shadow: none;
 }
 
 .ck-corner { display: none; }
 
 .live-console-cockpit {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
   min-height: 0;
+  min-width: 0;
   height: 100%;
+  width: 100%;
   max-height: 100%;
-  overflow: clip;
-}
-.live-console-cockpit .lc-head,
-.live-console-cockpit .lc-form {
-  flex-shrink: 0;
+  align-self: stretch;
+  justify-self: stretch;
+  /* erbt Grid aus .live-console — kein Flex-Collapse mehr */
+  overflow: hidden;
+  border-left: 0;
+  box-shadow: none;
 }
 .live-console-cockpit .lc-head {
   padding: 10px 14px;
@@ -283,7 +299,6 @@
   color: var(--muted);
 }
 .live-console-cockpit .lc-term {
-  flex: 1 1 0;
   min-height: 0;
   background: var(--bg-elevated);
 }

@@ -1,17 +1,36 @@
 /* Live-Konsole (Drawer + Vollbild) — unabhängig vom Panel-Theme */
 
 .live-console {
-  display: flex;
-  flex-direction: column;
+  /* Grid statt Flex: Head/Term/Form können nicht mehr kollabieren/wandern */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "head"
+    "term"
+    "err"
+    "form";
+  align-content: stretch;
+  justify-items: stretch;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
-  /* clip: kein programmatisches Ancestor-Scroll (scrollIntoView-/Burst-Schutz) */
-  overflow: clip;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  border-left: 0;
+  box-shadow: none;
 }
+
+.live-console > .lc-head { grid-area: head; }
+.live-console > .lc-term { grid-area: term; }
+.live-console > .lc-err { grid-area: err; }
+.live-console > .lc-form { grid-area: form; }
 
 .live-console > .lc-head,
 .live-console > .lc-form,
 .live-console > .lc-err {
-  flex-shrink: 0;
+  min-height: 0;
 }
 
 .live-console-drawer {
@@ -20,8 +39,7 @@
   right: 0;
   bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   z-index: 46;
-  display: flex;
-  flex-direction: column;
+  /* behält display:grid aus .live-console */
   border-top: 1px solid rgba(var(--accent-rgb), 0.28);
   background: rgba(5, 5, 5, 0.98);
   backdrop-filter: blur(18px);
@@ -29,8 +47,6 @@
 }
 
 .live-console-page {
-  display: flex;
-  flex-direction: column;
   min-height: min(72vh, 720px);
   border-radius: 20px;
   border: 1px solid var(--line);
@@ -39,14 +55,11 @@
 }
 
 .live-console-side {
-  display: flex;
-  flex-direction: column;
   flex: 1;
   min-height: 0;
   height: 100%;
   background: #030303;
 }
-.live-console-side .lc-term { flex: 1; min-height: 0; }
 
 .lc-resize {
   position: absolute;
@@ -137,8 +150,9 @@
   color: var(--accent);
 }
 .lc-term {
-  flex: 1 1 0;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -150,8 +164,9 @@
   background: #101010;
   color: #e4e4e4;
   -webkit-font-smoothing: antialiased;
-  /* eigener Scrollport — Head/Form bleiben pinnt */
-  scrollbar-gutter: stable;
+  /* kein scrollbar-gutter: kann links/rechts „Streifen“ erzeugen */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 .lc-empty { color: #888; text-align: center; padding: 28px 0; }
 .lc-soft-clear-cue {
@@ -179,10 +194,19 @@
   align-items: baseline;
   gap: 0.45rem 0.65rem;
   padding: 2px 0;
+  min-height: 1.35em;
+  flex-shrink: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 .lc-ts { color: #777; font-size: 11px; flex-shrink: 0; }
-.lc-prompt { color: var(--accent); font-weight: 700; flex-shrink: 0; }
+/* Nie Accent: gestapelte › würden sonst als orange Vollhöhen-Kante wirken */
+.lc-prompt {
+  color: #6a6a6a;
+  font-weight: 600;
+  flex-shrink: 0;
+  line-height: inherit;
+  align-self: baseline;
+}
 .lc-text {
   flex: 1 1 12rem;
   min-width: 0;
