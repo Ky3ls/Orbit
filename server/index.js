@@ -163,7 +163,10 @@ import { fxCommandReady } from './rcon.js';
 import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
 import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail.js';
 import { syncOrbitPermissionsFile, applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
-import { logLine, logPanel, runtime, pushSeries, setLogHook, snapshot, onConsoleWake, clearConsole } from './state.js';
+import {
+  logLine, logPanel, runtime, pushSeries, setLogHook, snapshot, onConsoleWake,
+  clearConsole, fxConsoleLive, setControlPhase,
+} from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
@@ -484,9 +487,17 @@ async function loop() {
       if (probe.hostname) runtime.hostname = probe.hostname;
       else runtime.hostname = settings.hostname || 'FiveM';
       runtime.maxClients = probe.maxClients || Number(settings.maxClients) || 48;
-      if (runtime.controlPhase === 'starting' && (probe.online || active)) runtime.controlPhase = 'idle';
-      if (runtime.controlPhase === 'stopping' && !probe.online && !active) runtime.controlPhase = 'idle';
-      if (runtime.controlPhase === 'restarting' && probe.online) runtime.controlPhase = 'idle';
+      if (runtime.controlPhase === 'starting' && (probe.online || active)) setControlPhase('idle');
+      if (runtime.controlPhase === 'stopping' && !probe.online && !active) setControlPhase('idle');
+      if (runtime.controlPhase === 'restarting' && probe.online) setControlPhase('idle');
+      // Hängende Steuerungsphase (z. B. Start ohne Prozess) → zurück auf idle
+      if (runtime.controlPhase !== 'idle' && runtime.controlPhaseAt) {
+        const maxMs = runtime.controlPhase === 'stopping' ? 90_000 : 180_000;
+        if (Date.now() - runtime.controlPhaseAt > maxMs) {
+          logPanel('warn', `Steuerung „${runtime.controlPhase}“ Timeout — Status zurückgesetzt.`);
+          setControlPhase('idle');
+        }
+      }
       if (probe.online && !was) {
         runtime.onlineSince = Date.now();
         logLine('ok', 'FiveM-Endpunkt erreichbar.');
@@ -495,16 +506,11 @@ async function loop() {
         runtime.onlineSince = null;
         db.prepare("UPDATE resources SET actual = 'unknown'").run();
         logLine('warn', 'FiveM-Endpunkt nicht erreichbar.');
-        // Offline: Live-Konsole leeren — keine historischen FX-Logs anzeigen
-        if (!active && runtime.controlPhase !== 'starting' && runtime.controlPhase !== 'restarting') {
-          clearConsole();
-        }
+        // Offline: Live-Konsole leeren — nie während Start/Boot/Stop
+        if (!fxConsoleLive()) clearConsole();
       }
-      // Prozess weg + Endpoint offline → Konsole leer halten
-      if (!probe.online && !active
-        && runtime.controlPhase !== 'starting'
-        && runtime.controlPhase !== 'restarting'
-        && runtime.console.length) {
+      // Prozess weg + Endpoint offline → Konsole leer halten (nicht während Boot)
+      if (!fxConsoleLive() && runtime.console.length) {
         clearConsole();
       }
       if (probe.online && !runtime.onlineSince) runtime.onlineSince = Date.now();
@@ -605,14 +611,14 @@ function checkSchedule() {
     audit(db, 'system', 'schedule', `${job.label} ${hhmm}`, 'local');
     sendDiscordWarning(settings, tServer(settings, 'discord.scheduledRestart', { label: job.label, time: hhmm })).catch(() => {});
     if (control) {
-      runtime.controlPhase = 'restarting';
+      setControlPhase('restarting');
       controlFx('restart', settings, logLine)
         .then(() => {
           logLine('ok', `Zeitplan: Neustart (${via})`);
           forceStatusRefresh().catch(() => {});
         })
         .catch((err) => {
-          runtime.controlPhase = 'idle';
+          setControlPhase('idle');
           logLine('bad', `Zeitplan-Neustart fehlgeschlagen: ${err.message}`);
         });
     }
@@ -1671,14 +1677,8 @@ async function handleApi(req, res, url) {
         send('console', fresh);
       }
     };
-    // Offline: keine historischen Buffer-Zeilen — Client startet leer
-    const fxLive = runtime.online
-      || runtime.unitActive
-      || runtime.controlPhase === 'starting'
-      || runtime.controlPhase === 'restarting'
-      || runtime.supervisorPhase === 'starting'
-      || runtime.supervisorPhase === 'restarting';
-    if (fxLive) {
+    // Offline/idle: keine historischen Buffer-Zeilen — während Start/Boot schon
+    if (fxConsoleLive()) {
       send('console', runtime.console.slice(-200));
     } else if (runtime.consoleClearId) {
       send('console_clear', { id: runtime.consoleClearId, at: runtime.consoleClearedAt });
@@ -2594,7 +2594,7 @@ async function handleApi(req, res, url) {
     if (runtime.controlPhase !== 'idle') {
       return json(res, 409, { error: 'Ein Steuerungsbefehl läuft bereits.' });
     }
-    runtime.controlPhase = action === 'start' ? 'starting' : action === 'stop' ? 'stopping' : 'restarting';
+    setControlPhase(action === 'start' ? 'starting' : action === 'stop' ? 'stopping' : 'restarting');
     logLine('info', `${me.username} → Server ${action}`);
     audit(db, me.username, `server.${action}`, '', ip);
     try {
@@ -2607,7 +2607,7 @@ async function handleApi(req, res, url) {
       setTimeout(() => forceStatusRefresh().catch(() => {}), 2500);
       return json(res, 200, { ok: true, action, phase: runtime.controlPhase });
     } catch (err) {
-      runtime.controlPhase = 'idle';
+      setControlPhase('idle');
       logLine('bad', `Server-${action} fehlgeschlagen: ${err.message}`);
       return json(res, 500, { error: `Steuerung fehlgeschlagen: ${err.message}` });
     }
