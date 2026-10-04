@@ -112,40 +112,6 @@ export function groupIdentifiers(ids) {
   });
 }
 
-/**
- * Anzeigezeilen: IP-Werte je eigene Zeile (Klick kopiert nur diese IP).
- * Andere Typen bleiben gruppiert.
- */
-export function flattenIdentifierRows(groups) {
-  const rows = [];
-  for (const g of groups || []) {
-    if (g.kind === 'ip') {
-      g.values.forEach((value, idx) => {
-        const v = String(value || '').trim();
-        if (!v) return;
-        rows.push({
-          key: `ip:${idx}:${v}`,
-          kind: 'ip',
-          label: g.label,
-          values: [v],
-          full: v,
-          copyText: formatIdentifierCopy('ip', [v]),
-        });
-      });
-      continue;
-    }
-    rows.push({
-      key: g.kind,
-      kind: g.kind,
-      label: g.label,
-      values: g.values,
-      full: g.full,
-      copyText: g.copyText,
-    });
-  }
-  return rows;
-}
-
 function maskPart(part) {
   const v = String(part || '').trim();
   if (!v) return '••••';
@@ -177,10 +143,15 @@ function FloppyIcon() {
   );
 }
 
+function segmentKey(kind, idx, value) {
+  return `${kind}:${idx}:${value}`;
+}
+
 /**
  * Strukturierte Identifier-Zeilen.
  * Mit mask: Standard zensiert; Hover (CSS) oder Tap/Click toggelt Reveal.
  * Mit copyable: Feldklick kopiert (Disketten-Icon als Hinweis); kein separater Button.
+ * IPs: eine Box, Segmente mit `; ` — Hover/Copy je Segment.
  */
 export default function PlayerIdentifiers({
   ids,
@@ -193,7 +164,15 @@ export default function PlayerIdentifiers({
   copiedLabel = 'Kopiert',
 }) {
   const rows = useMemo(() => {
-    const all = flattenIdentifierRows(groupIdentifiers(ids));
+    const all = groupIdentifiers(ids).map((g) => ({
+      key: g.kind,
+      kind: g.kind,
+      label: g.label,
+      values: g.values,
+      full: g.full,
+      copyText: g.copyText,
+      segmented: g.kind === 'ip',
+    }));
     return maxRows > 0 ? all.slice(0, maxRows) : all;
   }, [ids, maxRows]);
   const [open, setOpen] = useState(() => new Set());
@@ -211,21 +190,21 @@ export default function PlayerIdentifiers({
     });
   }
 
-  async function copyRow(row, e) {
+  async function copyText(key, text, e) {
     e?.preventDefault?.();
     e?.stopPropagation?.();
-    const ok = await writeClipboard(row.copyText);
+    const ok = await writeClipboard(text);
     if (!ok) return;
     if (mask) {
       setOpen((prev) => {
         const next = new Set(prev);
-        next.add(row.key);
+        next.add(key);
         return next;
       });
     }
-    setCopiedKey(row.key);
+    setCopiedKey(key);
     window.setTimeout(() => {
-      setCopiedKey((cur) => (cur === row.key ? '' : cur));
+      setCopiedKey((cur) => (cur === key ? '' : cur));
     }, 1400);
   }
 
@@ -233,10 +212,27 @@ export default function PlayerIdentifiers({
     e.preventDefault();
     e.stopPropagation();
     if (copyable) {
-      copyRow(row, e);
+      copyText(row.key, row.copyText, e);
       return;
     }
     toggle(row.key);
+  }
+
+  function onSegmentActivate(row, idx, value, e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = segmentKey(row.kind, idx, value);
+    const text = formatIdentifierCopy(row.kind, [value]);
+    if (copyable) {
+      copyText(key, text, e);
+      return;
+    }
+    toggle(key);
+  }
+
+  function onSegmentKeyDown(row, idx, value, e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    onSegmentActivate(row, idx, value, e);
   }
 
   return (
@@ -246,29 +242,77 @@ export default function PlayerIdentifiers({
       onKeyDown={(e) => e.stopPropagation()}
     >
       {rows.map((row) => {
+        const isSegmented = row.segmented;
         const shown = !mask || open.has(row.key);
-        const isCopied = copiedKey === row.key;
-        const interactive = mask || copyable;
+        const isCopied = !isSegmented && copiedKey === row.key;
+        const interactive = !isSegmented && (mask || copyable);
         const Tag = interactive ? 'button' : 'div';
+        const anySegCopied = isSegmented && row.values.some((v, i) => copiedKey === segmentKey(row.kind, i, v));
+
         return (
-          <div key={row.key} className={`pl-id-row-wrap${isCopied ? ' is-copied' : ''}`}>
+          <div key={row.key} className={`pl-id-row-wrap${isCopied || anySegCopied ? ' is-copied' : ''}`}>
             <Tag
               type={interactive ? 'button' : undefined}
-              className={`pl-id-row-line${shown ? ' is-open' : ''}${isCopied ? ' is-copied' : ''}`}
+              className={`pl-id-row-line${isSegmented ? ' has-segments' : ''}${shown && !isSegmented ? ' is-open' : ''}${isCopied || anySegCopied ? ' is-copied' : ''}`}
               onClick={interactive ? (e) => onRowActivate(row, e) : undefined}
               title={
-                copyable
-                  ? `${isCopied ? copiedLabel : copyLabel}: ${row.copyText}`
-                  : mask
-                    ? (shown ? row.full : `${row.label}: tippen/hover zum Anzeigen`)
-                    : row.full
+                isSegmented
+                  ? undefined
+                  : copyable
+                    ? `${isCopied ? copiedLabel : copyLabel}: ${row.copyText}`
+                    : mask
+                      ? (shown ? row.full : `${row.label}: tippen/hover zum Anzeigen`)
+                      : row.full
               }
-              aria-pressed={mask ? shown : undefined}
-              aria-label={`${row.label}: ${mask && !shown ? 'zensiert' : row.copyText || row.full}${copyable ? ` — ${copyLabel}` : ''}`}
+              aria-pressed={!isSegmented && mask ? shown : undefined}
+              aria-label={
+                isSegmented
+                  ? row.label
+                  : `${row.label}: ${mask && !shown ? 'zensiert' : row.copyText || row.full}${copyable ? ` — ${copyLabel}` : ''}`
+              }
             >
               <span className="pl-id-kind">{row.label}</span>
               <span className="pl-id-val">
-                {mask ? (
+                {isSegmented ? (
+                  row.values.map((value, idx) => {
+                    const v = String(value || '').trim();
+                    if (!v) return null;
+                    const key = segmentKey(row.kind, idx, v);
+                    const segShown = !mask || open.has(key);
+                    const segCopied = copiedKey === key;
+                    const segInteractive = mask || copyable;
+                    return (
+                      <span key={key} className="pl-id-seg-wrap">
+                        {idx > 0 ? <span className="pl-id-seg-sep" aria-hidden="true">; </span> : null}
+                        <span
+                          role={segInteractive ? 'button' : undefined}
+                          tabIndex={segInteractive ? 0 : undefined}
+                          className={`pl-id-seg${segShown ? ' is-open' : ''}${segCopied ? ' is-copied' : ''}${copyable ? ' is-copyable' : ''}`}
+                          onClick={segInteractive ? (e) => onSegmentActivate(row, idx, v, e) : undefined}
+                          onKeyDown={segInteractive ? (e) => onSegmentKeyDown(row, idx, v, e) : undefined}
+                          title={
+                            copyable
+                              ? `${segCopied ? copiedLabel : copyLabel}: ${formatIdentifierCopy(row.kind, [v])}`
+                              : mask
+                                ? (segShown ? v : `${row.label}: tippen/hover zum Anzeigen`)
+                                : v
+                          }
+                          aria-pressed={mask ? segShown : undefined}
+                          aria-label={`${row.label}: ${mask && !segShown ? 'zensiert' : v}${copyable ? ` — ${copyLabel}` : ''}`}
+                        >
+                          {mask ? (
+                            <>
+                              <span className="pl-id-mask mono">{maskPart(v)}</span>
+                              <span className="pl-id-full mono">{v}</span>
+                            </>
+                          ) : (
+                            <span className="pl-id-full mono is-static">{v}</span>
+                          )}
+                        </span>
+                      </span>
+                    );
+                  })
+                ) : mask ? (
                   <>
                     <span className="pl-id-mask mono">{maskIdentifier(row.full)}</span>
                     <span className="pl-id-full mono">{row.full}</span>
@@ -278,7 +322,7 @@ export default function PlayerIdentifiers({
                 )}
               </span>
               {copyable ? (
-                <span className={`pl-id-floppy${isCopied ? ' is-copied' : ''}`} aria-hidden="true">
+                <span className={`pl-id-floppy${isCopied || anySegCopied ? ' is-copied' : ''}`} aria-hidden="true">
                   <FloppyIcon />
                 </span>
               ) : null}
