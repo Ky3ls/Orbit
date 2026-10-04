@@ -182,7 +182,6 @@
   outline-offset: 2px;
   border-radius: 2px;
 }
-.lc-caret { color: var(--accent); animation: blink 1s steps(1) infinite; margin-top: 6px; }
 .lc-err {
   margin: 0 16px 8px;
   padding: 8px 12px;
