@@ -688,15 +688,6 @@ html[data-theme="light"] .pl-card {
   color: var(--muted);
   font-size: 11px;
 }
-.pl-ban-already {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(196, 60, 60, 0.28);
-  background: rgba(196, 60, 60, 0.08);
-  color: var(--muted);
-  font-size: 13px;
-}
 .pl-ban-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
