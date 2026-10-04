@@ -18,11 +18,12 @@ export function normalizeIdentifiers(raw) {
   const out = [];
   const seen = new Set();
   for (const x of raw) {
-    const id = String(x || '').trim().slice(0, 96);
+    const id = String(x || '').trim().slice(0, 128);
+    // netid: ist nur Session-intern — alle anderen Typen behalten (license*, discord, ip, identifier2, …)
     if (!id || seen.has(id) || id.startsWith('netid:')) continue;
     seen.add(id);
     out.push(id);
-    if (out.length >= 24) break;
+    if (out.length >= 64) break;
   }
   return out;
 }
@@ -59,6 +60,7 @@ export function idLabel(id) {
     live: 'Microsoft',
     ip: 'IP',
     hardware: 'HWID',
+    identifier2: 'identifier2',
   };
   return map[kind] || kind;
 }

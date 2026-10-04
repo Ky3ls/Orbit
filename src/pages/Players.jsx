@@ -644,57 +644,53 @@ export default function Players({ user }) {
         <Empty title={t('players.empty')} text={t('players.emptyText')} />
       ) : (
         <div className="pl-grid">
-          {rows.map((row) => {
-            const idsPreview = playerIds(row);
-            return (
-              <article
-                key={row.identifier}
-                className={`pl-card${row.online ? ' online' : ''}${row.banned ? ' banned' : ''}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => openPlayer(row)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    openPlayer(row);
-                  }
-                }}
-              >
-                <div className="pl-card-top">
-                  <div className="pl-card-identity">
-                    <strong className="pl-card-name">{row.name}</strong>
-                    <div className="pl-card-meta">
-                      {row.online
-                        ? (
-                          <>
-                            <span>ID {row.serverId}</span>
-                            <span className="pl-meta-sep" aria-hidden="true">·</span>
-                            <span>{row.ping ?? 0} ms</span>
-                            <span className="pl-meta-sep" aria-hidden="true">·</span>
-                            <span>{fmtPlaytime(row.play_ms)}</span>
-                          </>
-                        )
-                        : (
-                          <>
-                            <span>{t('status.offline')}</span>
-                            <span className="pl-meta-sep" aria-hidden="true">·</span>
-                            <span>{fmtPlaytime(row.play_ms)}</span>
-                          </>
-                        )}
-                    </div>
-                  </div>
-                  <div className="pl-card-badges">
-                    {row.banned && <Badge tone="bad">Ban</Badge>}
-                    {row.whitelisted && <Badge tone="ok">WL</Badge>}
+          {rows.map((row) => (
+            <article
+              key={row.identifier}
+              className={`pl-card${row.online ? ' online' : ''}${row.banned ? ' banned' : ''}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => openPlayer(row)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openPlayer(row);
+                }
+              }}
+            >
+              <div className="pl-card-top">
+                <div className="pl-card-identity">
+                  <strong className="pl-card-name">{row.name}</strong>
+                  <div className="pl-card-meta">
                     {row.online
-                      ? <span className="pl-status online">{t('status.online')}</span>
-                      : <span className="pl-status">{t('status.offline')}</span>}
+                      ? (
+                        <>
+                          <span>ID {row.serverId}</span>
+                          <span className="pl-meta-sep" aria-hidden="true">·</span>
+                          <span>{row.ping ?? 0} ms</span>
+                          <span className="pl-meta-sep" aria-hidden="true">·</span>
+                          <span>{fmtPlaytime(row.play_ms)}</span>
+                        </>
+                      )
+                      : (
+                        <>
+                          <span>{t('status.offline')}</span>
+                          <span className="pl-meta-sep" aria-hidden="true">·</span>
+                          <span>{fmtPlaytime(row.play_ms)}</span>
+                        </>
+                      )}
                   </div>
                 </div>
-                <PlayerIdentifiers ids={idsPreview} compact maxRows={5} mask />
-              </article>
-            );
-          })}
+                <div className="pl-card-badges">
+                  {row.banned && <Badge tone="bad">Ban</Badge>}
+                  {row.whitelisted && <Badge tone="ok">WL</Badge>}
+                  {row.online
+                    ? <span className="pl-status online">{t('status.online')}</span>
+                    : <span className="pl-status">{t('status.offline')}</span>}
+                </div>
+              </div>
+            </article>
+          ))}
         </div>
       )}
 
@@ -848,7 +844,7 @@ export default function Players({ user }) {
                 ids.length === 0 ? (
                   <p className="muted">{t('players.noIds')}</p>
                 ) : (
-                  <PlayerIdentifiers ids={ids} mask={false} className="pl-ids-sheet" />
+                  <PlayerIdentifiers ids={ids} mask className="pl-ids-sheet" />
                 )
               )}
 
