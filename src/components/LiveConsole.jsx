@@ -66,14 +66,19 @@ export default function LiveConsole({
   const [history, setHistory] = useState([]);
   const [histIdx, setHistIdx] = useState(-1);
   const box = useRef(null);
+  const endRef = useRef(null);
   const drag = useRef(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const stick = useRef(true);
+  /** true während programmatischem Scroll → onScroll darf Auto nicht ausknipsen */
+  const progScrollRef = useRef(false);
+  const scrollRafRef = useRef(0);
   const inputRef = useRef(null);
   const consoleBuf = useRef([]);
   const consoleRaf = useRef(0);
   /** true = offline bestätigt → keine (Alt-)Logs annehmen */
   const suppressLogsRef = useRef(false);
+  const wasLiveRef = useRef(false);
 
   /** FX läuft / startet — sonst Konsole leer halten (keine Alt-Logs). */
   const consoleLive = !!(
@@ -92,6 +97,36 @@ export default function LiveConsole({
     setLines([]);
   }
 
+  function scrollToEnd() {
+    const el = box.current;
+    if (!el) return;
+    progScrollRef.current = true;
+    if (endRef.current) {
+      endRef.current.scrollIntoView({ block: 'end', behavior: 'auto' });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+    // nach Layout nochmal anheften (Burst/Start), Flag danach freigeben
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+    scrollRafRef.current = requestAnimationFrame(() => {
+      if (endRef.current) {
+        endRef.current.scrollIntoView({ block: 'end', behavior: 'auto' });
+      } else if (box.current) {
+        box.current.scrollTop = box.current.scrollHeight;
+      }
+      scrollRafRef.current = requestAnimationFrame(() => {
+        progScrollRef.current = false;
+        scrollRafRef.current = 0;
+      });
+    });
+  }
+
+  function enableAutoScroll() {
+    stick.current = true;
+    setAutoScroll(true);
+    scrollToEnd();
+  }
+
   useEffect(() => {
     if (!active) return;
     api('/api/servers').then((d) => setTargets(d.servers || [])).catch(() => {});
@@ -108,10 +143,15 @@ export default function LiveConsole({
     if (!fx.ready) return;
     if (consoleLive) {
       suppressLogsRef.current = false;
+      // Offline→Online: Auto wieder an (User hatte Sticky-Bottom-Modus)
+      if (!wasLiveRef.current) enableAutoScroll();
+      wasLiveRef.current = true;
       return;
     }
+    wasLiveRef.current = false;
     suppressLogsRef.current = true;
     wipeConsole();
+    enableAutoScroll();
   }, [fx.ready, consoleLive]);
 
   useEffect(() => {
@@ -119,6 +159,7 @@ export default function LiveConsole({
     const es = new EventSource('/api/stream');
     es.addEventListener('console_clear', () => {
       wipeConsole();
+      enableAutoScroll();
     });
     es.addEventListener('console', (e) => {
       if (suppressLogsRef.current) return;
@@ -136,7 +177,11 @@ export default function LiveConsole({
         }
         const batch = consoleBuf.current;
         consoleBuf.current = [];
-        if (batch.length) setLines((prev) => mergeLines(prev, batch));
+        if (batch.length) {
+          // Flag schon vor Commit setzen — sonst kann onScroll zwischen Paint und Effect greifen
+          if (stick.current) progScrollRef.current = true;
+          setLines((prev) => mergeLines(prev, batch));
+        }
       });
     });
     es.onerror = () => {};
@@ -144,6 +189,9 @@ export default function LiveConsole({
       es.close();
       consoleRaf.current = 0;
       consoleBuf.current = [];
+      if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = 0;
+      progScrollRef.current = false;
     };
   }, [active]);
 
@@ -157,9 +205,10 @@ export default function LiveConsole({
   }, [autoScroll]);
 
   useEffect(() => {
-    if (active && stick.current && box.current) {
-      box.current.scrollTop = box.current.scrollHeight;
-    }
+    if (!active || !stick.current) return undefined;
+    progScrollRef.current = true;
+    scrollToEnd();
+    return undefined;
   }, [visible, active, autoScroll]);
 
   useEffect(() => {
@@ -209,22 +258,39 @@ export default function LiveConsole({
   }
 
   function onScroll() {
+    // Programmatisches Scrollen (Append/Burst) darf Auto nie deaktivieren
+    if (progScrollRef.current) return;
     const el = box.current;
     if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-    stick.current = atBottom;
-    setAutoScroll((prev) => (prev === atBottom ? prev : atBottom));
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = gap < 80;
+    if (!atBottom) {
+      // Nur User-Scroll nach oben → Auto aus
+      if (stick.current) {
+        stick.current = false;
+        setAutoScroll(false);
+      }
+      return;
+    }
+    // Zurück am Ende → Auto wieder an
+    if (!stick.current) {
+      stick.current = true;
+      setAutoScroll(true);
+    }
   }
 
   function toggleAutoScroll() {
     setAutoScroll((prev) => {
       const next = !prev;
       stick.current = next;
-      if (next && box.current) {
-        box.current.scrollTop = box.current.scrollHeight;
-      }
+      if (next) scrollToEnd();
       return next;
     });
+  }
+
+  function clearLines() {
+    wipeConsole();
+    enableAutoScroll();
   }
 
   function onKeyDown(e) {
@@ -315,21 +381,21 @@ export default function LiveConsole({
               <button type="button" className="btn btn-sm" onClick={onClose}>{t('common.close')}</button>
             </>
           )}
+          {variant !== 'cockpit' && (
+            <button type="button" className="btn btn-sm lc-action-btn" onClick={clearLines}>{t('console.clear')}</button>
+          )}
+          {variant === 'cockpit' && (
+            <button type="button" className="btn btn-sm lc-action-btn" onClick={clearLines}>{t('console.clr')}</button>
+          )}
           <button
             type="button"
-            className={`btn btn-sm lc-auto${autoScroll ? ' on' : ''}`}
+            className={`btn btn-sm lc-action-btn lc-auto${autoScroll ? ' on' : ''}`}
             onClick={toggleAutoScroll}
             aria-pressed={autoScroll}
             title={autoScroll ? t('console.autoOn') : t('console.autoOff')}
           >
             {t('console.auto')}
           </button>
-          {variant !== 'cockpit' && (
-            <button type="button" className="btn btn-sm" onClick={() => setLines([])}>{t('console.clear')}</button>
-          )}
-          {variant === 'cockpit' && (
-            <button type="button" className="btn btn-sm" onClick={() => setLines([])}>{t('console.clr')}</button>
-          )}
         </div>
       </header>
       <div className="lc-term" ref={box} onScroll={onScroll}>
@@ -352,7 +418,10 @@ export default function LiveConsole({
           </div>
         ))}
         {(consoleLive || !fx.ready) && visible.length > 0 && (
-          <div className="lc-caret" aria-hidden="true">▌</div>
+          <div className="lc-caret" ref={endRef} aria-hidden="true">▌</div>
+        )}
+        {(consoleLive || !fx.ready) && visible.length === 0 && (
+          <div ref={endRef} aria-hidden="true" style={{ height: 0, overflow: 'hidden' }} />
         )}
       </div>
       {err && <div className="lc-err">{err}</div>}

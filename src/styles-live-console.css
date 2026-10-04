@@ -99,13 +99,19 @@
 }
 .lc-chip:hover:not(:disabled) { color: #fff; border-color: rgba(var(--accent-rgb), 0.35); }
 .lc-chip:disabled { opacity: 0.4; cursor: not-allowed; }
-.lc-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.lc-actions .lc-auto {
+.lc-actions { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.lc-actions .lc-action-btn {
   font-family: var(--mono);
-  font-weight: 700;
+  font-weight: 650;
+  font-size: 11px;
   letter-spacing: 0.02em;
   min-width: 0;
-  padding: 7px 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+.lc-actions .lc-auto {
+  font-weight: 700;
 }
 .lc-actions .lc-auto.on {
   color: #fff;
