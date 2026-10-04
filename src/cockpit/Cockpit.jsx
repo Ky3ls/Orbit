@@ -75,8 +75,6 @@ export default function Cockpit() {
             <p className="ck-meta">
               {fxModeShort(fx.fxControlMode)}
               {online && state?.onlineSince ? ` · ${fmtUptime(state.onlineSince)}` : ''}
-              {' · '}
-              {fx.fxCommandReady ? 'FX LINK OK' : 'FX LINK DOWN'}
             </p>
           </div>
           <OrbitRing value={clients} max={maxClients} online={online} />
