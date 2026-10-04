@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { fxModeShort } from '../fxMeta.js';
 import { CATALOG } from '../i18n/catalog.js';
@@ -66,8 +65,6 @@ export default function ServerControls({
     }
   }
 
-  const hintMode = fxControlMode === 'orbit' ? t('ctl.hintOrbit') : t('ctl.hintRcon');
-
   return (
     <div className={`srv-ctl${compact ? ' compact' : ''}`}>
       <div className={`srv-badge tone-${statusTone(status)}`}>
@@ -75,24 +72,6 @@ export default function ServerControls({
         {t(STATUS_KEYS[status] || STATUS_KEYS.offline)}
         <em className="srv-mode">{fxModeShort(fxControlMode)}</em>
       </div>
-      {!fxCommandReady && status === 'online' && (
-        <p className="srv-hint muted">
-          {t('ctl.hintPrefix')}: {hintMode}
-          {fxControlMode === 'orbit' ? (
-            <>
-              {' — '}
-              {t('ctl.hintReattach')}
-              {' · '}
-              <Link to="/settings">{t('ctl.setup')}</Link>
-            </>
-          ) : (
-            <>
-              {' — '}
-              <Link to="/settings">{t('ctl.setup')}</Link>
-            </>
-          )}
-        </p>
-      )}
       {canControl && (
         <div className="srv-actions" role="group" aria-label={t('shell.serverControls')}>
           <button
