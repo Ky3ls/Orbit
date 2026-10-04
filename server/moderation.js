@@ -4,8 +4,6 @@
 import { normalizeIdentifiers, primaryId, mergeIdLists } from './playerIdentity.js';
 
 const DURATION_PRESETS = [
-  { id: '2h', label: '2 Stunden', ms: 2 * 3600_000 },
-  { id: '8h', label: '8 Stunden', ms: 8 * 3600_000 },
   { id: '1d', label: '1 Tag', ms: 24 * 3600_000 },
   { id: '2d', label: '2 Tage', ms: 2 * 24 * 3600_000 },
   { id: '7d', label: '7 Tage', ms: 7 * 24 * 3600_000 },
@@ -14,8 +12,26 @@ const DURATION_PRESETS = [
   { id: 'perm', label: 'Permanent', ms: 0 },
 ];
 
+const UNIT_MS = {
+  h: 3600_000,
+  hours: 3600_000,
+  d: 24 * 3600_000,
+  days: 24 * 3600_000,
+  w: 7 * 24 * 3600_000,
+  weeks: 7 * 24 * 3600_000,
+};
+
 export function banDurationPresets() {
   return DURATION_PRESETS;
+}
+
+/** Flex-IDs wie 12h / 3d / 2w (Custom + Legacy-Vorlagen). */
+function flexDurationMs(durationId) {
+  const m = /^(\d{1,4})(h|d|w)$/i.exec(String(durationId || '').trim());
+  if (!m) return null;
+  const amount = Math.max(1, Math.min(9999, Number(m[1]) || 0));
+  const mult = UNIT_MS[m[2].toLowerCase()];
+  return amount * mult;
 }
 
 export function resolveBanExpiry(durationId, customAmount, customUnit) {
@@ -23,11 +39,11 @@ export function resolveBanExpiry(durationId, customAmount, customUnit) {
   if (preset) {
     return preset.ms === 0 ? null : Date.now() + preset.ms;
   }
+  const flexMs = flexDurationMs(durationId);
+  if (flexMs != null) return Date.now() + flexMs;
   const amount = Math.max(1, Math.min(9999, Number(customAmount) || 0));
-  const unit = String(customUnit || 'days').toLowerCase();
-  const mult = unit === 'hours' || unit === 'h' ? 3600_000
-    : unit === 'weeks' || unit === 'w' ? 7 * 24 * 3600_000
-    : 24 * 3600_000;
+  const unit = String(customUnit || 'hours').toLowerCase();
+  const mult = UNIT_MS[unit] || UNIT_MS.hours;
   return Date.now() + amount * mult;
 }
 
