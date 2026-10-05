@@ -2457,6 +2457,7 @@ async function handleApi(req, res, url) {
     try {
       syncActiveCfgPath(settingMap(db));
       const fileParam = str(url.searchParams.get('file') || '', 240);
+      const reveal = url.searchParams.get('reveal') === '1' || url.searchParams.get('reveal') === 'true';
       const parsed = fileParam ? readCfgFile(fileParam) : readCfg();
       const rel = parsed.rel || path.basename(parsed.path);
       const isPrimary = !!parsed.primary;
@@ -2466,7 +2467,8 @@ async function handleApi(req, res, url) {
         writable = true;
       } catch { writable = false; }
       return json(res, 200, {
-        content: redactCfg(parsed.raw),
+        content: reveal ? parsed.raw : redactCfg(parsed.raw),
+        revealed: !!reveal,
         path: parsed.path,
         file: rel,
         primary: isPrimary,

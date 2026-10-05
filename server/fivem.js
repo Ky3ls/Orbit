@@ -248,16 +248,37 @@ export function createCfgFile(relOrName, text, opts = {}) {
   return { full, rel, created: !exists, overwritten: exists && overwrite };
 }
 
-const SECRET_RE = /^(sv_licenseKey|set\s+steam_webApiKey|set\s+mysql_connection_string|rcon_password|set\s+sv_tebexSecret)\b/i;
+const SECRET_RE = /^(?:set\s+)?(?:sv_licenseKey|steam_webApiKey|mysql_connection_string|rcon_password|sv_tebexSecret)\b/i;
+
+/** Werte in identifier.TYPE:VALUE und license:HEX zensieren. */
+function redactIdentifiersInLine(line) {
+  return String(line || '')
+    .replace(/\bidentifier\.([a-z0-9_]+):([^\s#"']+)/gi, (_, type, val) => {
+      const n = Math.min(12, Math.max(4, String(val).length));
+      return `identifier.${type}:${'•'.repeat(n)}`;
+    })
+    .replace(/\blicense:([a-f0-9]{8,})/gi, (_, val) => {
+      const n = Math.min(12, Math.max(4, String(val).length));
+      return `license:${'•'.repeat(n)}`;
+    });
+}
+
+function secretLinePrefix(trimmed) {
+  const parts = trimmed.split(/\s+/);
+  if (parts[0]?.toLowerCase() === 'set' && parts[1]) return `set ${parts[1]}`.toLowerCase();
+  return (parts[0] || '').toLowerCase();
+}
 
 export function redactCfg(text) {
   return String(text || '').split('\n').map((line) => {
     const t = line.trim();
     if (SECRET_RE.test(t)) {
-      const key = t.split(/\s+/)[0] === 'set' ? t.split(/\s+/).slice(0, 2).join(' ') : t.split(/\s+/)[0];
+      const key = t.split(/\s+/)[0]?.toLowerCase() === 'set'
+        ? t.split(/\s+/).slice(0, 2).join(' ')
+        : t.split(/\s+/)[0];
       return `${key} "••••••••"`;
     }
-    return line;
+    return redactIdentifiersInLine(line);
   }).join('\n');
 }
 
@@ -268,15 +289,29 @@ export function mergeCfgSecrets(original, edited) {
   for (const line of origLines) {
     const t = line.trim();
     if (SECRET_RE.test(t)) {
-      const prefix = t.split(/\s+/)[0] === 'set' ? t.split(/\s+/).slice(0, 2).join(' ').toLowerCase() : t.split(/\s+/)[0].toLowerCase();
-      secretByPrefix.set(prefix, line);
+      secretByPrefix.set(secretLinePrefix(t), line);
     }
   }
-  return editLines.map((line) => {
+  return editLines.map((line, i) => {
     const t = line.trim();
-    if (!SECRET_RE.test(t) && !/••••/.test(t)) return line;
-    const prefix = t.split(/\s+/)[0] === 'set' ? t.split(/\s+/).slice(0, 2).join(' ').toLowerCase() : t.split(/\s+/)[0].toLowerCase();
-    return secretByPrefix.get(prefix) || line.replace(/••••+/g, 'REMOVED');
+    if (SECRET_RE.test(t) || (/•{2,}/.test(t) && SECRET_RE.test(t.replace(/•+/g, 'x')))) {
+      const prefix = secretLinePrefix(t);
+      if (secretByPrefix.has(prefix)) return secretByPrefix.get(prefix);
+    }
+    // Zensierte Identifier-Zeilen: Original gleicher Index wiederherstellen
+    if (/•{2,}/.test(line) && i < origLines.length) {
+      const orig = origLines[i];
+      const redOrig = redactCfg(orig);
+      const norm = (s) => s.replace(/•+/g, '•').replace(/\s+/g, ' ').trim();
+      if (norm(redOrig) === norm(line)) return orig;
+      if (/identifier\./i.test(orig) && /identifier\./i.test(line)) return orig;
+      if (/\blicense:[a-f0-9•]/i.test(orig) && /\blicense:/i.test(line)) return orig;
+    }
+    if (/•{2,}/.test(line) && SECRET_RE.test(t.replace(/"+/g, '"x"'))) {
+      const prefix = secretLinePrefix(t);
+      return secretByPrefix.get(prefix) || line.replace(/•+/g, 'REMOVED');
+    }
+    return line;
   }).join('\n');
 }
 
