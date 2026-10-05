@@ -55,14 +55,24 @@ export default function Admins() {
     setCreateOpen(true);
   }
 
+  function allPermIds() {
+    return catalog.all?.length
+      ? [...catalog.all]
+      : (catalog.groups || []).flatMap((g) => (g.permissions || []).map((p) => p.id));
+  }
+
   function openEdit(user) {
     setErr('');
     setEdit(user);
+    const raw = [...(user.permissions || [])];
+    const hasStar = raw.includes('*') || raw.includes('all_permissions');
     setForm({
       username: user.username,
       password: '',
-      role: user.role === 'owner' ? 'owner' : user.role,
-      permissions: [...(user.permissions || [])].filter((p) => p !== '*'),
+      role: user.role === 'owner' ? 'owner' : (hasStar ? 'custom' : user.role),
+      permissions: hasStar
+        ? allPermIds()
+        : raw.filter((p) => p !== '*'),
       cfxName: user.cfx_name || '',
       discordId: user.discord_id || '',
     });
@@ -80,8 +90,29 @@ export default function Admins() {
 
   function togglePerm(id) {
     setForm((f) => {
+      const ids = allPermIds();
+      if (id === 'all_permissions') {
+        const on = f.permissions.includes('all_permissions');
+        return {
+          ...f,
+          role: 'custom',
+          permissions: on ? [] : ids,
+        };
+      }
+      if (f.permissions.includes('all_permissions')) {
+        // Einzelrecht abwählen → Alle-Rechte aufheben, Rest behalten
+        const permissions = ids.filter((p) => p !== 'all_permissions' && p !== id);
+        return { ...f, role: 'custom', permissions };
+      }
       const has = f.permissions.includes(id);
-      const permissions = has ? f.permissions.filter((p) => p !== id) : [...(f.permissions), id];
+      let permissions = has
+        ? f.permissions.filter((p) => p !== id)
+        : [...f.permissions, id];
+      // Wenn alle Einzelrechte gesetzt sind → Alle-Rechte syncen
+      const singles = ids.filter((p) => p !== 'all_permissions');
+      if (singles.length && singles.every((p) => permissions.includes(p))) {
+        permissions = ids;
+      }
       return { ...f, role: 'custom', permissions };
     });
   }
@@ -135,6 +166,7 @@ export default function Admins() {
   );
 
   const permGroups = catalog.groups || [];
+  const hasAllPerms = form.permissions.includes('all_permissions');
 
   return (
     <Page>
@@ -304,20 +336,26 @@ export default function Admins() {
                   <fieldset key={g.id} className="tm-perm-group">
                     <legend>{groupLabel(t, g.id, g.label)}</legend>
                     <div className="tm-perm-grid">
-                      {g.permissions.map((perm) => (
-                        <label
-                          key={perm.id}
-                          className={`tm-perm${perm.sensitive ? ' sensitive' : ''}`}
-                          title={perm.id}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={form.permissions.includes(perm.id)}
-                            onChange={() => togglePerm(perm.id)}
-                          />
-                          <span>{permLabel(t, perm.id, perm.label)}</span>
-                        </label>
-                      ))}
+                      {g.permissions.map((perm) => {
+                        const isAll = perm.id === 'all_permissions';
+                        const locked = hasAllPerms && !isAll;
+                        const checked = hasAllPerms || form.permissions.includes(perm.id);
+                        return (
+                          <label
+                            key={perm.id}
+                            className={`tm-perm${perm.sensitive ? ' sensitive' : ''}${locked ? ' is-locked' : ''}`}
+                            title={perm.id}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={locked}
+                              onChange={() => togglePerm(perm.id)}
+                            />
+                            <span>{permLabel(t, perm.id, perm.label)}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </fieldset>
                 ))}
