@@ -383,107 +383,101 @@ export default function Admins({ user: me }) {
           title={createOpen ? t('team.createTitle') : t('team.editTitle', { name: edit?.username })}
           onClose={closeForm}
           wide
-          aside={(
-            <aside className="tm-identity-aside" aria-label={t('team.identity')}>
-              <h4 className="tm-form-col-title">{t('team.identity')}</h4>
-              {createOpen && (
-                <label className="field">
-                  <span>{t('team.username')} <em className="req">{t('common.required')}</em></span>
-                  <input
-                    form="tm-user-form"
-                    required
-                    value={form.username}
-                    onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    placeholder={t('team.usernamePh')}
-                    autoComplete="off"
-                  />
-                </label>
-              )}
-              {!createOpen && (
-                <label className="field">
-                  <span>{t('team.newPassword')}</span>
-                  <input
-                    form="tm-user-form"
-                    type="text"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={t('team.pwPhEdit')}
-                  />
-                </label>
-              )}
-              <label className="field">
-                <span>{t('team.cfx')}</span>
-                <input
-                  form="tm-user-form"
-                  value={form.cfxName || ''}
-                  onChange={(e) => setForm({ ...form, cfxName: e.target.value })}
-                  placeholder={t('team.cfxPh')}
-                />
-              </label>
-              <label className="field">
-                <span>{t('team.discord')}</span>
-                <input
-                  form="tm-user-form"
-                  value={form.discordId || ''}
-                  onChange={(e) => setForm({ ...form, discordId: e.target.value })}
-                  placeholder={t('team.discordPh')}
-                />
-              </label>
-              <label className="field">
-                <span>{t('team.role')}</span>
-                <select
-                  form="tm-user-form"
-                  value={form.role === 'custom' ? 'custom' : form.role}
-                  onChange={(e) => applyRoleTemplate(e.target.value)}
-                >
-                  <option value="moderator">{t('role.mod')}</option>
-                  <option value="admin">{t('role.admin')}</option>
-                  <option value="custom">{t('role.custom')}</option>
-                </select>
-              </label>
-            </aside>
-          )}
         >
-          <form id="tm-user-form" className="tm-form" onSubmit={createOpen ? create : saveEdit}>
+          <form className="tm-form" onSubmit={createOpen ? create : saveEdit}>
             {err && <div className="err">{err}</div>}
-            <div className="tm-perms">
-              <h4 className="tm-form-col-title">{t('team.perms')}</h4>
-              <p className="tm-perms-hint muted">{t('team.permsHint')}</p>
-              <div className="tm-perms-body">
-                {permGroups.map((g) => (
-                  <fieldset key={g.id} className="tm-perm-group">
-                    <legend>{groupLabel(t, g.id, g.label)}</legend>
-                    <div className="tm-perm-grid">
-                      {(g.permissions || []).map((perm) => {
-                        const isAll = perm.id === 'all_permissions';
-                        const locked = hasAllPerms && !isAll;
-                        const checked = hasAllPerms || form.permissions.includes(perm.id);
-                        return (
-                          <label
-                            key={perm.id}
-                            className={`tm-perm${perm.sensitive ? ' sensitive' : ''}${locked ? ' is-locked' : ''}`}
-                            title={perm.id}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={locked}
-                              onChange={() => togglePerm(perm.id)}
-                            />
-                            <span>{permLabel(t, perm.id, perm.label)}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
-                ))}
+            <div className="tm-split">
+              <div className="tm-identity" aria-label={t('team.identity')}>
+                <h4 className="tm-form-col-title">{t('team.identity')}</h4>
+                {createOpen && (
+                  <label className="field">
+                    <span>{t('team.username')} <em className="req">{t('common.required')}</em></span>
+                    <input
+                      required
+                      value={form.username}
+                      onChange={(e) => setForm({ ...form, username: e.target.value })}
+                      placeholder={t('team.usernamePh')}
+                      autoComplete="off"
+                    />
+                  </label>
+                )}
+                {!createOpen && (
+                  <label className="field">
+                    <span>{t('team.newPassword')}</span>
+                    <input
+                      type="text"
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      placeholder={t('team.pwPhEdit')}
+                    />
+                  </label>
+                )}
+                <label className="field">
+                  <span>{t('team.cfx')}</span>
+                  <input
+                    value={form.cfxName || ''}
+                    onChange={(e) => setForm({ ...form, cfxName: e.target.value })}
+                    placeholder={t('team.cfxPh')}
+                  />
+                </label>
+                <label className="field">
+                  <span>{t('team.discord')}</span>
+                  <input
+                    value={form.discordId || ''}
+                    onChange={(e) => setForm({ ...form, discordId: e.target.value })}
+                    placeholder={t('team.discordPh')}
+                  />
+                </label>
+                <label className="field">
+                  <span>{t('team.role')}</span>
+                  <select
+                    value={form.role === 'custom' ? 'custom' : form.role}
+                    onChange={(e) => applyRoleTemplate(e.target.value)}
+                  >
+                    <option value="moderator">{t('role.mod')}</option>
+                    <option value="admin">{t('role.admin')}</option>
+                    <option value="custom">{t('role.custom')}</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="tm-perms" aria-label={t('team.perms')}>
+                <h4 className="tm-form-col-title">{t('team.perms')}</h4>
+                <p className="tm-perms-hint muted">{t('team.permsHint')}</p>
+                <div className="tm-perms-body">
+                  {permGroups.map((g) => (
+                    <fieldset key={g.id} className="tm-perm-group">
+                      <legend>{groupLabel(t, g.id, g.label)}</legend>
+                      <div className="tm-perm-grid">
+                        {(g.permissions || []).map((perm) => {
+                          const isAll = perm.id === 'all_permissions';
+                          const locked = hasAllPerms && !isAll;
+                          const checked = hasAllPerms || form.permissions.includes(perm.id);
+                          return (
+                            <label
+                              key={perm.id}
+                              className={`tm-perm${perm.sensitive ? ' sensitive' : ''}${locked ? ' is-locked' : ''}`}
+                              title={perm.id}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={locked}
+                                onChange={() => togglePerm(perm.id)}
+                              />
+                              <span>{permLabel(t, perm.id, perm.label)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </fieldset>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="tm-form-actions row">
-              <button type="button" className="btn" onClick={closeForm} disabled={busy}>
-                {t('common.cancel')}
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={busy}>
+
+            <div className="tm-form-actions">
+              <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
                 {createOpen ? t('common.create') : t('common.save')}
               </button>
             </div>
