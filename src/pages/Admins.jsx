@@ -35,6 +35,8 @@ export default function Admins() {
   const [createOpen, setCreateOpen] = useState(false);
   const [edit, setEdit] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [createdCreds, setCreatedCreds] = useState(null);
+  const [pwCopied, setPwCopied] = useState(false);
 
   function load() {
     api('/api/admins')
@@ -122,11 +124,10 @@ export default function Admins() {
     setBusy(true);
     setErr('');
     try {
-      await api('/api/admins', {
+      const res = await api('/api/admins', {
         method: 'POST',
         body: {
           username: form.username,
-          password: form.password,
           role: form.role === 'custom' ? 'custom' : form.role,
           permissions: form.role === 'custom' ? form.permissions : undefined,
           cfxName: form.cfxName || undefined,
@@ -135,9 +136,24 @@ export default function Admins() {
       });
       setCreateOpen(false);
       setForm(EMPTY_FORM);
+      if (res.password) {
+        setCreatedCreds({ username: res.username || form.username, password: res.password });
+        setPwCopied(false);
+      }
       load();
     } catch (error) { setErr(error.message); }
     setBusy(false);
+  }
+
+  async function copyCreatedPassword() {
+    if (!createdCreds?.password) return;
+    try {
+      await navigator.clipboard.writeText(createdCreds.password);
+      setPwCopied(true);
+      window.setTimeout(() => setPwCopied(false), 2000);
+    } catch {
+      setErr(t('team.pwCopyFail'));
+    }
   }
 
   async function saveEdit(e) {
@@ -268,29 +284,33 @@ export default function Admins() {
             <aside className="tm-identity-aside" aria-label={t('team.identity')}>
               <h4 className="tm-form-col-title">{t('team.identity')}</h4>
               {createOpen && (
+                <>
+                  <label className="field">
+                    <span>{t('team.username')}</span>
+                    <input
+                      form="tm-user-form"
+                      required
+                      value={form.username}
+                      onChange={(e) => setForm({ ...form, username: e.target.value })}
+                      placeholder={t('team.usernamePh')}
+                    />
+                  </label>
+                  <p className="tm-pw-auto muted">{t('team.pwAutoHint')}</p>
+                </>
+              )}
+              {!createOpen && (
                 <label className="field">
-                  <span>{t('team.username')}</span>
+                  <span>{t('team.newPassword')}</span>
                   <input
                     form="tm-user-form"
-                    required
-                    value={form.username}
-                    onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    placeholder={t('team.usernamePh')}
+                    type="text"
+                    minLength={0}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder={t('team.pwPhEdit')}
                   />
                 </label>
               )}
-              <label className="field">
-                <span>{createOpen ? t('team.password') : t('team.newPassword')}</span>
-                <input
-                  form="tm-user-form"
-                  type="text"
-                  required={createOpen}
-                  minLength={createOpen ? 6 : 0}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder={createOpen ? t('team.pwPhCreate') : t('team.pwPhEdit')}
-                />
-              </label>
               <label className="field">
                 <span>{t('team.cfx')}</span>
                 <input
@@ -368,6 +388,30 @@ export default function Admins() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {createdCreds && (
+        <Modal
+          title={t('team.pwRevealTitle')}
+          onClose={() => setCreatedCreds(null)}
+        >
+          <p className="muted">{t('team.pwRevealHint')}</p>
+          <p className="tm-pw-reveal-user">
+            <strong>{createdCreds.username}</strong>
+          </p>
+          <div className="tm-pw-reveal-row">
+            <code className="tm-pw-reveal-value mono">{createdCreds.password}</code>
+            <button type="button" className="btn btn-primary" onClick={copyCreatedPassword}>
+              {pwCopied ? t('common.copied') : t('common.copy')}
+            </button>
+          </div>
+          <p className="tm-pw-reveal-foot muted">{t('team.pwRevealFoot')}</p>
+          <div className="tm-form-actions row">
+            <button type="button" className="btn btn-primary" onClick={() => setCreatedCreds(null)}>
+              {t('common.close')}
+            </button>
+          </div>
         </Modal>
       )}
     </Page>

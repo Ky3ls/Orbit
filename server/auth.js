@@ -45,6 +45,17 @@ export function passwordOk(password) {
   return true;
 }
 
+const GENERATED_PW_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+/** Einmal-Passwort für neue Team-Accounts (URL-sicher, mind. 6 Zeichen). */
+export function generatePassword(length = 16) {
+  const n = Math.max(6, Math.min(32, length));
+  const bytes = crypto.randomBytes(n);
+  let out = '';
+  for (let i = 0; i < n; i += 1) out += GENERATED_PW_CHARS[bytes[i] % GENERATED_PW_CHARS.length];
+  return out;
+}
+
 export function userOk(username) {
   return typeof username === 'string' && /^[a-zA-Z0-9._-]{3,24}$/.test(username);
 }
