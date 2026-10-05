@@ -55,6 +55,8 @@ export default function CfgEditor() {
   const [newName, setNewName] = useState('');
   const [newTemplate, setNewTemplate] = useState('minimal');
   const [creating, setCreating] = useState(false);
+  const [showSecrets, setShowSecrets] = useState(false);
+  const [secretsBusy, setSecretsBusy] = useState(false);
 
   const taRef = useRef(null);
   const searchRef = useRef(null);
@@ -78,16 +80,20 @@ export default function CfgEditor() {
     return d.files || [];
   }, []);
 
-  const loadFile = useCallback(async (rel, { soft } = {}) => {
+  const loadFile = useCallback(async (rel, { soft, reveal } = {}) => {
     if (!soft) setLoading(true);
     setErr('');
     setMsg('');
     try {
-      const q = rel ? `?file=${encodeURIComponent(rel)}` : '';
+      const params = new URLSearchParams();
+      if (rel) params.set('file', rel);
+      if (reveal) params.set('reveal', '1');
+      const q = params.toString() ? `?${params}` : '';
       const d = await api(`/api/cfg${q}`);
       setContent(d.content || '');
       setMeta(d);
       setActiveFile(d.file || rel || 'server.cfg');
+      setShowSecrets(!!d.revealed);
       setDirty(false);
       setMatchIdx(0);
     } catch (e) {
@@ -96,6 +102,20 @@ export default function CfgEditor() {
       setLoading(false);
     }
   }, []);
+
+  async function toggleSecrets() {
+    if (secretsBusy || loading) return;
+    if (dirty && !window.confirm(t('cfg.secretsDirty'))) return;
+    setSecretsBusy(true);
+    setErr('');
+    try {
+      await loadFile(activeFile, { soft: true, reveal: !showSecrets });
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSecretsBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -129,7 +149,7 @@ export default function CfgEditor() {
       const list = await loadList();
       const stillThere = list.find((f) => f.rel === activeFile);
       const next = stillThere?.rel || list.find((f) => f.primary)?.rel || list[0]?.rel || '';
-      await loadFile(next);
+      await loadFile(next, { reveal: showSecrets });
     } catch (e) {
       setErr(e.message);
     }
@@ -138,7 +158,7 @@ export default function CfgEditor() {
   async function selectFile(rel) {
     if (rel === activeFile) return;
     if (dirty && !window.confirm(t('cfg.discard'))) return;
-    await loadFile(rel);
+    await loadFile(rel, { reveal: showSecrets });
   }
 
   function openCreate() {
@@ -421,6 +441,29 @@ export default function CfgEditor() {
               </div>
             )}
             <div className="cfg-toolbar-actions">
+              <button
+                type="button"
+                className={`o-icon-btn${showSecrets ? ' is-on' : ''}`}
+                title={showSecrets ? t('cfg.hideSecrets') : t('cfg.showSecrets')}
+                aria-label={showSecrets ? t('cfg.hideSecrets') : t('cfg.showSecrets')}
+                aria-pressed={showSecrets}
+                disabled={secretsBusy || loading}
+                onClick={toggleSecrets}
+              >
+                {showSecrets ? (
+                  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-5 0-9.27-3-11-8 1.02-2.95 2.94-5.1 5.24-6.28" />
+                    <path d="M1 1l22 22" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c5 0 9.27 3 11 8a11.5 11.5 0 0 1-2.16 3.19" />
+                    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving || !dirty}>
                 {saving ? t('cfg.saving') : t('common.save')}
               </button>
