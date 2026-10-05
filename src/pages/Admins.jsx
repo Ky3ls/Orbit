@@ -435,11 +435,6 @@ export default function Admins({ user: me }) {
         eyebrow={t('team.eyebrow')}
         title={t('page.admins')}
         description={t('team.desc')}
-        actions={(
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            {t('team.newUser')}
-          </button>
-        )}
       />
       {err && !formOpen && !tplOpen && !createdCreds && <div className="err">{err}</div>}
 
@@ -450,7 +445,18 @@ export default function Admins({ user: me }) {
               <h3>{t('team.members')}</h3>
               <p className="muted">{t('team.membersHint')}</p>
             </div>
-            <Badge tone="info">{members.length}</Badge>
+            <div className="tm-tpl-actions">
+              <button
+                type="button"
+                className="tm-icon-btn"
+                title={t('team.newUser')}
+                aria-label={t('team.newUser')}
+                onClick={openCreate}
+              >
+                <PlusIcon />
+              </button>
+              <Badge tone="info">{members.length}</Badge>
+            </div>
           </div>
           {members.length === 0 ? (
             <Empty title={t('team.empty')} text={t('team.emptyText')} />
