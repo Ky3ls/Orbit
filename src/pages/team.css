@@ -1,10 +1,14 @@
-/* Team — Orbit-Karten, Identität + gruppierte Rechte */
+/* Team — flache Sektionen, keine Card-in-Card */
 
 .tm-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  gap: 14px;
+  gap: 22px;
   align-items: start;
+}
+
+.tm-section {
+  min-width: 0;
 }
 
 .tm-module-head {
@@ -12,13 +16,14 @@
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .tm-module-head h3 {
   margin: 0 0 4px;
   font-size: 16px;
   letter-spacing: -0.02em;
+  font-weight: 650;
 }
 
 .tm-module-head .muted {
@@ -33,66 +38,91 @@
   flex-shrink: 0;
 }
 
-.tm-module.is-managing .tm-role.is-editable {
+.tm-section.is-managing .tm-role.is-editable {
   border-color: rgba(var(--accent-rgb), 0.4);
-  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.12);
 }
 
 .tm-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-.tm-card {
+.tm-tile {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+
+.tm-tile:hover {
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.04);
+}
+
+.tm-tile.off {
+  opacity: 0.58;
+}
+
+.tm-tile-main {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  text-align: left;
-  width: 100%;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background:
-    linear-gradient(135deg, rgba(var(--accent-rgb), 0.07), transparent 42%),
-    var(--bg-2);
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
-.tm-card.off {
-  opacity: 0.65;
-}
-
-.tm-card-top {
+.tm-tile-top {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 8px;
 }
 
-.tm-card-top strong {
+.tm-tile-name {
   font-size: 15px;
+  font-weight: 650;
   letter-spacing: -0.01em;
 }
 
-.tm-card-ids {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.tm-chip {
+.tm-role-tag {
   display: inline-flex;
   align-items: center;
-  max-width: 100%;
-  padding: 3px 8px;
-  border-radius: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
   border: 1px solid var(--line);
-  background: var(--bg);
-  font-size: 11.5px;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: transparent;
+}
+
+.tm-role-tag.owner {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+.tm-role-tag.bad {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.tm-tile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tm-tile-meta .mono {
+  opacity: 0.9;
 }
 
 .tm-card-perms {
@@ -105,10 +135,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(var(--accent-rgb), 0.1);
-  border: 1px solid rgba(var(--accent-rgb), 0.22);
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
   font-size: 11.5px;
   color: var(--text);
 }
@@ -119,17 +149,24 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tm-card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 2px;
+.tm-tile-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.tm-icon-btn.danger:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.1);
 }
 
 .tm-roles {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tm-role {
@@ -139,14 +176,15 @@
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: transparent;
   color: inherit;
   cursor: pointer;
-  transition: border-color 0.12s ease;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
 .tm-role:hover {
-  border-color: rgba(var(--accent-rgb), 0.5);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.04);
 }
 
 .tm-role strong {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { roleLabel } from '../format.js';
-import { Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import { Empty, Modal, Page, PageHeader } from '../components/Ui.jsx';
 import './team.css';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
@@ -40,6 +40,25 @@ function PencilIcon() {
     <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6M14 11v6" />
     </svg>
   );
 }
@@ -439,10 +458,10 @@ export default function Admins({ user: me }) {
       {err && !formOpen && !tplOpen && !createdCreds && <div className="err">{err}</div>}
 
       <div className="tm-grid">
-        <PanelCard className="tm-module">
+        <section className="tm-section">
           <div className="tm-module-head">
             <div>
-              <h3>{t('team.members')}</h3>
+              <h3>{t('team.membersCount', { n: members.length })}</h3>
               <p className="muted">{t('team.membersHint')}</p>
             </div>
             <div className="tm-tpl-actions">
@@ -455,7 +474,6 @@ export default function Admins({ user: me }) {
               >
                 <PlusIcon />
               </button>
-              <Badge tone="info">{members.length}</Badge>
             </div>
           </div>
           {members.length === 0 ? (
@@ -465,77 +483,106 @@ export default function Admins({ user: me }) {
               {members.map((user) => {
                 const isSelf = me && Number(me.id) === Number(user.id);
                 const preview = permPreview(user);
+                const canManage = !isSelf && user.role !== 'owner';
                 return (
-                  <div
+                  <article
                     key={user.id}
-                    className={`tm-card${user.disabled ? ' off' : ''}${user.role === 'owner' ? ' is-owner' : ''}`}
+                    className={`tm-tile${user.disabled ? ' off' : ''}${user.role === 'owner' ? ' is-owner' : ''}`}
                   >
-                    <div className="tm-card-top">
-                      <strong>{user.username}</strong>
-                      <Badge tone={user.role === 'owner' ? 'info' : user.disabled ? 'bad' : ''}>
-                        {roleBadge(user)}
-                      </Badge>
-                    </div>
-
-                    <div className="tm-card-ids">
-                      {(user.cfx_name || user.cfx_id) && (
-                        <span className="tm-chip mono" title={t('team.cfx')}>
-                          {user.cfx_name || `fivem:${user.cfx_id}`}
+                    <div className="tm-tile-main">
+                      <div className="tm-tile-top">
+                        <strong className="tm-tile-name">{user.username}</strong>
+                        <span className={`tm-role-tag${user.role === 'owner' ? ' owner' : ''}${user.disabled ? ' bad' : ''}`}>
+                          {roleBadge(user)}
                         </span>
-                      )}
-                      {user.discord_id && (
-                        <span className="tm-chip mono" title={t('team.discord')}>
-                          discord:{user.discord_id}
-                        </span>
-                      )}
-                    </div>
-
-                    {preview.length > 0 && (
-                      <div className="tm-card-perms">
-                        {preview.map((g) => (
-                          <span key={g.id} className="tm-perm-pill">
-                            {g.label}
-                            <em>{g.n}/{g.total}</em>
-                          </span>
-                        ))}
                       </div>
-                    )}
 
-                    <div className="tm-card-actions">
-                      {isSelf || user.role === 'owner' ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          onClick={() => navigate('/settings?section=account')}
-                        >
-                          {t('team.yourAccount')}
-                        </button>
-                      ) : (
+                      {(user.cfx_name || user.cfx_id || user.discord_id) && (
+                        <div className="tm-tile-meta">
+                          {(user.cfx_name || user.cfx_id) && (
+                            <span className="mono" title={t('team.cfx')}>
+                              {user.cfx_name || `fivem:${user.cfx_id}`}
+                            </span>
+                          )}
+                          {user.discord_id && (
+                            <span className="mono" title={t('team.discord')}>
+                              {user.discord_id}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {preview.length > 0 && (
+                        <div className="tm-card-perms">
+                          {preview.map((g) => (
+                            <span key={g.id} className="tm-perm-pill">
+                              {g.label}
+                              <em>{g.n}/{g.total}</em>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="tm-tile-actions">
+                      {canManage ? (
                         <>
-                          <button type="button" className="btn btn-sm btn-primary" onClick={() => openEdit(user)}>
-                            {t('common.edit')}
+                          <button
+                            type="button"
+                            className="tm-icon-btn"
+                            title={t('common.edit')}
+                            aria-label={t('common.edit')}
+                            onClick={() => openEdit(user)}
+                          >
+                            <PencilIcon />
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm"
+                            className={`tm-icon-btn${user.disabled ? ' is-on' : ''}`}
+                            title={user.disabled ? t('team.enable') : t('team.lock')}
+                            aria-label={user.disabled ? t('team.enable') : t('team.lock')}
                             onClick={() => api(`/api/admins/${user.id}`, {
                               method: 'PATCH',
                               body: { disabled: !user.disabled },
-                            }).then(load)}
+                            }).then(load).catch((e) => setErr(e.message))}
                           >
-                            {user.disabled ? t('team.enable') : t('team.lock')}
+                            <XIcon />
+                          </button>
+                          <button
+                            type="button"
+                            className="tm-icon-btn danger"
+                            title={t('common.remove')}
+                            aria-label={t('common.remove')}
+                            onClick={() => {
+                              if (!window.confirm(t('team.deleteConfirm', { name: user.username }))) return;
+                              api(`/api/admins/${user.id}`, { method: 'DELETE' })
+                                .then(load)
+                                .catch((e) => setErr(e.message));
+                            }}
+                          >
+                            <TrashIcon />
                           </button>
                         </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="tm-icon-btn"
+                          title={t('team.yourAccount')}
+                          aria-label={t('team.yourAccount')}
+                          onClick={() => navigate('/settings?section=account')}
+                        >
+                          <PencilIcon />
+                        </button>
                       )}
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
           )}
-        </PanelCard>
+        </section>
 
-        <PanelCard className={`tm-module${tplManaging ? ' is-managing' : ''}`}>
+        <section className={`tm-section${tplManaging ? ' is-managing' : ''}`}>
           <div className="tm-module-head">
             <div>
               <h3>{t('team.roleTpl')}</h3>
@@ -598,7 +645,7 @@ export default function Admins({ user: me }) {
               </button>
             ))}
           </div>
-        </PanelCard>
+        </section>
       </div>
 
       {formOpen && (
