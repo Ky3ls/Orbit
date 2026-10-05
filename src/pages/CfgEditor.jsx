@@ -268,6 +268,11 @@ export default function CfgEditor() {
         }
         return;
       }
+      if (mod && e.key.toLowerCase() === 'r') {
+        e.preventDefault();
+        if (!loading) reloadAll();
+        return;
+      }
       if (e.key === 'F3' || (mod && e.key.toLowerCase() === 'g')) {
         if (!search && !searchOpen) return;
         e.preventDefault();
@@ -291,7 +296,7 @@ export default function CfgEditor() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [saving, dirty, search, searchOpen, matches, content]);
+  }, [saving, dirty, search, searchOpen, matches, content, loading]);
 
   const aside = (
     <div className="cfg-side">
@@ -299,11 +304,14 @@ export default function CfgEditor() {
         <span className="cfg-side-title">{t('cfg.files')}</span>
         <button
           type="button"
-          className="btn btn-sm btn-primary cfg-side-new"
+          className="o-icon-btn"
           onClick={openCreate}
           title={t('cfg.newTitle')}
+          aria-label={t('cfg.newTitle')}
         >
-          {t('cfg.new')}
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
         </button>
       </div>
       <input
@@ -354,36 +362,6 @@ export default function CfgEditor() {
             ? `${activeFile}${meta && !meta.writable ? ` · ${t('cfg.readonly')}` : ''}${meta?.primary ? ` · ${t('cfg.ensures', { n: meta.resources })}` : ''}${dirty ? ` · ${t('cfg.unsaved')}` : ''}`
             : t('cfg.desc')
         }
-        actions={(
-          <div className="cfg-head-actions">
-            <button
-              className="btn btn-sm btn-primary"
-              type="button"
-              onClick={openCreate}
-            >
-              {t('cfg.new')}
-            </button>
-            <button
-              className="btn btn-sm"
-              type="button"
-              onClick={() => {
-                setSearchOpen(true);
-                requestAnimationFrame(() => searchRef.current?.focus());
-              }}
-            >
-              {t('cfg.search')}
-            </button>
-            <button
-              className="btn btn-sm"
-              type="button"
-              title={t('cfg.refreshTitle')}
-              onClick={() => reloadAll()}
-              disabled={loading}
-            >
-              {t('cfg.reload')}
-            </button>
-          </div>
-        )}
       />
 
       {err && <div className="err">{err}</div>}

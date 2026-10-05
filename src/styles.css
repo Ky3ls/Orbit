@@ -257,6 +257,35 @@ input[type='radio']:focus {
 .btn-ghost { background: transparent; }
 .btn-danger { color: #ffc9b0; border-color: rgba(255, 93, 115, 0.35); }
 .btn-sm { padding: 7px 12px; border-radius: 999px; font-size: 13px; }
+
+/* Kompakte Icon-Actions (+ / Stift) — Team, CFG, … */
+.o-icon-btn,
+.tm-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg, rgba(255, 255, 255, 0.04));
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.o-icon-btn:hover,
+.tm-icon-btn:hover {
+  color: var(--text);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.o-icon-btn.is-on,
+.tm-icon-btn.is-on {
+  color: var(--accent, #a78bfa);
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.14);
+}
 .err {
   background: rgba(255, 93, 115, 0.1);
   color: #ffc090;
