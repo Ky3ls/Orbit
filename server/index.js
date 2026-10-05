@@ -14,6 +14,7 @@ import {
   loadSession,
   newTotpSecret,
   passwordOk,
+  generatePassword,
   publicUser,
   randomToken,
   readCookie,
@@ -2708,10 +2709,10 @@ async function handleApi(req, res, url) {
     if (me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
     const body = await readBody(req);
     const username = str(body.username, 24);
-    const password = typeof body.password === 'string' ? body.password : '';
     const role = str(body.role, 16);
+    const password = generatePassword();
     if (!userOk(username) || !passwordOk(password) || !['admin', 'moderator', 'custom'].includes(role)) {
-      return json(res, 400, { error: 'Benutzer, Passwort oder Rolle ungültig.' });
+      return json(res, 400, { error: 'Benutzer oder Rolle ungültig.' });
     }
     let permsJson = '';
     if (role === 'custom' || Array.isArray(body.permissions)) {
@@ -2730,7 +2731,7 @@ async function handleApi(req, res, url) {
       return json(res, 409, { error: 'Benutzername ist vergeben.' });
     }
     audit(db, me.username, 'admin.add', `${username}:${role}`, ip);
-    return json(res, 200, { ok: true });
+    return json(res, 200, { ok: true, username, password });
   }
 
   const adminId = pathname.match(/^\/api\/admins\/(\d+)$/);
