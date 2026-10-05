@@ -498,7 +498,8 @@ html[data-theme="light"] .cfg-find {
 .ws-module .nx-panel,
 .ws-module .sch-card,
 .ws-module .pl-ban-aside,
-.ws-module .tm-identity-aside {
+.ws-module .tm-identity-aside,
+.ws-module .tm-perms-aside {
   box-shadow: none;
 }
 
