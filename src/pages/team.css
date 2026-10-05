@@ -281,6 +281,27 @@
   }
 }
 
+/* Sensible Rechte: dezenter Accent-Hinweis, kein Alarm-Rot */
+.tm-perm.sensitive {
+  border-color: rgba(var(--accent-rgb), 0.18);
+  background: rgba(var(--accent-rgb), 0.04);
+}
+
 .tm-perm.sensitive span {
-  color: #f07178;
+  color: inherit;
+}
+
+.tm-perm.is-locked {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.tm-perm.is-locked:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+.tm-perm.sensitive.is-locked {
+  border-color: rgba(var(--accent-rgb), 0.12);
+  background: rgba(var(--accent-rgb), 0.03);
 }
