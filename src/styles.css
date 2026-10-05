@@ -2146,6 +2146,7 @@ td .badge { margin-left: 8px; }
 .pl-ban-aside-list,
 .pl-ban-tags,
 .tm-identity-aside,
+.tm-perms-aside,
 .modal {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
@@ -2155,6 +2156,7 @@ td .badge { margin-left: 8px; }
 .pl-ban-aside-list::-webkit-scrollbar,
 .pl-ban-tags::-webkit-scrollbar,
 .tm-identity-aside::-webkit-scrollbar,
+.tm-perms-aside::-webkit-scrollbar,
 .modal::-webkit-scrollbar {
   width: 8px;
 }
@@ -2162,6 +2164,7 @@ td .badge { margin-left: 8px; }
 .pl-ban-aside-list::-webkit-scrollbar-thumb,
 .pl-ban-tags::-webkit-scrollbar-thumb,
 .tm-identity-aside::-webkit-scrollbar-thumb,
+.tm-perms-aside::-webkit-scrollbar-thumb,
 .modal::-webkit-scrollbar-thumb {
   background: rgba(var(--accent-rgb), 0.45);
   border-radius: 8px;
@@ -2172,6 +2175,7 @@ td .badge { margin-left: 8px; }
 .pl-ban-aside-list::-webkit-scrollbar-track,
 .pl-ban-tags::-webkit-scrollbar-track,
 .tm-identity-aside::-webkit-scrollbar-track,
+.tm-perms-aside::-webkit-scrollbar-track,
 .modal::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.04);
   border-radius: 8px;

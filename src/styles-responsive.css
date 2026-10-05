@@ -640,6 +640,15 @@ button,
     order: -1;
     padding-bottom: 16px;
   }
+  .modal-cluster.with-aside .tm-perms-aside {
+    width: 100%;
+    max-height: min(48dvh, 360px);
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
   .modal .spread .btn,
   .modal-x {
     min-height: var(--touch-min);
