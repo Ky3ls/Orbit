@@ -118,6 +118,9 @@ import {
   parseStoredPermissions,
   resolveUserPermissions,
   ROLE_TEMPLATES,
+  loadRoleTemplates,
+  saveRoleTemplates,
+  normalizePermissionList,
 } from './permissions.js';
 import { publicSettingsPayload, resolveAllowlistMode, ALLOWLIST_MODES } from './settingsSchema.js';
 import { tServer } from './i18n.js';
@@ -175,6 +178,7 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
 const db = getDb();
+permissionsCatalog(db); // Rollen-Vorlagen-Cache warmhalten
 
 /** Permissions-Block am Ende der aktiven server.cfg (Master-Principals nur wenn verknüpft). */
 function syncActiveCfgPermissions() {
@@ -2702,7 +2706,60 @@ async function handleApi(req, res, url) {
       permissions: resolveUserPermissions(u),
       customPermissions: !!parseStoredPermissions(u.permissions),
     }));
-    return json(res, 200, { users, catalog: permissionsCatalog() });
+    return json(res, 200, { users, catalog: permissionsCatalog(db) });
+  }
+
+  if (method === 'GET' && pathname === '/api/role-templates') {
+    if (me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    return json(res, 200, { templates: loadRoleTemplates(db) });
+  }
+
+  if (method === 'POST' && pathname === '/api/role-templates') {
+    if (me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    const body = await readBody(req);
+    const label = str(body.label || body.name || '', 48);
+    if (label.length < 2) return json(res, 400, { error: 'Name zu kurz.' });
+    const baseId = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'role';
+    const list = loadRoleTemplates(db);
+    let id = baseId;
+    let n = 2;
+    while (list.some((t) => t.id === id) || id === 'custom' || id === 'owner') {
+      id = `${baseId}-${n}`;
+      n += 1;
+    }
+    const permissions = normalizePermissionList(body.permissions || []);
+    list.push({ id, label, permissions, builtin: false });
+    const templates = saveRoleTemplates(db, list);
+    audit(db, me.username, 'role.template.add', id, ip);
+    return json(res, 200, { ok: true, templates, id });
+  }
+
+  const roleTplId = pathname.match(/^\/api\/role-templates\/([^/]+)$/);
+  if (roleTplId && (method === 'PATCH' || method === 'DELETE')) {
+    if (me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    const id = decodeURIComponent(roleTplId[1]);
+    const list = loadRoleTemplates(db);
+    const idx = list.findIndex((t) => t.id === id);
+    if (idx < 0) return json(res, 404, { error: 'Vorlage nicht gefunden.' });
+    if (method === 'DELETE') {
+      if (list[idx].builtin || id === 'moderator' || id === 'admin') {
+        return json(res, 400, { error: 'Eingebaute Vorlagen können nicht gelöscht werden.' });
+      }
+      list.splice(idx, 1);
+      const templates = saveRoleTemplates(db, list);
+      audit(db, me.username, 'role.template.remove', id, ip);
+      return json(res, 200, { ok: true, templates });
+    }
+    const body = await readBody(req);
+    if (typeof body.label === 'string' && body.label.trim().length >= 2) {
+      list[idx].label = str(body.label, 48);
+    }
+    if (Array.isArray(body.permissions)) {
+      list[idx].permissions = normalizePermissionList(body.permissions);
+    }
+    const templates = saveRoleTemplates(db, list);
+    audit(db, me.username, 'role.template.edit', id, ip);
+    return json(res, 200, { ok: true, templates });
   }
 
   if (method === 'POST' && pathname === '/api/admins') {

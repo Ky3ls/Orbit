@@ -27,6 +27,23 @@ function groupLabel(t, id, fallback) {
   return label === key ? (fallback || id) : label;
 }
 
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
 async function copyText(text) {
   if (!text) return false;
   try {
@@ -50,11 +67,49 @@ async function copyText(text) {
   }
 }
 
+function PermsAside({ t, permGroups, form, hasAllPerms, togglePerm }) {
+  return (
+    <aside className="tm-perms-aside" aria-label={t('team.perms')}>
+      <h4 className="tm-form-col-title">{t('team.perms')}</h4>
+      <p className="tm-perms-hint muted">{t('team.permsHint')}</p>
+      <div className="tm-perms-body">
+        {permGroups.map((g) => (
+          <fieldset key={g.id} className="tm-perm-group">
+            <legend>{groupLabel(t, g.id, g.label)}</legend>
+            <div className="tm-perm-grid">
+              {(g.permissions || []).map((perm) => {
+                const isAll = perm.id === 'all_permissions';
+                const locked = hasAllPerms && !isAll;
+                const checked = hasAllPerms || form.permissions.includes(perm.id);
+                return (
+                  <label
+                    key={perm.id}
+                    className={`tm-perm${perm.sensitive ? ' sensitive' : ''}${locked ? ' is-locked' : ''}`}
+                    title={perm.id}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={locked}
+                      onChange={() => togglePerm(perm.id)}
+                    />
+                    <span>{permLabel(t, perm.id, perm.label)}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
 export default function Admins({ user: me }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
-  const [catalog, setCatalog] = useState({ groups: [], templates: {} });
+  const [catalog, setCatalog] = useState({ groups: [], templates: {}, templateList: [] });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -62,16 +117,35 @@ export default function Admins({ user: me }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [createdCreds, setCreatedCreds] = useState(null);
   const [pwCopied, setPwCopied] = useState(false);
+  /** Stift aktiv: Klick auf Vorlage öffnet Bearbeiten statt User anlegen. */
+  const [tplManaging, setTplManaging] = useState(false);
+  /** null | { mode:'create'|'edit', id?, label, permissions, builtin? } */
+  const [tplEdit, setTplEdit] = useState(null);
+
+  function applyCatalog(d) {
+    setUsers(d.users || []);
+    setCatalog(d.catalog || { groups: [], templates: {}, templateList: [] });
+  }
 
   function load() {
     api('/api/admins')
-      .then((d) => {
-        setUsers(d.users || []);
-        setCatalog(d.catalog || { groups: [], templates: {} });
-      })
+      .then(applyCatalog)
       .catch((e) => setErr(e.message));
   }
   useEffect(() => { load(); }, []);
+
+  const templateList = useMemo(() => {
+    if (catalog.templateList?.length) return catalog.templateList;
+    const map = catalog.templates || {};
+    return ['moderator', 'admin']
+      .filter((id) => map[id])
+      .map((id) => ({
+        id,
+        label: roleLabel(id),
+        permissions: map[id] || [],
+        builtin: true,
+      }));
+  }, [catalog]);
 
   function allPermIds() {
     return catalog.all?.length
@@ -81,15 +155,19 @@ export default function Admins({ user: me }) {
 
   function openCreate() {
     setErr('');
+    setTplEdit(null);
+    setTplManaging(false);
     setForm({
       ...EMPTY_FORM,
-      permissions: [...(catalog.templates?.moderator || [])],
+      permissions: [...(catalog.templates?.moderator || templateList[0]?.permissions || [])],
     });
     setCreateOpen(true);
   }
 
   function openEdit(user) {
     setErr('');
+    setTplEdit(null);
+    setTplManaging(false);
     setEdit(user);
     const raw = [...(user.permissions || [])];
     const hasStar = raw.includes('*') || raw.includes('all_permissions');
@@ -100,6 +178,32 @@ export default function Admins({ user: me }) {
       permissions: hasStar ? allPermIds() : raw.filter((p) => p !== '*'),
       cfxName: user.cfx_name || '',
       discordId: user.discord_id || '',
+    });
+  }
+
+  function openTplCreate() {
+    setErr('');
+    setCreateOpen(false);
+    setEdit(null);
+    setTplManaging(false);
+    setTplEdit({
+      mode: 'create',
+      label: '',
+      permissions: [...(catalog.templates?.moderator || [])],
+    });
+  }
+
+  function openTplEdit(tpl) {
+    setErr('');
+    setCreateOpen(false);
+    setEdit(null);
+    setTplManaging(false);
+    setTplEdit({
+      mode: 'edit',
+      id: tpl.id,
+      label: tpl.label || roleLabel(tpl.id),
+      permissions: [...(tpl.permissions || catalog.templates?.[tpl.id] || [])],
+      builtin: !!tpl.builtin || tpl.id === 'moderator' || tpl.id === 'admin',
     });
   }
 
@@ -114,7 +218,7 @@ export default function Admins({ user: me }) {
   }
 
   function togglePerm(id) {
-    setForm((f) => {
+    const apply = (f) => {
       const ids = allPermIds();
       if (id === 'all_permissions') {
         const on = f.permissions.includes('all_permissions');
@@ -132,7 +236,12 @@ export default function Admins({ user: me }) {
         permissions = ids;
       }
       return { ...f, role: 'custom', permissions };
-    });
+    };
+    if (tplEdit) {
+      setTplEdit((f) => apply(f));
+      return;
+    }
+    setForm((f) => apply(f));
   }
 
   async function create(e) {
@@ -190,9 +299,71 @@ export default function Admins({ user: me }) {
     setBusy(false);
   }
 
+  async function saveTpl(e) {
+    e.preventDefault();
+    if (!tplEdit) return;
+    const label = String(tplEdit.label || '').trim();
+    if (label.length < 2) {
+      setErr(t('team.tplNameShort'));
+      return;
+    }
+    setBusy(true);
+    setErr('');
+    try {
+      let res;
+      if (tplEdit.mode === 'create') {
+        res = await api('/api/role-templates', {
+          method: 'POST',
+          body: { label, permissions: tplEdit.permissions },
+        });
+      } else {
+        res = await api(`/api/role-templates/${encodeURIComponent(tplEdit.id)}`, {
+          method: 'PATCH',
+          body: { label, permissions: tplEdit.permissions },
+        });
+      }
+      if (res.templates) {
+        setCatalog((c) => ({
+          ...c,
+          templateList: res.templates,
+          templates: Object.fromEntries([
+            ['custom', []],
+            ...res.templates.map((tpl) => [tpl.id, tpl.permissions || []]),
+          ]),
+        }));
+      }
+      setTplEdit(null);
+      load();
+    } catch (error) { setErr(error.message); }
+    setBusy(false);
+  }
+
+  async function deleteTpl() {
+    if (!tplEdit?.id || tplEdit.builtin) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await api(`/api/role-templates/${encodeURIComponent(tplEdit.id)}`, { method: 'DELETE' });
+      if (res.templates) {
+        setCatalog((c) => ({
+          ...c,
+          templateList: res.templates,
+          templates: Object.fromEntries([
+            ['custom', []],
+            ...res.templates.map((tpl) => [tpl.id, tpl.permissions || []]),
+          ]),
+        }));
+      }
+      setTplEdit(null);
+      load();
+    } catch (error) { setErr(error.message); }
+    setBusy(false);
+  }
+
   function closeForm() {
     setCreateOpen(false);
     setEdit(null);
+    setTplEdit(null);
     setErr('');
   }
 
@@ -237,8 +408,11 @@ export default function Admins({ user: me }) {
   );
 
   const permGroups = catalog.groups || [];
-  const hasAllPerms = form.permissions.includes('all_permissions');
+  const activePerms = tplEdit ? tplEdit.permissions : form.permissions;
+  const hasAllPerms = activePerms.includes('all_permissions');
   const formOpen = createOpen || !!edit;
+  const tplOpen = !!tplEdit;
+  const activeForm = tplEdit || form;
 
   return (
     <Page>
@@ -252,7 +426,7 @@ export default function Admins({ user: me }) {
           </button>
         )}
       />
-      {err && !formOpen && !createdCreds && <div className="err">{err}</div>}
+      {err && !formOpen && !tplOpen && !createdCreds && <div className="err">{err}</div>}
 
       <div className="tm-grid">
         <PanelCard className="tm-module">
@@ -340,36 +514,64 @@ export default function Admins({ user: me }) {
           )}
         </PanelCard>
 
-        <PanelCard className="tm-module">
+        <PanelCard className={`tm-module${tplManaging ? ' is-managing' : ''}`}>
           <div className="tm-module-head">
             <div>
               <h3>{t('team.roleTpl')}</h3>
-              <p className="muted">{t('team.roleTplHint')}</p>
+              <p className="muted">
+                {tplManaging ? t('team.tplManageHint') : t('team.roleTplHint')}
+              </p>
+            </div>
+            <div className="tm-tpl-actions">
+              <button
+                type="button"
+                className="tm-icon-btn"
+                title={t('team.tplAdd')}
+                aria-label={t('team.tplAdd')}
+                onClick={openTplCreate}
+              >
+                <PlusIcon />
+              </button>
+              <button
+                type="button"
+                className={`tm-icon-btn${tplManaging ? ' is-on' : ''}`}
+                title={t('team.tplEdit')}
+                aria-label={t('team.tplEdit')}
+                aria-pressed={tplManaging}
+                onClick={() => setTplManaging((v) => !v)}
+              >
+                <PencilIcon />
+              </button>
             </div>
           </div>
           <div className="tm-roles">
-            {['moderator', 'admin'].map((role) => (
+            {templateList.map((tpl) => (
               <button
-                key={role}
+                key={tpl.id}
                 type="button"
-                className="tm-role"
+                className={`tm-role${tplManaging ? ' is-editable' : ''}`}
                 onClick={() => {
+                  if (tplManaging) {
+                    openTplEdit(tpl);
+                    return;
+                  }
                   setErr('');
+                  setTplEdit(null);
                   setForm({
                     ...EMPTY_FORM,
-                    role,
-                    permissions: [...(catalog.templates?.[role] || [])],
+                    role: tpl.id,
+                    permissions: [...(tpl.permissions || catalog.templates?.[tpl.id] || [])],
                   });
                   setCreateOpen(true);
                 }}
               >
-                <strong>{roleLabel(role)}</strong>
+                <strong>{tpl.label || roleLabel(tpl.id)}</strong>
                 <ul>
-                  {(catalog.templates?.[role] || []).slice(0, 6).map((p) => (
+                  {(tpl.permissions || []).slice(0, 6).map((p) => (
                     <li key={p}>{permLabel(t, p)}</li>
                   ))}
-                  {(catalog.templates?.[role] || []).length > 6 && (
-                    <li className="muted">{t('team.more', { n: catalog.templates[role].length - 6 })}</li>
+                  {(tpl.permissions || []).length > 6 && (
+                    <li className="muted">{t('team.more', { n: tpl.permissions.length - 6 })}</li>
                   )}
                 </ul>
               </button>
@@ -383,39 +585,13 @@ export default function Admins({ user: me }) {
           title={createOpen ? t('team.createTitle') : t('team.editTitle', { name: edit?.username })}
           onClose={closeForm}
           aside={(
-            <aside className="tm-perms-aside" aria-label={t('team.perms')}>
-              <h4 className="tm-form-col-title">{t('team.perms')}</h4>
-              <p className="tm-perms-hint muted">{t('team.permsHint')}</p>
-              <div className="tm-perms-body">
-                {permGroups.map((g) => (
-                  <fieldset key={g.id} className="tm-perm-group">
-                    <legend>{groupLabel(t, g.id, g.label)}</legend>
-                    <div className="tm-perm-grid">
-                      {(g.permissions || []).map((perm) => {
-                        const isAll = perm.id === 'all_permissions';
-                        const locked = hasAllPerms && !isAll;
-                        const checked = hasAllPerms || form.permissions.includes(perm.id);
-                        return (
-                          <label
-                            key={perm.id}
-                            className={`tm-perm${perm.sensitive ? ' sensitive' : ''}${locked ? ' is-locked' : ''}`}
-                            title={perm.id}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={locked}
-                              onChange={() => togglePerm(perm.id)}
-                            />
-                            <span>{permLabel(t, perm.id, perm.label)}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
-                ))}
-              </div>
-            </aside>
+            <PermsAside
+              t={t}
+              permGroups={permGroups}
+              form={form}
+              hasAllPerms={hasAllPerms}
+              togglePerm={togglePerm}
+            />
           )}
         >
           <form className="tm-form" onSubmit={createOpen ? create : saveEdit}>
@@ -467,8 +643,9 @@ export default function Admins({ user: me }) {
                   value={form.role === 'custom' ? 'custom' : form.role}
                   onChange={(e) => applyRoleTemplate(e.target.value)}
                 >
-                  <option value="moderator">{t('role.mod')}</option>
-                  <option value="admin">{t('role.admin')}</option>
+                  {templateList.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>{tpl.label || roleLabel(tpl.id)}</option>
+                  ))}
                   <option value="custom">{t('role.custom')}</option>
                 </select>
               </label>
@@ -476,6 +653,51 @@ export default function Admins({ user: me }) {
             <div className="tm-form-actions">
               <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
                 {createOpen ? t('common.create') : t('common.save')}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {tplOpen && (
+        <Modal
+          title={tplEdit.mode === 'create' ? t('team.tplCreateTitle') : t('team.tplEditTitle', { name: tplEdit.label })}
+          onClose={closeForm}
+          aside={(
+            <PermsAside
+              t={t}
+              permGroups={permGroups}
+              form={activeForm}
+              hasAllPerms={hasAllPerms}
+              togglePerm={togglePerm}
+            />
+          )}
+        >
+          <form className="tm-form" onSubmit={saveTpl}>
+            {err && <div className="err">{err}</div>}
+            <div className="tm-identity" aria-label={t('team.tplName')}>
+              <h4 className="tm-form-col-title">{t('team.tplName')}</h4>
+              <label className="field">
+                <span>{t('team.tplName')} <em className="req">{t('common.required')}</em></span>
+                <input
+                  required
+                  minLength={2}
+                  value={tplEdit.label}
+                  onChange={(e) => setTplEdit({ ...tplEdit, label: e.target.value })}
+                  placeholder={t('team.tplNamePh')}
+                  autoComplete="off"
+                  autoFocus
+                />
+              </label>
+            </div>
+            <div className="tm-form-actions">
+              {tplEdit.mode === 'edit' && !tplEdit.builtin && (
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={deleteTpl}>
+                  {t('common.remove')}
+                </button>
+              )}
+              <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
+                {tplEdit.mode === 'create' ? t('common.create') : t('common.save')}
               </button>
             </div>
           </form>

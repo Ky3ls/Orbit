@@ -26,6 +26,44 @@
   font-size: 13px;
 }
 
+.tm-tpl-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tm-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.tm-icon-btn:hover {
+  color: var(--text);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.tm-icon-btn.is-on {
+  color: var(--accent, #a78bfa);
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.14);
+}
+
+.tm-module.is-managing .tm-role.is-editable {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.12);
+}
+
 .tm-list {
   display: flex;
   flex-direction: column;
@@ -189,14 +227,25 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: min(520px, 100%);
-  min-width: min(320px, 100%);
+  flex: 1 1 auto;
+  width: min(680px, 100%);
+  min-width: min(380px, 100%);
   max-height: inherit;
   padding: 16px;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--bg-2, var(--bg));
   overflow: hidden;
+}
+
+/* Name/Identität schmaler, Rechte breiter */
+.modal-cluster.with-aside:has(.tm-perms-aside) {
+  width: min(1080px, 100%);
+}
+
+.modal-cluster.with-aside:has(.tm-perms-aside) > .modal {
+  flex: 0 1 260px;
+  width: min(260px, 100%);
 }
 
 .tm-perms-hint {
