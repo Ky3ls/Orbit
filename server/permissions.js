@@ -118,8 +118,102 @@ export const ROLE_TEMPLATES = {
   custom: [],
 };
 
-export function permissionsCatalog() {
-  return { groups: PERMISSION_GROUPS, templates: ROLE_TEMPLATES, all: ALL_PERMISSION_IDS };
+const BUILTIN_LABELS = {
+  moderator: 'Moderator',
+  admin: 'Admin',
+};
+
+export function defaultRoleTemplateList() {
+  return [
+    {
+      id: 'moderator',
+      label: BUILTIN_LABELS.moderator,
+      permissions: [...ROLE_TEMPLATES.moderator],
+      builtin: true,
+    },
+    {
+      id: 'admin',
+      label: BUILTIN_LABELS.admin,
+      permissions: [...ROLE_TEMPLATES.admin],
+      builtin: true,
+    },
+  ];
+}
+
+/** Gespeicherte Vorlagen aus Settings (Fallback: Defaults). */
+export function loadRoleTemplates(db) {
+  let raw = null;
+  try {
+    raw = db.prepare('SELECT v FROM settings WHERE k = ?').get('roleTemplates')?.v;
+  } catch { /* ignore */ }
+  if (!raw) return defaultRoleTemplateList();
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.length) return defaultRoleTemplateList();
+    const out = [];
+    for (const item of parsed) {
+      const id = String(item?.id || '').trim().slice(0, 32);
+      if (!id || id === 'custom' || id === 'owner') continue;
+      const label = String(item?.label || id).trim().slice(0, 48) || id;
+      const permissions = normalizePermissionList(item?.permissions || []);
+      const builtin = id === 'moderator' || id === 'admin' || !!item?.builtin;
+      out.push({ id, label, permissions, builtin });
+    }
+    // Builtins immer vorhanden
+    for (const def of defaultRoleTemplateList()) {
+      if (!out.some((t) => t.id === def.id)) out.unshift(def);
+    }
+    return out;
+  } catch {
+    return defaultRoleTemplateList();
+  }
+}
+
+let roleTemplateCache = null;
+
+export function saveRoleTemplates(db, list) {
+  const cleaned = [];
+  for (const item of list || []) {
+    const id = String(item?.id || '').trim().slice(0, 32);
+    if (!id || id === 'custom' || id === 'owner') continue;
+    cleaned.push({
+      id,
+      label: String(item?.label || id).trim().slice(0, 48) || id,
+      permissions: normalizePermissionList(item?.permissions || []),
+      builtin: id === 'moderator' || id === 'admin',
+    });
+  }
+  for (const def of defaultRoleTemplateList()) {
+    if (!cleaned.some((t) => t.id === def.id)) cleaned.unshift(def);
+  }
+  const payload = JSON.stringify(cleaned);
+  db.prepare('INSERT INTO settings (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v')
+    .run('roleTemplates', payload);
+  roleTemplateCache = templatesMapFromList(cleaned);
+  return cleaned;
+}
+
+export function templatesMapFromList(list) {
+  const map = { custom: [] };
+  for (const t of list || []) map[t.id] = [...(t.permissions || [])];
+  return map;
+}
+
+export function permissionsCatalog(db) {
+  const list = db ? loadRoleTemplates(db) : defaultRoleTemplateList();
+  const templates = templatesMapFromList(list);
+  roleTemplateCache = templates;
+  return {
+    groups: PERMISSION_GROUPS,
+    templates,
+    templateList: list,
+    all: ALL_PERMISSION_IDS,
+  };
+}
+
+function templatePermsForRole(role) {
+  const map = roleTemplateCache || ROLE_TEMPLATES;
+  return map[role] || ROLE_TEMPLATES[role] || ROLE_TEMPLATES.moderator;
 }
 
 function canonicalize(id) {
@@ -184,7 +278,7 @@ export function resolveUserPermissions(user) {
     return expanded;
   }
   if (user.role === 'custom') return [];
-  return expandImplied(ROLE_TEMPLATES[user.role] || ROLE_TEMPLATES.moderator);
+  return expandImplied(templatePermsForRole(user.role));
 }
 
 export function hasPermission(user, perm) {

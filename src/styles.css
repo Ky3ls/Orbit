@@ -1951,6 +1951,13 @@ td .badge { margin-left: 8px; }
 .modal-cluster.with-aside {
   width: min(980px, 100%);
 }
+.modal-cluster.with-aside:has(.tm-perms-aside) {
+  width: min(1080px, 100%);
+}
+.modal-cluster.with-aside:has(.tm-perms-aside) > .modal {
+  flex: 0 1 260px;
+  width: min(260px, 100%);
+}
 .modal {
   width: min(440px, 100%);
   padding: 24px 20px 20px;
