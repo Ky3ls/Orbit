@@ -154,41 +154,54 @@
   margin: 2px 0;
 }
 
-/* Modal: Identität links, Rechte gruppiert */
+/* Modal: links Identität, rechts Rechte (grau) */
 .tm-form-col-title {
   margin: 0 0 10px;
   font-size: 14px;
   font-weight: 650;
 }
 
-.tm-identity-aside {
+.tm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tm-split {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.tm-identity {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 240px;
-  max-width: 280px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: var(--bg-2);
+  min-width: 0;
 }
 
-.tm-identity-aside .field {
+.tm-identity .field {
   margin: 0;
 }
 
-.tm-identity-aside .req {
+.tm-identity .req {
   color: #e91e63;
   font-style: normal;
   font-size: 12px;
   font-weight: 500;
 }
 
-.tm-form {
+.tm-perms {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-width: min(100%, 420px);
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-2, var(--bg));
 }
 
 .tm-perms-hint {
@@ -199,18 +212,18 @@
 .tm-perms-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   max-height: min(52vh, 420px);
   overflow: auto;
-  padding-right: 4px;
+  padding-right: 2px;
 }
 
 .tm-perm-group {
   margin: 0;
-  padding: 10px 12px 12px;
+  padding: 8px 10px 10px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--bg);
+  border-radius: 10px;
+  background: var(--bg-elevated, var(--card, rgba(255, 255, 255, 0.03)));
 }
 
 .tm-perm-group legend {
@@ -223,14 +236,14 @@
 .tm-perm-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 10px;
+  gap: 4px 10px;
 }
 
 .tm-perm {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 5px 6px;
   border-radius: 8px;
   border: 1px solid transparent;
   cursor: pointer;
@@ -239,8 +252,7 @@
 }
 
 .tm-perm:hover {
-  background: rgba(var(--accent-rgb), 0.06);
-  border-color: rgba(var(--accent-rgb), 0.15);
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .tm-perm input {
@@ -249,8 +261,8 @@
 }
 
 .tm-perm.sensitive {
-  border-color: rgba(var(--accent-rgb), 0.18);
-  background: rgba(var(--accent-rgb), 0.04);
+  border-color: rgba(var(--accent-rgb), 0.16);
+  background: rgba(var(--accent-rgb), 0.05);
 }
 
 .tm-perm.is-locked {
@@ -259,15 +271,20 @@
 }
 
 .tm-perm.is-locked:hover {
-  border-color: transparent;
   background: transparent;
 }
 
 .tm-form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  padding-top: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.tm-form-actions .btn {
+  width: auto;
+  min-width: 0;
+  flex: 0 0 auto;
 }
 
 /* Passwort-Success */
@@ -310,11 +327,16 @@
 }
 
 .tm-pw-success-close {
-  width: 100%;
+  width: auto;
+  align-self: flex-end;
 }
 
 @media (max-width: 900px) {
   .tm-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tm-split {
     grid-template-columns: 1fr;
   }
 
