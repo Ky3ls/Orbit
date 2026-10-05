@@ -306,28 +306,37 @@
   background: rgba(var(--accent-rgb), 0.03);
 }
 
-.tm-pw-reveal-user {
-  margin: 12px 0 8px;
+.tm-pw-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: min(100%, 360px);
+}
+
+.tm-pw-reveal .field {
+  margin: 0;
 }
 
 .tm-pw-reveal-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
+  gap: 8px;
+  align-items: stretch;
 }
 
-.tm-pw-reveal-value {
-  flex: 1 1 12rem;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--bg-2);
-  font-size: 14px;
-  word-break: break-all;
+.tm-pw-reveal-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.02em;
+}
+
+.tm-pw-reveal-row .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .tm-pw-reveal-foot {
-  margin: 12px 0 0;
+  margin: 0;
   font-size: 13px;
+  line-height: 1.4;
 }

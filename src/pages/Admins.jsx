@@ -136,6 +136,7 @@ export default function Admins() {
       });
       setCreateOpen(false);
       setForm(EMPTY_FORM);
+      setErr('');
       if (res.password) {
         setCreatedCreds({ username: res.username || form.username, password: res.password });
         setPwCopied(false);
@@ -147,12 +148,28 @@ export default function Admins() {
 
   async function copyCreatedPassword() {
     if (!createdCreds?.password) return;
+    let ok = false;
     try {
-      await navigator.clipboard.writeText(createdCreds.password);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(createdCreds.password);
+        ok = true;
+      }
+    } catch { /* fallback */ }
+    if (!ok) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = createdCreds.password;
+        ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch { /* ignore */ }
+    }
+    if (ok) {
       setPwCopied(true);
       window.setTimeout(() => setPwCopied(false), 2000);
-    } catch {
-      setErr(t('team.pwCopyFail'));
     }
   }
 
@@ -391,23 +408,29 @@ export default function Admins() {
       {createdCreds && (
         <Modal
           title={t('team.pwRevealTitle')}
-          onClose={() => setCreatedCreds(null)}
+          onClose={() => { setCreatedCreds(null); setPwCopied(false); }}
         >
-          <p className="muted">{t('team.pwRevealHint')}</p>
-          <p className="tm-pw-reveal-user">
-            <strong>{createdCreds.username}</strong>
-          </p>
-          <div className="tm-pw-reveal-row">
-            <code className="tm-pw-reveal-value mono">{createdCreds.password}</code>
-            <button type="button" className="btn btn-primary" onClick={copyCreatedPassword}>
-              {pwCopied ? t('common.copied') : t('common.copy')}
-            </button>
-          </div>
-          <p className="tm-pw-reveal-foot muted">{t('team.pwRevealFoot')}</p>
-          <div className="tm-form-actions row">
-            <button type="button" className="btn btn-primary" onClick={() => setCreatedCreds(null)}>
-              {t('common.close')}
-            </button>
+          <div className="tm-pw-reveal">
+            <label className="field">
+              <span>{t('team.username')}</span>
+              <input type="text" readOnly value={createdCreds.username} />
+            </label>
+            <label className="field">
+              <span>{t('team.password')}</span>
+              <div className="tm-pw-reveal-row">
+                <input
+                  type="text"
+                  className="mono"
+                  readOnly
+                  value={createdCreds.password}
+                  onFocus={(e) => e.target.select()}
+                />
+                <button type="button" className="btn btn-primary" onClick={copyCreatedPassword}>
+                  {pwCopied ? t('common.copied') : t('common.copy')}
+                </button>
+              </div>
+            </label>
+            <p className="tm-pw-reveal-foot muted">{t('team.pwRevealFoot')}</p>
           </div>
         </Modal>
       )}
