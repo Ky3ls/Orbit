@@ -226,13 +226,13 @@
 .tm-perms-aside {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   flex: 1 1 auto;
   width: min(720px, 100%);
   min-width: min(420px, 100%);
   max-height: inherit;
-  min-height: min(62vh, 560px);
-  padding: 22px 20px 24px;
+  min-height: 0;
+  padding: 16px 18px 18px;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--bg-2, var(--bg));
@@ -263,25 +263,25 @@
 /* Name/Identität schmaler, Rechte breiter — insgesamt etwas größer */
 .modal-cluster.with-aside:has(.tm-perms-aside) {
   width: min(1140px, 100%);
-  max-height: calc(100dvh - 28px);
+  max-height: calc(100dvh - 40px);
   align-items: stretch;
 }
 
 .modal-cluster.with-aside:has(.tm-perms-aside) > .modal {
   flex: 0 1 300px;
   width: min(300px, 100%);
-  padding: 28px 22px 26px;
+  padding: 20px 18px 18px;
   display: flex;
   flex-direction: column;
 }
 
 .modal-cluster.with-aside:has(.tm-perms-aside) > .modal .modal-head {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .modal-cluster.with-aside:has(.tm-perms-aside) > .modal .tm-form {
   flex: 1 1 auto;
-  gap: 18px;
+  gap: 14px;
 }
 
 .tm-perms-hint {
@@ -292,17 +292,17 @@
 .tm-perms-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   flex: 1 1 auto;
   min-height: 0;
-  max-height: none;
+  max-height: min(58vh, 480px);
   overflow: auto;
-  padding: 2px 4px 6px 0;
+  padding: 0 2px 2px 0;
 }
 
 .tm-perm-group {
   margin: 0;
-  padding: 12px 12px 14px;
+  padding: 8px 10px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg-elevated, var(--card, rgba(255, 255, 255, 0.03)));
