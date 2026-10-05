@@ -67,11 +67,26 @@ async function copyText(text) {
   }
 }
 
-function PermsAside({ t, permGroups, form, hasAllPerms, togglePerm }) {
+function PermsAside({ t, permGroups, form, hasAllPerms, togglePerm, onClose }) {
   return (
     <aside className="tm-perms-aside" aria-label={t('team.perms')}>
-      <h4 className="tm-form-col-title">{t('team.perms')}</h4>
-      <p className="tm-perms-hint muted">{t('team.permsHint')}</p>
+      <div className="tm-perms-head">
+        <div>
+          <h4 className="tm-form-col-title">{t('team.perms')}</h4>
+          <p className="tm-perms-hint muted">{t('team.permsHint')}</p>
+        </div>
+        {onClose && (
+          <button
+            className="modal-x tm-perms-x"
+            onClick={onClose}
+            type="button"
+            aria-label={t('common.close')}
+            title={t('common.close')}
+          >
+            ×
+          </button>
+        )}
+      </div>
       <div className="tm-perms-body">
         {permGroups.map((g) => (
           <fieldset key={g.id} className="tm-perm-group">
@@ -584,6 +599,7 @@ export default function Admins({ user: me }) {
         <Modal
           title={createOpen ? t('team.createTitle') : t('team.editTitle', { name: edit?.username })}
           onClose={closeForm}
+          showClose={false}
           aside={(
             <PermsAside
               t={t}
@@ -591,6 +607,7 @@ export default function Admins({ user: me }) {
               form={form}
               hasAllPerms={hasAllPerms}
               togglePerm={togglePerm}
+              onClose={closeForm}
             />
           )}
         >
@@ -663,6 +680,7 @@ export default function Admins({ user: me }) {
         <Modal
           title={tplEdit.mode === 'create' ? t('team.tplCreateTitle') : t('team.tplEditTitle', { name: tplEdit.label })}
           onClose={closeForm}
+          showClose={false}
           aside={(
             <PermsAside
               t={t}
@@ -670,6 +688,7 @@ export default function Admins({ user: me }) {
               form={activeForm}
               hasAllPerms={hasAllPerms}
               togglePerm={togglePerm}
+              onClose={closeForm}
             />
           )}
         >

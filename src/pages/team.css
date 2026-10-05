@@ -226,26 +226,62 @@
 .tm-perms-aside {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   flex: 1 1 auto;
-  width: min(680px, 100%);
-  min-width: min(380px, 100%);
+  width: min(720px, 100%);
+  min-width: min(420px, 100%);
   max-height: inherit;
-  padding: 16px;
+  min-height: min(62vh, 560px);
+  padding: 22px 20px 24px;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--bg-2, var(--bg));
   overflow: hidden;
 }
 
-/* Name/Identität schmaler, Rechte breiter */
+.tm-perms-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.tm-perms-head .tm-form-col-title {
+  margin: 0 0 6px;
+}
+
+.tm-perms-head .tm-perms-hint {
+  margin: 0;
+}
+
+.tm-perms-x {
+  margin: -4px -6px 0 0;
+  flex-shrink: 0;
+}
+
+/* Name/Identität schmaler, Rechte breiter — insgesamt etwas größer */
 .modal-cluster.with-aside:has(.tm-perms-aside) {
-  width: min(1080px, 100%);
+  width: min(1140px, 100%);
+  max-height: calc(100dvh - 28px);
+  align-items: stretch;
 }
 
 .modal-cluster.with-aside:has(.tm-perms-aside) > .modal {
-  flex: 0 1 260px;
-  width: min(260px, 100%);
+  flex: 0 1 300px;
+  width: min(300px, 100%);
+  padding: 28px 22px 26px;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-cluster.with-aside:has(.tm-perms-aside) > .modal .modal-head {
+  margin-bottom: 16px;
+}
+
+.modal-cluster.with-aside:has(.tm-perms-aside) > .modal .tm-form {
+  flex: 1 1 auto;
+  gap: 18px;
 }
 
 .tm-perms-hint {
@@ -256,17 +292,17 @@
 .tm-perms-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   flex: 1 1 auto;
   min-height: 0;
-  max-height: min(52vh, 420px);
+  max-height: none;
   overflow: auto;
-  padding-right: 2px;
+  padding: 2px 4px 6px 0;
 }
 
 .tm-perm-group {
   margin: 0;
-  padding: 8px 10px 10px;
+  padding: 12px 12px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--bg-elevated, var(--card, rgba(255, 255, 255, 0.03)));
