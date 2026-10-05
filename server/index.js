@@ -2828,14 +2828,23 @@ async function handleApi(req, res, url) {
         const cfxName = str(body.cfxName ?? body.cfx_name ?? '', 64);
         db.prepare('UPDATE users SET cfx_name = ? WHERE id = ?').run(cfxName || null, id);
       }
-      if (typeof body.password === 'string' && body.password.length >= 6) {
-        if (!passwordOk(body.password)) return json(res, 400, { error: 'Passwort ungültig.' });
-        const hash = await hashPassword(body.password);
-        db.prepare('UPDATE users SET password_hash = ?, must_change = 1 WHERE id = ?').run(hash, id);
-        audit(db, me.username, 'admin.password', target.username, ip);
-      }
     }
     return json(res, 200, { ok: true });
+  }
+
+  const adminResetPw = pathname.match(/^\/api\/admins\/(\d+)\/reset-password$/);
+  if (adminResetPw && method === 'POST') {
+    if (me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    const id = Number(adminResetPw[1]);
+    const target = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (!target || target.role === 'owner') return json(res, 400, { error: 'Dieser Account kann so nicht geändert werden.' });
+    const password = generatePassword();
+    if (!passwordOk(password)) return json(res, 500, { error: 'Passwort-Erzeugung fehlgeschlagen.' });
+    const hash = await hashPassword(password);
+    db.prepare('UPDATE users SET password_hash = ?, must_change = 1 WHERE id = ?').run(hash, id);
+    db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(id);
+    audit(db, me.username, 'admin.password.reset', target.username, ip);
+    return json(res, 200, { ok: true, username: target.username, password });
   }
 
   if (method === 'GET' && pathname === '/api/settings') {

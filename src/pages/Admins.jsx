@@ -319,15 +319,37 @@ export default function Admins({ user: me }) {
     setBusy(true);
     setErr('');
     try {
-      const body = {
-        role: 'custom',
-        permissions: form.permissions,
-        cfxName: form.cfxName,
-        discordId: form.discordId,
-      };
-      if (form.password.length >= 6) body.password = form.password;
-      await api(`/api/admins/${edit.id}`, { method: 'PATCH', body });
+      await api(`/api/admins/${edit.id}`, {
+        method: 'PATCH',
+        body: {
+          role: 'custom',
+          permissions: form.permissions,
+          cfxName: form.cfxName,
+          discordId: form.discordId,
+        },
+      });
       setEdit(null);
+      load();
+    } catch (error) { setErr(error.message); }
+    setBusy(false);
+  }
+
+  async function resetPassword() {
+    if (!edit || edit.role === 'owner' || busy) return;
+    if (!window.confirm(t('team.resetPwConfirm', { name: edit.username }))) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const res = await api(`/api/admins/${edit.id}/reset-password`, { method: 'POST' });
+      setEdit(null);
+      if (res.password) {
+        setCreatedCreds({
+          username: res.username || edit.username,
+          password: res.password,
+          reset: true,
+        });
+        setPwCopied(false);
+      }
       load();
     } catch (error) { setErr(error.message); }
     setBusy(false);
@@ -680,17 +702,6 @@ export default function Admins({ user: me }) {
                   />
                 </label>
               )}
-              {!createOpen && (
-                <label className="field">
-                  <span>{t('team.newPassword')}</span>
-                  <input
-                    type="text"
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={t('team.pwPhEdit')}
-                  />
-                </label>
-              )}
               <label className="field">
                 <span>{t('team.cfx')}</span>
                 <input
@@ -721,6 +732,11 @@ export default function Admins({ user: me }) {
               </label>
             </div>
             <div className="tm-form-actions">
+              {!createOpen && (
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={resetPassword}>
+                  {t('team.resetPw')}
+                </button>
+              )}
               <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
                 {createOpen ? t('common.create') : t('common.save')}
               </button>
@@ -778,11 +794,13 @@ export default function Admins({ user: me }) {
 
       {createdCreds && (
         <Modal
-          title={t('team.pwRevealTitle')}
+          title={createdCreds.reset ? t('team.pwResetTitle') : t('team.pwRevealTitle')}
           onClose={() => { setCreatedCreds(null); setPwCopied(false); }}
         >
           <div className="tm-pw-success">
-            <p className="tm-pw-success-title">{t('team.pwSaved')}</p>
+            <p className="tm-pw-success-title">
+              {createdCreds.reset ? t('team.pwResetSaved') : t('team.pwSaved')}
+            </p>
             <p>{t('team.pwCopyPlease')}</p>
             <div className="tm-pw-success-row">
               <input
