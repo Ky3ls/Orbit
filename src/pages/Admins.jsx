@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
-import { fmtFull, roleLabel } from '../format.js';
-import { Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import { roleLabel } from '../format.js';
+import { Empty, Modal, Page, PanelCard } from '../components/Ui.jsx';
 import './team.css';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
 const EMPTY_FORM = {
   username: '',
   password: '',
-  role: 'moderator',
+  role: 'custom',
   permissions: [],
   cfxName: '',
   discordId: '',
@@ -20,14 +21,43 @@ function permLabel(t, id, fallback) {
   return label === key ? (fallback || id) : label;
 }
 
-function groupLabel(t, id, fallback) {
-  const key = `perm.group.${id}`;
-  const label = t(key);
-  return label === key ? (fallback || id) : label;
+async function copyText(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fallback */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
-export default function Admins() {
+function flatPerms(catalog) {
+  if (catalog.all?.length) {
+    const byId = new Map();
+    for (const g of catalog.groups || []) {
+      for (const p of g.permissions || []) byId.set(p.id, p);
+    }
+    return catalog.all.map((id) => byId.get(id) || { id, label: id });
+  }
+  return (catalog.groups || []).flatMap((g) => g.permissions || []);
+}
+
+export default function Admins({ user: me }) {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [catalog, setCatalog] = useState({ groups: [], templates: {} });
   const [err, setErr] = useState('');
@@ -48,6 +78,14 @@ export default function Admins() {
   }
   useEffect(() => { load(); }, []);
 
+  const allPermList = useMemo(() => flatPerms(catalog), [catalog]);
+
+  function allPermIds() {
+    return catalog.all?.length
+      ? [...catalog.all]
+      : allPermList.map((p) => p.id);
+  }
+
   function openCreate() {
     setErr('');
     setForm({
@@ -55,12 +93,6 @@ export default function Admins() {
       permissions: [...(catalog.templates?.moderator || [])],
     });
     setCreateOpen(true);
-  }
-
-  function allPermIds() {
-    return catalog.all?.length
-      ? [...catalog.all]
-      : (catalog.groups || []).flatMap((g) => (g.permissions || []).map((p) => p.id));
   }
 
   function openEdit(user) {
@@ -71,23 +103,11 @@ export default function Admins() {
     setForm({
       username: user.username,
       password: '',
-      role: user.role === 'owner' ? 'owner' : (hasStar ? 'custom' : user.role),
-      permissions: hasStar
-        ? allPermIds()
-        : raw.filter((p) => p !== '*'),
+      role: 'custom',
+      permissions: hasStar ? allPermIds() : raw.filter((p) => p !== '*'),
       cfxName: user.cfx_name || '',
       discordId: user.discord_id || '',
     });
-  }
-
-  function applyRoleTemplate(role) {
-    setForm((f) => ({
-      ...f,
-      role,
-      permissions: role === 'custom'
-        ? f.permissions
-        : [...(catalog.templates?.[role] || [])],
-    }));
   }
 
   function togglePerm(id) {
@@ -95,22 +115,15 @@ export default function Admins() {
       const ids = allPermIds();
       if (id === 'all_permissions') {
         const on = f.permissions.includes('all_permissions');
-        return {
-          ...f,
-          role: 'custom',
-          permissions: on ? [] : ids,
-        };
+        return { ...f, role: 'custom', permissions: on ? [] : ids };
       }
       if (f.permissions.includes('all_permissions')) {
-        // Einzelrecht abwählen → Alle-Rechte aufheben, Rest behalten
         const permissions = ids.filter((p) => p !== 'all_permissions' && p !== id);
         return { ...f, role: 'custom', permissions };
       }
-      const has = f.permissions.includes(id);
-      let permissions = has
+      let permissions = f.permissions.includes(id)
         ? f.permissions.filter((p) => p !== id)
         : [...f.permissions, id];
-      // Wenn alle Einzelrechte gesetzt sind → Alle-Rechte syncen
       const singles = ids.filter((p) => p !== 'all_permissions');
       if (singles.length && singles.every((p) => permissions.includes(p))) {
         permissions = ids;
@@ -128,8 +141,8 @@ export default function Admins() {
         method: 'POST',
         body: {
           username: form.username,
-          role: form.role === 'custom' ? 'custom' : form.role,
-          permissions: form.role === 'custom' ? form.permissions : undefined,
+          role: 'custom',
+          permissions: form.permissions,
           cfxName: form.cfxName || undefined,
           discordId: form.discordId || undefined,
         },
@@ -148,26 +161,7 @@ export default function Admins() {
 
   async function copyCreatedPassword() {
     if (!createdCreds?.password) return;
-    let ok = false;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(createdCreds.password);
-        ok = true;
-      }
-    } catch { /* fallback */ }
-    if (!ok) {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = createdCreds.password;
-        ta.setAttribute('readonly', '');
-        ta.style.cssText = 'position:fixed;left:-9999px;top:0';
-        document.body.appendChild(ta);
-        ta.select();
-        ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-      } catch { /* ignore */ }
-    }
-    if (ok) {
+    if (await copyText(createdCreds.password)) {
       setPwCopied(true);
       window.setTimeout(() => setPwCopied(false), 2000);
     }
@@ -180,8 +174,8 @@ export default function Admins() {
     setErr('');
     try {
       const body = {
-        role: form.role,
-        permissions: form.role === 'custom' ? form.permissions : null,
+        role: 'custom',
+        permissions: form.permissions,
         cfxName: form.cfxName,
         discordId: form.discordId,
       };
@@ -193,212 +187,206 @@ export default function Admins() {
     setBusy(false);
   }
 
+  function closeForm() {
+    setCreateOpen(false);
+    setEdit(null);
+    setErr('');
+  }
+
+  function permSummary(user) {
+    if (user.role === 'owner') return t('team.masterAccount');
+    const raw = user.permissions || [];
+    if (raw.includes('*') || raw.includes('all_permissions')) return t('perm.all_permissions');
+    if (user.role === 'admin' || user.role === 'moderator') return roleLabel(user.role);
+    const n = raw.filter((p) => p !== '*').length;
+    return n ? t('team.permCount', { n }) : roleLabel(user.role);
+  }
+
   const members = useMemo(
     () => [...users].sort((a, b) => (a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : a.id - b.id)),
     [users],
   );
 
-  const permGroups = catalog.groups || [];
   const hasAllPerms = form.permissions.includes('all_permissions');
+  const formOpen = createOpen || edit;
 
   return (
-    <Page>
-      <PageHeader
-        eyebrow={t('team.eyebrow')}
-        title={t('page.admins')}
-        description={t('team.desc')}
-        actions={(
-          <button type="button" className="btn btn-primary" onClick={openCreate}>
-            {t('team.newUser')}
+    <Page className="tm-page">
+      {err && !formOpen && !createdCreds && <div className="err">{err}</div>}
+
+      <PanelCard className="tm-table-card">
+        <div className="tm-table-head">
+          <h2>{t('team.allAdmins', { n: members.length })}</h2>
+          <button type="button" className="btn btn-primary tm-add" onClick={openCreate}>
+            + {t('team.add')}
           </button>
+        </div>
+
+        {members.length === 0 ? (
+          <Empty title={t('team.empty')} text={t('team.emptyText')} />
+        ) : (
+          <div className="tm-table-wrap">
+            <table className="tm-table">
+              <thead>
+                <tr>
+                  <th>{t('team.username')}</th>
+                  <th>{t('team.colIds')}</th>
+                  <th>{t('team.colPerms')}</th>
+                  <th>{t('team.colActions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((u) => {
+                  const isSelf = me && Number(me.id) === Number(u.id);
+                  const isOwner = u.role === 'owner';
+                  return (
+                    <tr key={u.id} className={u.disabled ? 'off' : ''}>
+                      <td className="tm-td-name">{u.username}</td>
+                      <td className="tm-td-ids">
+                        {u.cfx_name || u.cfx_id ? (
+                          <div className="tm-id-line">
+                            <span className="tm-id-badge cfx" aria-hidden="true">A</span>
+                            <span className="mono">{u.cfx_id ? `fivem:${u.cfx_id}` : u.cfx_name}</span>
+                          </div>
+                        ) : null}
+                        {u.discord_id ? (
+                          <div className="tm-id-line">
+                            <span className="tm-id-badge discord" aria-hidden="true">D</span>
+                            <span className="mono">{`discord:${u.discord_id}`}</span>
+                          </div>
+                        ) : null}
+                        {!u.cfx_name && !u.cfx_id && !u.discord_id && (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td>{permSummary(u)}</td>
+                      <td className="tm-td-actions">
+                        {isSelf || isOwner ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm tm-btn-outline"
+                            onClick={() => navigate('/settings?section=account')}
+                          >
+                            ✎ {t('team.yourAccount')}
+                          </button>
+                        ) : (
+                          <div className="tm-actions-row">
+                            <button type="button" className="btn btn-sm" onClick={() => openEdit(u)}>
+                              {t('common.edit')}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={() => api(`/api/admins/${u.id}`, {
+                                method: 'PATCH',
+                                body: { disabled: !u.disabled },
+                              }).then(load)}
+                            >
+                              {u.disabled ? t('team.enable') : t('team.lock')}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-      />
-      {err && !createOpen && !edit && <div className="err">{err}</div>}
+      </PanelCard>
 
-      <div className="tm-grid">
-        <PanelCard className="tm-module">
-          <div className="tm-module-head">
-            <div>
-              <h3>{t('team.members')}</h3>
-              <p className="muted">{t('team.membersHint')}</p>
-            </div>
-            <Badge tone="info">{members.length}</Badge>
-          </div>
-          {members.length === 0 ? (
-            <Empty title={t('team.empty')} text={t('team.emptyText')} />
-          ) : (
-            <div className="tm-list">
-              {members.map((user) => (
-                <button
-                  key={user.id}
-                  type="button"
-                  className={`tm-card${user.disabled ? ' off' : ''}`}
-                  onClick={() => user.role !== 'owner' && openEdit(user)}
-                  disabled={user.role === 'owner'}
-                >
-                  <div className="tm-card-top">
-                    <strong>{user.username}</strong>
-                    <Badge tone={user.role === 'owner' ? 'info' : user.disabled ? 'bad' : ''}>
-                      {roleLabel(user.role)}
-                    </Badge>
-                  </div>
-                  <div className="tm-card-meta">
-                    <span>{user.totp_enabled ? t('team.totpOn') : t('team.totpOff')}</span>
-                    <span>{t('team.login', { when: fmtFull(user.last_login) })}</span>
-                    {user.customPermissions && <span>{t('team.customPerms')}</span>}
-                  </div>
-                  {user.role !== 'owner' && (
-                    <div className="tm-card-actions" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className="btn btn-sm"
-                        type="button"
-                        onClick={() => api(`/api/admins/${user.id}`, {
-                          method: 'PATCH',
-                          body: { disabled: !user.disabled },
-                        }).then(load)}
-                      >
-                        {user.disabled ? t('team.enable') : t('team.lock')}
-                      </button>
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </PanelCard>
-
-        <PanelCard className="tm-module">
-          <div className="tm-module-head">
-            <div>
-              <h3>{t('team.roleTpl')}</h3>
-              <p className="muted">{t('team.roleTplHint')}</p>
-            </div>
-          </div>
-          <div className="tm-roles">
-            {['moderator', 'admin'].map((role) => (
-              <div key={role} className="tm-role">
-                <strong>{roleLabel(role)}</strong>
-                <ul>
-                  {(catalog.templates?.[role] || []).slice(0, 8).map((p) => (
-                    <li key={p} title={p}>{permLabel(t, p)}</li>
-                  ))}
-                  {(catalog.templates?.[role] || []).length > 8 && (
-                    <li className="muted">{t('team.more', { n: catalog.templates[role].length - 8 })}</li>
-                  )}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </PanelCard>
-      </div>
-
-      {(createOpen || edit) && (
+      {formOpen && (
         <Modal
           title={createOpen ? t('team.createTitle') : t('team.editTitle', { name: edit?.username })}
-          onClose={() => { setCreateOpen(false); setEdit(null); setErr(''); }}
-          wide
-          aside={(
-            <aside className="tm-identity-aside" aria-label={t('team.identity')}>
-              <h4 className="tm-form-col-title">{t('team.identity')}</h4>
-              {createOpen && (
-                <label className="field">
-                  <span>{t('team.username')}</span>
-                  <input
-                    form="tm-user-form"
-                    required
-                    value={form.username}
-                    onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    placeholder={t('team.usernamePh')}
-                  />
-                </label>
-              )}
-              {!createOpen && (
-                <label className="field">
-                  <span>{t('team.newPassword')}</span>
-                  <input
-                    form="tm-user-form"
-                    type="text"
-                    minLength={0}
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    placeholder={t('team.pwPhEdit')}
-                  />
-                </label>
-              )}
-              <label className="field">
-                <span>{t('team.cfx')}</span>
-                <input
-                  form="tm-user-form"
-                  value={form.cfxName || ''}
-                  onChange={(e) => setForm({ ...form, cfxName: e.target.value })}
-                  placeholder={t('team.cfxPh')}
-                />
-              </label>
-              <label className="field">
-                <span>{t('team.discord')}</span>
-                <input
-                  form="tm-user-form"
-                  value={form.discordId || ''}
-                  onChange={(e) => setForm({ ...form, discordId: e.target.value })}
-                  placeholder={t('team.discordPh')}
-                />
-              </label>
-              <label className="field">
-                <span>{t('team.role')}</span>
-                <select
-                  form="tm-user-form"
-                  value={form.role}
-                  onChange={(e) => applyRoleTemplate(e.target.value)}
-                >
-                  <option value="moderator">{t('role.mod')}</option>
-                  <option value="admin">{t('role.admin')}</option>
-                  <option value="custom">{t('role.custom')}</option>
-                </select>
-              </label>
-            </aside>
-          )}
+          onClose={closeForm}
         >
-          <form id="tm-user-form" className="tm-form" onSubmit={createOpen ? create : saveEdit}>
+          <form className="tm-form-tx" onSubmit={createOpen ? create : saveEdit}>
             {err && <div className="err">{err}</div>}
-            <div className="tm-perms">
-              <h4 className="tm-form-col-title">{t('team.perms')}</h4>
-              <p className="tm-perms-hint muted">
-                {t('team.permsHint')}
-              </p>
-              <div className="tm-perms-body">
-                {permGroups.map((g) => (
-                  <fieldset key={g.id} className="tm-perm-group">
-                    <legend>{groupLabel(t, g.id, g.label)}</legend>
-                    <div className="tm-perm-grid">
-                      {g.permissions.map((perm) => {
-                        const isAll = perm.id === 'all_permissions';
-                        const locked = hasAllPerms && !isAll;
-                        const checked = hasAllPerms || form.permissions.includes(perm.id);
-                        return (
-                          <label
-                            key={perm.id}
-                            className={`tm-perm${perm.sensitive ? ' sensitive' : ''}${locked ? ' is-locked' : ''}`}
-                            title={perm.id}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={locked}
-                              onChange={() => togglePerm(perm.id)}
-                            />
-                            <span>{permLabel(t, perm.id, perm.label)}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
-                ))}
-              </div>
+
+            {createOpen && (
+              <label className="field">
+                <span>
+                  {t('team.username')}{' '}
+                  <em className="req">{t('common.required')}</em>
+                </span>
+                <input
+                  required
+                  value={form.username}
+                  onChange={(e) => setForm({ ...form, username: e.target.value })}
+                  placeholder={t('team.usernamePh')}
+                  autoComplete="off"
+                />
+              </label>
+            )}
+
+            <label className="field">
+              <span>
+                {t('team.cfx')}{' '}
+                <em className="opt">{t('common.optional')}</em>
+              </span>
+              <input
+                value={form.cfxName || ''}
+                onChange={(e) => setForm({ ...form, cfxName: e.target.value })}
+                placeholder={t('team.cfxPh')}
+              />
+              <small className="tm-field-hint muted">{t('team.cfxHint')}</small>
+            </label>
+
+            <label className="field">
+              <span>
+                {t('team.discord')}{' '}
+                <em className="opt">{t('common.optional')}</em>
+              </span>
+              <input
+                value={form.discordId || ''}
+                onChange={(e) => setForm({ ...form, discordId: e.target.value })}
+                placeholder={t('team.discordPh')}
+              />
+              <small className="tm-field-hint muted">{t('team.discordHint')}</small>
+            </label>
+
+            {!createOpen && (
+              <label className="field">
+                <span>{t('team.newPassword')}</span>
+                <input
+                  type="text"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  placeholder={t('team.pwPhEdit')}
+                />
+              </label>
+            )}
+
+            <h4 className="tm-perms-title">{t('team.perms')}</h4>
+            <div className="tm-perm-cols">
+              {allPermList.map((perm) => {
+                const isAll = perm.id === 'all_permissions';
+                const locked = hasAllPerms && !isAll;
+                const checked = hasAllPerms || form.permissions.includes(perm.id);
+                return (
+                  <label
+                    key={perm.id}
+                    className={`tm-perm-check${perm.sensitive ? ' is-sensitive' : ''}${locked ? ' is-locked' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={locked}
+                      onChange={() => togglePerm(perm.id)}
+                    />
+                    <span>{permLabel(t, perm.id, perm.label)}</span>
+                  </label>
+                );
+              })}
             </div>
 
-            <div className="tm-form-actions row">
+            <div className="tm-form-foot">
+              <button type="button" className="btn" onClick={closeForm} disabled={busy}>
+                {t('common.cancel')}
+              </button>
               <button type="submit" className="btn btn-primary" disabled={busy}>
-                {createOpen ? t('common.create') : t('common.save')}
+                {createOpen ? t('common.save') : t('common.save')}
               </button>
             </div>
           </form>
@@ -410,27 +398,29 @@ export default function Admins() {
           title={t('team.pwRevealTitle')}
           onClose={() => { setCreatedCreds(null); setPwCopied(false); }}
         >
-          <div className="tm-pw-reveal">
-            <label className="field">
-              <span>{t('team.username')}</span>
-              <input type="text" readOnly value={createdCreds.username} />
-            </label>
-            <label className="field">
-              <span>{t('team.password')}</span>
-              <div className="tm-pw-reveal-row">
-                <input
-                  type="text"
-                  className="mono"
-                  readOnly
-                  value={createdCreds.password}
-                  onFocus={(e) => e.target.select()}
-                />
-                <button type="button" className="btn btn-primary" onClick={copyCreatedPassword}>
-                  {pwCopied ? t('common.copied') : t('common.copy')}
-                </button>
-              </div>
-            </label>
-            <p className="tm-pw-reveal-foot muted">{t('team.pwRevealFoot')}</p>
+          <div className="tm-pw-success">
+            <p className="tm-pw-success-title">{t('team.pwSaved')}</p>
+            <p>{t('team.pwCopyPlease')}</p>
+            <div className="tm-pw-success-row">
+              <input
+                type="text"
+                className="mono"
+                readOnly
+                value={createdCreds.password}
+                onFocus={(e) => e.target.select()}
+              />
+              <button type="button" className="btn" onClick={copyCreatedPassword}>
+                {pwCopied ? t('common.copied') : t('common.copy')}
+              </button>
+            </div>
+            <p className="muted tm-pw-success-foot">{t('team.pwRevealFoot')}</p>
+            <button
+              type="button"
+              className="btn btn-primary tm-pw-success-close"
+              onClick={() => { setCreatedCreds(null); setPwCopied(false); }}
+            >
+              {t('team.pwClose')}
+            </button>
           </div>
         </Modal>
       )}

@@ -19,6 +19,7 @@ import { GAME_BUILD_OPTIONS, ONESYNC_OPTIONS } from './settingsOptions.js';
 import { BAN_DURATION_PRESETS, banDurationLabel, customDurationToId } from './banPresets.js';
 
 const HOST_TABS = new Set(['servers', 'artifacts', 'prod']);
+const PERSONAL_SECTIONS = new Set(['appearance', 'account']);
 
 const SECTION_DEFS = [
   { id: 'general', labelKey: 'settings.sec.general', hintKey: 'settings.sec.generalHint', owner: false },
@@ -154,21 +155,30 @@ export default function Settings({ user, onUser, onSetupReset }) {
 
   const isOwner = user?.role === 'owner';
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const perms = user?.permissions || [];
+  const canViewSettings = isOwner
+    || perms.includes('*')
+    || perms.includes('all_permissions')
+    || perms.includes('settings')
+    || perms.includes('settings.write');
   const nav = useMemo(
     () => SECTION_DEFS.filter((s) => {
+      if (PERSONAL_SECTIONS.has(s.id)) return true;
+      if (!canViewSettings) return false;
       if (s.owner && !isOwner) return false;
       if (s.admin && !isAdmin) return false;
       return true;
     }).map((s) => ({ ...s, label: t(s.labelKey), hint: t(s.hintKey) })),
-    [isOwner, isAdmin, t],
+    [isOwner, isAdmin, canViewSettings, t],
   );
 
   const sectionParam = params.get('section');
   const legacyMap = { server: 'general', bans: 'moderation', allowlist: 'moderation', fx: 'fxserver' };
   const mapped = legacyMap[sectionParam] || sectionParam;
+  const fallbackSection = canViewSettings ? 'general' : 'appearance';
   const section = nav.some((s) => s.id === mapped)
     ? mapped
-    : (HOST_TABS.has(params.get('tab')) ? 'host' : 'general');
+    : (canViewSettings && HOST_TABS.has(params.get('tab')) ? 'host' : fallbackSection);
 
   function setSection(id) {
     const next = new URLSearchParams(params);
@@ -178,6 +188,10 @@ export default function Settings({ user, onUser, onSetupReset }) {
   }
 
   function load() {
+    if (!canViewSettings) {
+      setForm({});
+      return;
+    }
     api('/api/settings').then((d) => {
       setForm(d.settings);
       if (d.settings) syncFromSettings(d.settings);
@@ -191,7 +205,12 @@ export default function Settings({ user, onUser, onSetupReset }) {
       .catch((e) => setErr(e.message));
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [canViewSettings]);
+  useEffect(() => {
+    if (PERSONAL_SECTIONS.has(section) || !canViewSettings) {
+      api('/api/sessions').then((d) => setSessions(d.sessions || [])).catch(() => {});
+    }
+  }, [section, canViewSettings]);
   useEffect(() => {
     if (section === 'moderation' && isAdmin) loadTemplates();
   }, [section, isAdmin]);

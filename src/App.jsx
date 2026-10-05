@@ -153,7 +153,7 @@ export default function App() {
           <Route path="server-log" element={setupOk ? <ServerLog /> : <Navigate to="/setup" replace />} />
           <Route path="cfg" element={setupOk ? <CfgEditor /> : <Navigate to="/setup" replace />} />
           <Route path="audit" element={setupOk ? <Audit /> : <Navigate to="/setup" replace />} />
-          <Route path="admins" element={setupOk ? <Admins /> : <Navigate to="/setup" replace />} />
+          <Route path="admins" element={setupOk ? <Admins user={session.user} /> : <Navigate to="/setup" replace />} />
           <Route path="ingame" element={setupOk ? <Ingame user={session.user} /> : <Navigate to="/setup" replace />} />
           <Route path="platform" element={<Navigate to="/settings?section=host&tab=servers" replace />} />
           <Route path="database" element={setupOk ? <Database user={session.user} /> : <Navigate to="/setup" replace />} />
