@@ -3415,7 +3415,6 @@ async function handleApi(req, res, url) {
   }
 
   if (method === 'GET' && pathname === '/api/sessions') {
-    if (!hasPerm(me, 'sessions') && me.role !== 'owner' && me.role !== 'admin') return json(res, 403, { error: 'Keine Berechtigung.' });
     const rows = db.prepare(`
       SELECT id, ip, ua, created, last_seen, expires FROM sessions
       WHERE user_id = ? AND revoked = 0 AND expires > ? ORDER BY last_seen DESC
