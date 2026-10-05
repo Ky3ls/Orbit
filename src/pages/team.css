@@ -306,12 +306,6 @@
   background: rgba(var(--accent-rgb), 0.03);
 }
 
-.tm-pw-auto {
-  margin: -4px 0 8px;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 .tm-pw-reveal-user {
   margin: 12px 0 8px;
 }

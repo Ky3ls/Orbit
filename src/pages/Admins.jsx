@@ -284,19 +284,16 @@ export default function Admins() {
             <aside className="tm-identity-aside" aria-label={t('team.identity')}>
               <h4 className="tm-form-col-title">{t('team.identity')}</h4>
               {createOpen && (
-                <>
-                  <label className="field">
-                    <span>{t('team.username')}</span>
-                    <input
-                      form="tm-user-form"
-                      required
-                      value={form.username}
-                      onChange={(e) => setForm({ ...form, username: e.target.value })}
-                      placeholder={t('team.usernamePh')}
-                    />
-                  </label>
-                  <p className="tm-pw-auto muted">{t('team.pwAutoHint')}</p>
-                </>
+                <label className="field">
+                  <span>{t('team.username')}</span>
+                  <input
+                    form="tm-user-form"
+                    required
+                    value={form.username}
+                    onChange={(e) => setForm({ ...form, username: e.target.value })}
+                    placeholder={t('team.usernamePh')}
+                  />
+                </label>
               )}
               {!createOpen && (
                 <label className="field">
