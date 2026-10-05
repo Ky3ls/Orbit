@@ -1953,12 +1953,12 @@ td .badge { margin-left: 8px; }
 }
 .modal-cluster.with-aside:has(.tm-perms-aside) {
   width: min(1140px, 100%);
-  max-height: calc(100dvh - 28px);
+  max-height: calc(100dvh - 40px);
 }
 .modal-cluster.with-aside:has(.tm-perms-aside) > .modal {
   flex: 0 1 300px;
   width: min(300px, 100%);
-  padding: 28px 22px 26px;
+  padding: 20px 18px 18px;
 }
 .modal {
   width: min(440px, 100%);
