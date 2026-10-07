@@ -949,51 +949,106 @@ export default function Players({ user }) {
 
               {tab === 'history' && (
                 <div className="pl-hist">
-                  {(detail?.history?.bans || []).length === 0 && (detail?.history?.warns || []).length === 0 ? (
-                    <p className="muted">{t('players.noHistory')}</p>
-                  ) : (
-                    <>
-                      {(detail?.history?.bans || []).map((b) => {
-                        const banLive = !b.revoked && (!b.expires || b.expires > Date.now());
-                        return (
-                          <article key={`b${b.id}`} className={`pl-hist-card ban${banLive ? ' active' : ''}`}>
-                            <header>
-                              <strong>Ban #{b.id}</strong>
-                              <span>{fmtFull(b.created)}</span>
-                            </header>
-                            <p>{b.reason}</p>
-                            <footer>
-                              <div className="pl-hist-meta">
-                                <span>{b.author}</span>
-                                {banLive ? (
-                                  <span className="pl-hist-pill">{t('players.banned')}</span>
-                                ) : b.revoked ? (
-                                  <span className="pl-hist-pill off">{t('players.banRevoked')}</span>
-                                ) : null}
-                              </div>
-                              {banLive && canRevoke && (
-                                <button
-                                  type="button"
-                                  className="btn btn-sm"
-                                  disabled={busy}
-                                  onClick={() => revokeBan(b.id)}
-                                >
-                                  {t('players.revokeBan')}
-                                </button>
-                              )}
-                            </footer>
-                          </article>
-                        );
-                      })}
-                      {(detail?.history?.warns || []).map((w) => (
-                        <article key={`w${w.id}`} className="pl-hist-card">
-                          <header><strong>Warn #{w.id}</strong><span>{fmtFull(w.created)}</span></header>
-                          <p>{w.reason}</p>
-                          <footer>{w.author}</footer>
-                        </article>
-                      ))}
-                    </>
-                  )}
+                  {(() => {
+                    const bans = detail?.history?.bans || [];
+                    const warns = detail?.history?.warns || [];
+                    if (!bans.length && !warns.length) {
+                      return <p className="pl-hist-empty muted">{t('players.noHistory')}</p>;
+                    }
+                    const entries = [
+                      ...bans.map((b) => ({
+                        kind: 'ban',
+                        id: b.id,
+                        created: b.created || 0,
+                        reason: b.reason,
+                        author: b.author,
+                        expires: b.expires,
+                        revoked: !!b.revoked,
+                        live: !b.revoked && (!b.expires || b.expires > Date.now()),
+                      })),
+                      ...warns.map((w) => ({
+                        kind: 'warn',
+                        id: w.id,
+                        created: w.created || 0,
+                        reason: w.reason,
+                        author: w.author,
+                      })),
+                    ].sort((a, b) => (b.created || 0) - (a.created || 0));
+
+                    const liveBans = entries.filter((e) => e.kind === 'ban' && e.live).length;
+                    return (
+                      <>
+                        <div className="pl-hist-summary">
+                          <span>{t('players.histBans', { n: bans.length })}</span>
+                          <span className="pl-hist-dot" aria-hidden="true">·</span>
+                          <span>{t('players.histWarns', { n: warns.length })}</span>
+                          {liveBans > 0 && (
+                            <>
+                              <span className="pl-hist-dot" aria-hidden="true">·</span>
+                              <span className="pl-hist-live">{t('players.histActive', { n: liveBans })}</span>
+                            </>
+                          )}
+                        </div>
+                        <ol className="pl-hist-list">
+                          {entries.map((e) => (
+                            <li
+                              key={`${e.kind}-${e.id}`}
+                              className={`pl-hist-item ${e.kind}${e.live ? ' live' : ''}${e.revoked ? ' revoked' : ''}`}
+                            >
+                              <div className="pl-hist-rail" aria-hidden="true" />
+                              <article className="pl-hist-card">
+                                <header className="pl-hist-head">
+                                  <div className="pl-hist-tags">
+                                    <span className={`pl-hist-type ${e.kind}`}>
+                                      {e.kind === 'ban' ? t('players.histBan') : t('players.histWarn')}
+                                    </span>
+                                    <span className="pl-hist-id">#{e.id}</span>
+                                    {e.kind === 'ban' && e.live && (
+                                      <span className="pl-hist-pill">{t('players.banned')}</span>
+                                    )}
+                                    {e.kind === 'ban' && e.revoked && (
+                                      <span className="pl-hist-pill off">{t('players.banRevoked')}</span>
+                                    )}
+                                    {e.kind === 'ban' && !e.live && !e.revoked && e.expires && (
+                                      <span className="pl-hist-pill off">{t('players.histExpired')}</span>
+                                    )}
+                                  </div>
+                                  <time className="pl-hist-time" dateTime={e.created ? new Date(e.created).toISOString() : undefined}>
+                                    {fmtFull(e.created)}
+                                  </time>
+                                </header>
+                                <p className="pl-hist-reason">{e.reason || '—'}</p>
+                                <footer className="pl-hist-foot">
+                                  <div className="pl-hist-meta">
+                                    {e.author && (
+                                      <span>{t('players.histBy', { name: e.author })}</span>
+                                    )}
+                                    {e.kind === 'ban' && (
+                                      <span>
+                                        {e.expires
+                                          ? t('players.banUntil', { when: fmtFull(e.expires) })
+                                          : t('common.permanent')}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {e.kind === 'ban' && e.live && canRevoke && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm"
+                                      disabled={busy}
+                                      onClick={() => revokeBan(e.id)}
+                                    >
+                                      {t('players.revokeBan')}
+                                    </button>
+                                  )}
+                                </footer>
+                              </article>
+                            </li>
+                          ))}
+                        </ol>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
