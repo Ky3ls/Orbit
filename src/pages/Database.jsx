@@ -321,10 +321,14 @@ function BrowseTable({
                     const isEditing = edit?.rowIdx === rowIdx && edit?.col === col;
                     const { text, null: isNull } = cellValue(row[col]);
                     if (isEditing) {
+                      const colMeta = structure?.find((c) => c.field === col);
+                      const useArea = isLongCol(colMeta)
+                        || draft.length > 40
+                        || draft.includes('\n');
                       return (
                         <td key={col} className="db-cell-edit">
                           <div
-                            className="db-inline-edit"
+                            className={`db-inline-edit${useArea ? ' is-wide' : ''}`}
                             title={t('db.editHint')}
                             onBlur={(e) => {
                               if (e.currentTarget.contains(e.relatedTarget)) return;
@@ -332,64 +336,87 @@ function BrowseTable({
                             }}
                           >
                             {!asNull ? (
-                              <input
-                                ref={inputRef}
-                                className="db-inline-input"
-                                type="text"
-                                value={draft}
-                                disabled={saving}
-                                onChange={(e) => setDraft(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Escape') {
-                                    e.preventDefault();
-                                    cancelEdit();
-                                  } else if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    commitEdit();
-                                  }
-                                }}
-                              />
+                              useArea ? (
+                                <textarea
+                                  ref={inputRef}
+                                  className="db-inline-input is-area"
+                                  rows={Math.min(8, Math.max(3, Math.ceil(draft.length / 48)))}
+                                  value={draft}
+                                  disabled={saving}
+                                  onChange={(e) => setDraft(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      cancelEdit();
+                                    } else if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault();
+                                      commitEdit();
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <input
+                                  ref={inputRef}
+                                  className="db-inline-input"
+                                  type="text"
+                                  value={draft}
+                                  disabled={saving}
+                                  size={Math.min(72, Math.max(18, draft.length + 2))}
+                                  onChange={(e) => setDraft(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      cancelEdit();
+                                    } else if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      commitEdit();
+                                    }
+                                  }}
+                                />
+                              )
                             ) : (
                               <span className="db-inline-nullval">NULL</span>
                             )}
-                            {nullable.get(col) && (
-                              <label className="db-inline-null" title="NULL">
-                                <input
-                                  type="checkbox"
-                                  checked={asNull}
-                                  disabled={saving}
-                                  onMouseDown={(e) => e.preventDefault()}
-                                  onChange={(e) => setAsNull(e.target.checked)}
-                                />
-                                <span>N</span>
-                              </label>
-                            )}
-                            <button
-                              type="button"
-                              className="db-inline-ico ok"
-                              disabled={saving}
-                              title={t('common.save')}
-                              aria-label={t('common.save')}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={commitEdit}
-                            >
-                              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M20 6 9 17l-5-5" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              className="db-inline-ico"
-                              disabled={saving}
-                              title={t('common.cancel')}
-                              aria-label={t('common.cancel')}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={cancelEdit}
-                            >
-                              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                                <path d="M18 6 6 18M6 6l12 12" />
-                              </svg>
-                            </button>
+                            <div className="db-inline-tools">
+                              {nullable.get(col) && (
+                                <label className="db-inline-null" title="NULL">
+                                  <input
+                                    type="checkbox"
+                                    checked={asNull}
+                                    disabled={saving}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onChange={(e) => setAsNull(e.target.checked)}
+                                  />
+                                  <span>N</span>
+                                </label>
+                              )}
+                              <button
+                                type="button"
+                                className="db-inline-ico ok"
+                                disabled={saving}
+                                title={t('common.save')}
+                                aria-label={t('common.save')}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={commitEdit}
+                              >
+                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M20 6 9 17l-5-5" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                className="db-inline-ico"
+                                disabled={saving}
+                                title={t('common.cancel')}
+                                aria-label={t('common.cancel')}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={cancelEdit}
+                              >
+                                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                                  <path d="M18 6 6 18M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
                           </div>
                         </td>
                       );

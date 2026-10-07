@@ -437,32 +437,46 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 }
 
 .db-cell-edit {
-  max-width: 360px !important;
+  position: relative;
+  max-width: none !important;
   overflow: visible !important;
-  white-space: nowrap !important;
+  white-space: normal !important;
   background: color-mix(in srgb, var(--accent) 8%, var(--card)) !important;
-  vertical-align: middle !important;
+  vertical-align: top !important;
   padding: 3px 4px !important;
+  z-index: 4;
 }
 
 .db-inline-edit {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: min(280px, 70vw);
+  max-width: min(420px, 80vw);
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-2);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.db-inline-edit.is-wide {
+  min-width: min(480px, 85vw);
+  max-width: min(640px, 92vw);
 }
 
 .db-inline-input {
-  flex: 1 1 auto;
-  min-width: 100px;
-  max-width: 260px;
-  width: 180px;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
   box-sizing: border-box;
   font: inherit;
   font-family: var(--mono);
   font-size: 12px;
-  line-height: 1.2;
-  padding: 4px 7px;
+  line-height: 1.35;
+  padding: 6px 8px;
   border: 1px solid var(--accent);
   border-radius: 5px;
   background: var(--bg);
@@ -470,14 +484,29 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   outline: none;
 }
 
+.db-inline-input.is-area {
+  min-height: 72px;
+  resize: vertical;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .db-inline-input:focus {
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.2);
 }
 
+.db-inline-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
 .db-inline-nullval {
-  flex: 1 1 auto;
-  min-width: 80px;
-  padding: 4px 7px;
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
   font-family: var(--mono);
   font-size: 12px;
   font-style: italic;
