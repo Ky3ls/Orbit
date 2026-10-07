@@ -63,13 +63,53 @@ function rowSelKey(row, primaryKey, rowIdx) {
   return `idx:${rowIdx}`;
 }
 
+function isAutoInc(col) {
+  return Boolean(col?.extra?.includes('auto_increment'));
+}
+
+function isLongCol(col) {
+  return /text|blob|json/i.test(String(col?.type || ''));
+}
+
 function valuesForCopy(row, structure) {
   const out = {};
   for (const col of structure || []) {
-    if (col.extra?.includes('auto_increment')) continue;
+    if (isAutoInc(col)) continue;
     out[col.field] = row[col.field] === undefined ? null : row[col.field];
   }
   return out;
+}
+
+/** Seed für Insert/Copy-Formular. Bei Copy: PK-Felder leeren (kein Duplicate). */
+function buildInsertDraft(structure, seed = null, { clearPrimary = false } = {}) {
+  const values = {};
+  const nulls = {};
+  for (const col of structure || []) {
+    if (isAutoInc(col)) continue;
+    const allowNull = String(col.null).toUpperCase() === 'YES';
+    const isPk = col.key === 'PRI';
+    if (clearPrimary && isPk) {
+      values[col.field] = '';
+      nulls[col.field] = false;
+      continue;
+    }
+    let raw;
+    if (seed && Object.prototype.hasOwnProperty.call(seed, col.field)) {
+      raw = seed[col.field];
+    } else if (col.default != null && String(col.default).toUpperCase() !== 'NULL') {
+      raw = col.default;
+    } else {
+      raw = null;
+    }
+    if (raw === null || raw === undefined) {
+      values[col.field] = '';
+      nulls[col.field] = allowNull;
+    } else {
+      values[col.field] = typeof raw === 'object' ? JSON.stringify(raw) : String(raw);
+      nulls[col.field] = false;
+    }
+  }
+  return { values, nulls };
 }
 
 function DataTable({ columns, rows, emptyColumns, emptyRows }) {
@@ -460,15 +500,29 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult, t }) {
   );
 }
 
-function InsertForm({ structure, busy, onInsert, onCancel, t }) {
-  const [values, setValues] = useState(() => {
-    const init = {};
-    for (const col of structure || []) {
-      if (col.extra?.includes('auto_increment')) continue;
-      init[col.field] = col.default == null ? '' : String(col.default);
-    }
-    return init;
-  });
+function InsertForm({ structure, busy, onInsert, onCancel, t, mode = 'insert', draft }) {
+  const baseline = useMemo(
+    () => draft || buildInsertDraft(structure),
+    [structure, draft],
+  );
+  const [values, setValues] = useState(baseline.values);
+  const [nulls, setNulls] = useState(baseline.nulls);
+
+  function reset() {
+    setValues(baseline.values);
+    setNulls(baseline.nulls);
+  }
+
+  function setValue(field, text) {
+    setValues((v) => ({ ...v, [field]: text }));
+    setNulls((n) => ({ ...n, [field]: false }));
+  }
+
+  function toggleNull(field, on, allowNull) {
+    if (!allowNull) return;
+    setNulls((n) => ({ ...n, [field]: on }));
+    if (on) setValues((v) => ({ ...v, [field]: '' }));
+  }
 
   return (
     <form
@@ -477,42 +531,94 @@ function InsertForm({ structure, busy, onInsert, onCancel, t }) {
         e.preventDefault();
         const payload = {};
         for (const col of structure || []) {
-          if (col.extra?.includes('auto_increment')) continue;
-          const raw = values[col.field];
-          if (raw === '' && String(col.null).toUpperCase() === 'YES') payload[col.field] = null;
+          if (isAutoInc(col)) continue;
+          const allowNull = String(col.null).toUpperCase() === 'YES';
+          if (nulls[col.field]) {
+            payload[col.field] = null;
+            continue;
+          }
+          const raw = values[col.field] ?? '';
+          if (raw === '' && allowNull) payload[col.field] = null;
           else payload[col.field] = raw;
         }
         onInsert(payload);
       }}
     >
-      <h4 className="db-insert-title">{t('db.insertRow')}</h4>
-      <div className="db-insert-grid">
-        {(structure || []).map((col) => {
-          if (col.extra?.includes('auto_increment')) {
-            return (
-              <label key={col.field} className="field">
-                <span>{col.field} <em className="muted">AI</em></span>
-                <input disabled placeholder="AUTO" />
-              </label>
-            );
-          }
-          return (
-            <label key={col.field} className="field">
-              <span>
-                {col.field}
-                {col.key === 'PRI' ? ' *' : ''}
-              </span>
-              <input
-                value={values[col.field] ?? ''}
-                onChange={(e) => setValues((v) => ({ ...v, [col.field]: e.target.value }))}
-                disabled={busy}
-              />
-            </label>
-          );
-        })}
+      <div className="db-insert-head">
+        <h4 className="db-insert-title">
+          {mode === 'copy' ? t('db.copyAsNew') : t('db.insertRow')}
+        </h4>
+        {mode === 'copy' && (
+          <p className="muted db-insert-hint">{t('db.copyPkHint')}</p>
+        )}
+      </div>
+      <div className="db-insert-scroll">
+        <table className="db-insert-table">
+          <thead>
+            <tr>
+              <th>{t('db.column')}</th>
+              <th>{t('db.col.type')}</th>
+              <th>{t('db.col.null')}</th>
+              <th>{t('db.value')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(structure || []).map((col) => {
+              const allowNull = String(col.null).toUpperCase() === 'YES';
+              const isAi = isAutoInc(col);
+              const long = isLongCol(col);
+              const isNull = Boolean(nulls[col.field]);
+              return (
+                <tr key={col.field} className={col.key === 'PRI' ? 'is-pk' : undefined}>
+                  <td className="db-insert-name">
+                    <code>{col.field}</code>
+                    {col.key === 'PRI' ? <span className="db-insert-badge">PK</span> : null}
+                    {isAi ? <span className="db-insert-badge ai">AI</span> : null}
+                  </td>
+                  <td className="db-insert-type muted mono">{col.type || '—'}</td>
+                  <td className="db-insert-null">
+                    {isAi ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={isNull}
+                        disabled={busy || !allowNull}
+                        title={allowNull ? t('db.col.null') : t('db.notNullable')}
+                        onChange={(e) => toggleNull(col.field, e.target.checked, allowNull)}
+                      />
+                    )}
+                  </td>
+                  <td className="db-insert-val">
+                    {isAi ? (
+                      <input className="db-insert-input" disabled placeholder="AUTO_INCREMENT" />
+                    ) : long ? (
+                      <textarea
+                        className="db-insert-input db-insert-area"
+                        rows={4}
+                        value={isNull ? '' : (values[col.field] ?? '')}
+                        disabled={busy || isNull}
+                        onChange={(e) => setValue(col.field, e.target.value)}
+                      />
+                    ) : (
+                      <input
+                        className="db-insert-input"
+                        value={isNull ? '' : (values[col.field] ?? '')}
+                        disabled={busy || isNull}
+                        onChange={(e) => setValue(col.field, e.target.value)}
+                        placeholder={col.key === 'PRI' && mode === 'copy' ? t('db.newPkPh') : undefined}
+                      />
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       <div className="db-insert-actions">
         <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{t('db.insert')}</button>
+        <button type="button" className="btn btn-sm" disabled={busy} onClick={reset}>{t('db.insertReset')}</button>
         <button type="button" className="btn btn-sm" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
       </div>
     </form>
@@ -546,6 +652,9 @@ export default function Database({ user }) {
   const [page, setPage] = useState(0);
   const [rowFilter, setRowFilter] = useState('');
   const [insertOpen, setInsertOpen] = useState(false);
+  const [insertMode, setInsertMode] = useState('insert');
+  const [insertDraft, setInsertDraft] = useState(null);
+  const [insertKey, setInsertKey] = useState(0);
 
   const [searchCol, setSearchCol] = useState('');
   const [searchQ, setSearchQ] = useState('');
@@ -764,69 +873,65 @@ export default function Database({ user }) {
     }
   }
 
-  async function insertRow(values, { silent = false } = {}) {
+  function closeInsert() {
+    setInsertOpen(false);
+    setInsertDraft(null);
+    setInsertMode('insert');
+  }
+
+  async function openInsertEditor(mode = 'insert', seed = null) {
+    setErr('');
+    setMsg('');
+    try {
+      let cols = structure;
+      if (!cols.length && table) {
+        cols = await loadStructure(table);
+      }
+      const draft = buildInsertDraft(cols, seed, { clearPrimary: mode === 'copy' });
+      setInsertMode(mode);
+      setInsertDraft(draft);
+      setInsertKey((k) => k + 1);
+      setInsertOpen(true);
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
+
+  async function insertRow(values) {
     setBusy(true);
     setErr('');
-    if (!silent) setMsg('');
+    setMsg('');
     try {
       const d = await api('/api/database/row', {
         method: 'POST',
         body: { action: 'insert', table, values },
       });
-      if (!silent) {
-        setMsg(d.insertId ? t('db.insertedId', { id: d.insertId }) : t('db.inserted'));
-        setInsertOpen(false);
-        setPage(0);
-        await loadBrowse(table, 0, pageSize);
-      }
+      const copied = insertMode === 'copy';
+      setMsg(
+        d.insertId
+          ? (copied ? t('db.copiedId', { id: d.insertId }) : t('db.insertedId', { id: d.insertId }))
+          : (copied ? t('db.copied') : t('db.inserted')),
+      );
+      closeInsert();
+      setPage(0);
+      await loadBrowse(table, 0, pageSize);
       return d;
     } catch (e) {
       setErr(e.message);
-      throw e;
     } finally {
       setBusy(false);
     }
   }
 
-  async function copyRow(values) {
-    setBusy(true);
-    setErr('');
-    setMsg('');
-    try {
-      const d = await api('/api/database/row', {
-        method: 'POST',
-        body: { action: 'insert', table, values },
-      });
-      setMsg(d.insertId ? t('db.copiedId', { id: d.insertId }) : t('db.copied'));
-      await loadBrowse(table, page * pageSize, pageSize);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setBusy(false);
-    }
+  function copyRow(values) {
+    openInsertEditor('copy', values);
   }
 
-  async function copyMany(valueList) {
+  function copyMany(valueList) {
     if (!valueList?.length) return;
-    setBusy(true);
-    setErr('');
-    setMsg('');
-    try {
-      let n = 0;
-      for (const values of valueList) {
-        await api('/api/database/row', {
-          method: 'POST',
-          body: { action: 'insert', table, values },
-        });
-        n += 1;
-      }
-      setMsg(t('db.copiedMany', { n }));
-      await loadBrowse(table, page * pageSize, pageSize);
-    } catch (e) {
-      setErr(e.message);
-      try { await loadBrowse(table, page * pageSize, pageSize); } catch { /* */ }
-    } finally {
-      setBusy(false);
+    openInsertEditor('copy', valueList[0]);
+    if (valueList.length > 1) {
+      setMsg(t('db.copyOneOfMany', { n: valueList.length }));
     }
   }
 
@@ -1092,11 +1197,11 @@ export default function Database({ user }) {
                     {canEdit && (
                       <button
                         type="button"
-                        className={`db-tool-btn${insertOpen ? ' is-on' : ''}`}
+                        className={`db-tool-btn${insertOpen && insertMode === 'insert' ? ' is-on' : ''}`}
                         disabled={busy}
                         onClick={() => {
-                          if (!structure.length) loadStructure(table).then(() => setInsertOpen(true));
-                          else setInsertOpen((v) => !v);
+                          if (insertOpen && insertMode === 'insert') closeInsert();
+                          else openInsertEditor('insert');
                         }}
                       >
                         {t('db.insertRow')}
@@ -1118,10 +1223,13 @@ export default function Database({ user }) {
 
                 {insertOpen && canEdit && (
                   <InsertForm
+                    key={insertKey}
                     structure={structure}
                     busy={busy}
+                    mode={insertMode}
+                    draft={insertDraft}
                     onInsert={insertRow}
-                    onCancel={() => setInsertOpen(false)}
+                    onCancel={closeInsert}
                     t={t}
                   />
                 )}
