@@ -46,6 +46,24 @@ function playerFingerprint(p) {
   return `${p.identifier}|${p.name}|${p.online ? 1 : 0}|${p.serverId || ''}|${p.ping ?? ''}|${p.banned ? 1 : 0}|${p.whitelisted ? 1 : 0}|${p.play_ms || 0}|${p.last_seen || 0}|${p.note || ''}`;
 }
 
+/** Ban-Dauer aus created/expires (z. B. „2 Tage“). */
+function banLengthLabel(created, expires, t) {
+  if (!expires) return t('common.permanent');
+  const ms = Math.max(0, Number(expires) - Number(created || 0));
+  const day = 86_400_000;
+  const hour = 3_600_000;
+  const days = Math.round(ms / day);
+  if (days >= 1 && Math.abs(ms - days * day) < hour) {
+    return days === 1 ? t('players.histLenDay') : t('players.histLenDays', { n: days });
+  }
+  const hours = Math.round(ms / hour);
+  if (hours >= 1 && Math.abs(ms - hours * hour) < 60_000) {
+    return hours === 1 ? t('players.histLenHour') : t('players.histLenHours', { n: hours });
+  }
+  const mins = Math.max(1, Math.round(ms / 60_000));
+  return mins === 1 ? t('players.histLenMin') : t('players.histLenMins', { n: mins });
+}
+
 export default function Players({ user }) {
   const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -966,6 +984,8 @@ export default function Players({ user }) {
                         author: b.author,
                         expires: b.expires,
                         revoked: !!b.revoked,
+                        revokedBy: b.revoked_by || '',
+                        revokedAt: b.revoked_at || 0,
                         live: !b.revoked && (!b.expires || b.expires > Date.now()),
                       })),
                       ...warns.map((w) => ({
@@ -985,6 +1005,7 @@ export default function Players({ user }) {
                             String(e.id),
                             e.reason,
                             e.author,
+                            e.revokedBy,
                             e.kind === 'ban' ? t('players.histBan') : t('players.histWarn'),
                           ].join(' ').toLowerCase();
                           return hay.includes(needle);
@@ -1025,44 +1046,64 @@ export default function Players({ user }) {
                             >
                               <div className="pl-hist-rail" aria-hidden="true" />
                               <article className="pl-hist-card">
-                                <div className="pl-hist-row">
-                                  <span className={`pl-hist-type ${e.kind}`}>
-                                    {e.kind === 'ban' ? t('players.histBan') : t('players.histWarn')}
-                                  </span>
-                                  <span className="pl-hist-id">#{e.id}</span>
-                                  {e.kind === 'ban' && e.live && (
-                                    <span className="pl-hist-pill">{t('players.banned')}</span>
-                                  )}
-                                  {e.kind === 'ban' && e.revoked && (
-                                    <span className="pl-hist-pill off">{t('players.banRevoked')}</span>
-                                  )}
-                                  {e.kind === 'ban' && !e.live && !e.revoked && e.expires && (
-                                    <span className="pl-hist-pill off">{t('players.histExpired')}</span>
-                                  )}
-                                  <p className="pl-hist-reason">{e.reason || '—'}</p>
-                                  <time className="pl-hist-time" dateTime={e.created ? new Date(e.created).toISOString() : undefined}>
-                                    {fmtFull(e.created)}
-                                  </time>
-                                  {e.kind === 'ban' && e.live && canRevoke && (
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm pl-hist-revoke"
-                                      disabled={busy}
-                                      onClick={() => revokeBan(e.id)}
-                                    >
-                                      {t('players.revokeBan')}
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="pl-hist-meta">
-                                  {e.author && <span>{t('players.histBy', { name: e.author })}</span>}
-                                  {e.kind === 'ban' && (
-                                    <span>
-                                      {e.expires
-                                        ? t('players.banUntil', { when: fmtFull(e.expires) })
-                                        : t('common.permanent')}
-                                    </span>
-                                  )}
+                                <div className="pl-hist-main">
+                                  <div className="pl-hist-body">
+                                    <div className="pl-hist-row">
+                                      <span className={`pl-hist-type ${e.kind}`}>
+                                        {e.kind === 'ban' ? t('players.histBan') : t('players.histWarn')}
+                                      </span>
+                                      <span className="pl-hist-id">#{e.id}</span>
+                                      {e.kind === 'ban' && e.live && (
+                                        <span className="pl-hist-pill">{t('players.banned')}</span>
+                                      )}
+                                      {e.kind === 'ban' && e.revoked && (
+                                        <span className="pl-hist-pill off">{t('players.banRevoked')}</span>
+                                      )}
+                                      {e.kind === 'ban' && !e.live && !e.revoked && e.expires && (
+                                        <span className="pl-hist-pill off">{t('players.histExpired')}</span>
+                                      )}
+                                      <p className="pl-hist-reason">{e.reason || '—'}</p>
+                                      {e.kind === 'ban' && e.live && canRevoke && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm pl-hist-revoke"
+                                          disabled={busy}
+                                          onClick={() => revokeBan(e.id)}
+                                        >
+                                          {t('players.revokeBan')}
+                                        </button>
+                                      )}
+                                    </div>
+                                    <div className="pl-hist-meta">
+                                      {e.author && (
+                                        <span>
+                                          {e.kind === 'ban'
+                                            ? t('players.histBannedBy', { name: e.author })
+                                            : t('players.histWarnedBy', { name: e.author })}
+                                        </span>
+                                      )}
+                                      {e.kind === 'ban' && e.revoked && e.revokedBy && (
+                                        <span>{t('players.histRevokedBy', { name: e.revokedBy })}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="pl-hist-when">
+                                    <time dateTime={e.created ? new Date(e.created).toISOString() : undefined}>
+                                      {fmtFull(e.created)}
+                                    </time>
+                                    {e.kind === 'ban' && (
+                                      <>
+                                        <span className="pl-hist-len">
+                                          {banLengthLabel(e.created, e.expires, t)}
+                                        </span>
+                                        {e.expires ? (
+                                          <span className="pl-hist-until">
+                                            {t('players.banUntil', { when: fmtFull(e.expires) })}
+                                          </span>
+                                        ) : null}
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </article>
                             </li>

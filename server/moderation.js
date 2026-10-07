@@ -303,6 +303,22 @@ export function playerHistory(db, identifiers) {
     });
   const warns = db.prepare('SELECT * FROM warns ORDER BY id DESC LIMIT 200').all()
     .filter((w) => ids.includes(w.identifier) || ids.some((id) => w.identifier === id));
+  /* Alte Aufhebungen: Autor aus Audit nachziehen */
+  try {
+    const lookup = db.prepare(
+      `SELECT user, created FROM audit WHERE action = 'unban' AND detail = ? ORDER BY id DESC LIMIT 1`,
+    );
+    for (const b of bans) {
+      if (!b.revoked || b.revoked_by) continue;
+      const row = lookup.get(String(b.id));
+      if (row) {
+        b.revoked_by = row.user;
+        if (!b.revoked_at) b.revoked_at = row.created;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
   return { bans, warns };
 }
 
@@ -372,6 +388,8 @@ export function deleteBanTemplate(db, id) {
 export function ensureModerationSchema(db) {
   for (const sql of [
     'ALTER TABLE bans ADD COLUMN ids TEXT',
+    'ALTER TABLE bans ADD COLUMN revoked_by TEXT',
+    'ALTER TABLE bans ADD COLUMN revoked_at INTEGER',
     'ALTER TABLE users ADD COLUMN discord_id TEXT',
     `CREATE TABLE IF NOT EXISTS ban_templates (
       id INTEGER PRIMARY KEY,
