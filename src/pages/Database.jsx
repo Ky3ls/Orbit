@@ -1565,23 +1565,29 @@ export default function Database({ user }) {
         <aside className="db-shell-aside" aria-label={t('db.tablesAria')}>
           <div className="db-aside-top">
             <span className="db-aside-label">{t('db.tables')}</span>
-            <span className="db-aside-count mono">{tables.length}</span>
+            <div className="db-aside-top-end">
+              <span className="db-aside-count mono">{tables.length}</span>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="o-icon-btn"
+                  disabled={busy}
+                  title={t('db.createTable')}
+                  aria-label={t('db.createTable')}
+                  onClick={() => {
+                    setTable(null);
+                    setTab('create');
+                    setErr('');
+                    setMsg('');
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
-          {canEdit && (
-            <button
-              type="button"
-              className="db-btn db-btn-primary db-aside-create"
-              disabled={busy}
-              onClick={() => {
-                setTable(null);
-                setTab('create');
-                setErr('');
-                setMsg('');
-              }}
-            >
-              {t('db.createTable')}
-            </button>
-          )}
           <input
             className="search db-aside-search"
             type="search"
@@ -1698,18 +1704,11 @@ export default function Database({ user }) {
 
             {tab === 'overview' && (
               <>
-                <div className="db-overview-head">
-                  <p className="db-lead">
-                    {t('db.pickHintBefore')}
-                    <button type="button" className="db-link" onClick={() => setTab('sql')}>{t('db.pickHintSql')}</button>
-                    {t('db.pickHintAfter')}
-                  </p>
-                  {canEdit && (
-                    <button type="button" className="db-btn db-btn-primary" disabled={busy} onClick={() => setTab('create')}>
-                      {t('db.createTable')}
-                    </button>
-                  )}
-                </div>
+                <p className="db-lead">
+                  {t('db.pickHintBefore')}
+                  <button type="button" className="db-link" onClick={() => setTab('sql')}>{t('db.pickHintSql')}</button>
+                  {t('db.pickHintAfter')}
+                </p>
                 <div className="db-scroll">
                   <table className="ws-table db-grid db-overview-table">
                     <thead>
