@@ -93,6 +93,18 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   min-width: 100px;
 }
 
+.db-create-actions {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.db-create-actions-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .db-table-list {
   display: flex;
   flex-direction: column;
