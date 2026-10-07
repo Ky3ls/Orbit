@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Badge, Page, PageHeader } from '../components/Ui.jsx';
 import { useI18n } from '../i18n/I18nProvider.jsx';
@@ -30,13 +30,6 @@ function cellValue(v) {
   return { text: String(v) };
 }
 
-function fmtBytes(n) {
-  const b = Number(n) || 0;
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  return `${(b / (1024 * 1024)).toFixed(2)} MB`;
-}
-
 function exportCsv(filename, columns, rows) {
   const esc = (s) => {
     const t = String(s ?? '');
@@ -55,13 +48,20 @@ function exportCsv(filename, columns, rows) {
   URL.revokeObjectURL(a.href);
 }
 
+function rowPk(row, primaryKey) {
+  if (!primaryKey?.length) return null;
+  const pk = {};
+  for (const k of primaryKey) pk[k] = row[k];
+  return pk;
+}
+
 function DataTable({ columns, rows, emptyColumns, emptyRows }) {
   if (!columns.length) {
     return <p className="muted">{emptyColumns}</p>;
   }
   return (
     <div className="db-scroll">
-      <table className="ws-table">
+      <table className="ws-table db-grid">
         <thead>
           <tr>{columns.map((c) => <th key={c.key || c}>{c.label || c}</th>)}</tr>
         </thead>
@@ -81,6 +81,198 @@ function DataTable({ columns, rows, emptyColumns, emptyRows }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function BrowseTable({
+  columns,
+  rows,
+  primaryKey,
+  structure,
+  emptyColumns,
+  emptyRows,
+  canEdit,
+  busy,
+  onSaveCell,
+  onDeleteRow,
+  t,
+}) {
+  const [edit, setEdit] = useState(null);
+  const [draft, setDraft] = useState('');
+  const [asNull, setAsNull] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+  const pkSet = useMemo(() => new Set(primaryKey || []), [primaryKey]);
+  const nullable = useMemo(() => {
+    const map = new Map();
+    for (const col of structure || []) map.set(col.field, String(col.null).toUpperCase() === 'YES');
+    return map;
+  }, [structure]);
+
+  useEffect(() => {
+    if (edit && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select?.();
+    }
+  }, [edit]);
+
+  function startEdit(rowIdx, col) {
+    if (!canEdit || busy || saving) return;
+    if (!primaryKey?.length) return;
+    if (pkSet.has(col) && structure?.find((c) => c.field === col)?.extra?.includes('auto_increment')) return;
+    const row = rows[rowIdx];
+    const raw = row?.[col];
+    const isNull = raw === null || raw === undefined;
+    setEdit({ rowIdx, col });
+    setAsNull(isNull);
+    setDraft(isNull ? '' : cellValue(raw).text);
+  }
+
+  function cancelEdit() {
+    setEdit(null);
+    setDraft('');
+    setAsNull(false);
+  }
+
+  async function commitEdit() {
+    if (!edit || saving) return;
+    const row = rows[edit.rowIdx];
+    if (!row) return cancelEdit();
+    const pk = rowPk(row, primaryKey);
+    if (!pk) return cancelEdit();
+    const nextVal = asNull ? null : draft;
+    const prev = row[edit.col];
+    const prevText = prev === null || prev === undefined ? null : cellValue(prev).text;
+    const nextText = nextVal === null ? null : String(nextVal);
+    if (prevText === nextText || (prev === null && nextVal === null)) {
+      cancelEdit();
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSaveCell(pk, edit.col, nextVal);
+      cancelEdit();
+    } catch {
+      /* parent sets err */
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!columns.length) {
+    return <p className="muted">{emptyColumns}</p>;
+  }
+
+  return (
+    <div className="db-scroll">
+      <table className="ws-table db-grid db-browse-grid">
+        <thead>
+          <tr>
+            {canEdit && <th className="db-act-col">{t('db.actions')}</th>}
+            {columns.map((c) => (
+              <th key={c} className={pkSet.has(c) ? 'pk' : undefined}>{c}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length + (canEdit ? 1 : 0)} className="muted">{emptyRows}</td>
+            </tr>
+          ) : rows.map((row, rowIdx) => (
+            <tr key={rowIdx}>
+              {canEdit && (
+                <td className="db-act-cell">
+                  <button
+                    type="button"
+                    className="db-act-btn danger"
+                    disabled={busy || saving || !primaryKey?.length}
+                    title={primaryKey?.length ? t('db.deleteRow') : t('db.noPrimaryKey')}
+                    onClick={() => {
+                      const pk = rowPk(row, primaryKey);
+                      if (!pk) return;
+                      if (!window.confirm(t('db.deleteConfirm'))) return;
+                      onDeleteRow(pk, rowIdx);
+                    }}
+                  >
+                    {t('db.deleteRow')}
+                  </button>
+                </td>
+              )}
+              {columns.map((col) => {
+                const isEditing = edit?.rowIdx === rowIdx && edit?.col === col;
+                const { text, null: isNull } = cellValue(row[col]);
+                if (isEditing) {
+                  return (
+                    <td key={col} className="db-cell-edit">
+                      <div className="db-inline-edit">
+                        {!asNull && (
+                          <textarea
+                            ref={inputRef}
+                            className="db-inline-input"
+                            value={draft}
+                            rows={Math.min(6, Math.max(1, String(draft).split('\n').length))}
+                            disabled={saving}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                cancelEdit();
+                              } else if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                commitEdit();
+                              }
+                            }}
+                            onBlur={() => {
+                              /* keep open; save via Enter or click outside handled below */
+                            }}
+                          />
+                        )}
+                        <div className="db-inline-hint">
+                          {nullable.get(col) && (
+                            <label className="db-inline-null">
+                              <input
+                                type="checkbox"
+                                checked={asNull}
+                                disabled={saving}
+                                onChange={(e) => setAsNull(e.target.checked)}
+                              />
+                              NULL
+                            </label>
+                          )}
+                          <span>{t('db.editHint')}</span>
+                          <div className="db-inline-actions">
+                            <button type="button" className="btn btn-sm btn-primary" disabled={saving} onMouseDown={(e) => e.preventDefault()} onClick={commitEdit}>
+                              {t('common.save')}
+                            </button>
+                            <button type="button" className="btn btn-sm" disabled={saving} onMouseDown={(e) => e.preventDefault()} onClick={cancelEdit}>
+                              {t('common.cancel')}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  );
+                }
+                return (
+                  <td
+                    key={col}
+                    className={`${isNull ? 'null' : ''}${canEdit && primaryKey?.length ? ' db-cell-editable' : ''}`}
+                    title={canEdit && primaryKey?.length ? t('db.dblClickEdit') : undefined}
+                    onDoubleClick={() => startEdit(rowIdx, col)}
+                  >
+                    {text}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {canEdit && !primaryKey?.length && (
+        <p className="muted db-pk-warn">{t('db.noPrimaryKey')}</p>
+      )}
     </div>
   );
 }
@@ -125,9 +317,72 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult, t }) {
   );
 }
 
+function InsertForm({ structure, busy, onInsert, onCancel, t }) {
+  const [values, setValues] = useState(() => {
+    const init = {};
+    for (const col of structure || []) {
+      if (col.extra?.includes('auto_increment')) continue;
+      init[col.field] = col.default == null ? '' : String(col.default);
+    }
+    return init;
+  });
+
+  return (
+    <form
+      className="db-insert"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const payload = {};
+        for (const col of structure || []) {
+          if (col.extra?.includes('auto_increment')) continue;
+          const raw = values[col.field];
+          if (raw === '' && String(col.null).toUpperCase() === 'YES') payload[col.field] = null;
+          else payload[col.field] = raw;
+        }
+        onInsert(payload);
+      }}
+    >
+      <h4 className="db-insert-title">{t('db.insertRow')}</h4>
+      <div className="db-insert-grid">
+        {(structure || []).map((col) => {
+          if (col.extra?.includes('auto_increment')) {
+            return (
+              <label key={col.field} className="field">
+                <span>{col.field} <em className="muted">AI</em></span>
+                <input disabled placeholder="AUTO" />
+              </label>
+            );
+          }
+          return (
+            <label key={col.field} className="field">
+              <span>
+                {col.field}
+                {col.key === 'PRI' ? ' *' : ''}
+              </span>
+              <input
+                value={values[col.field] ?? ''}
+                onChange={(e) => setValues((v) => ({ ...v, [col.field]: e.target.value }))}
+                disabled={busy}
+              />
+            </label>
+          );
+        })}
+      </div>
+      <div className="db-insert-actions">
+        <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{t('db.insert')}</button>
+        <button type="button" className="btn btn-sm" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
+      </div>
+    </form>
+  );
+}
+
 export default function Database({ user }) {
   const { t } = useI18n();
   const isOwner = user?.role === 'owner';
+  const canEdit = isOwner
+    || user?.role === 'admin'
+    || (user?.permissions || []).includes('database')
+    || (user?.permissions || []).includes('*');
   const [meta, setMeta] = useState({ database: '', version: '' });
   const [tables, setTables] = useState([]);
   const [overview, setOverview] = useState([]);
@@ -141,9 +396,13 @@ export default function Database({ user }) {
   const [msg, setMsg] = useState('');
 
   const [structure, setStructure] = useState([]);
-  const [browse, setBrowse] = useState({ rows: [], columns: [], total: 0, offset: 0, limit: 25 });
+  const [browse, setBrowse] = useState({
+    rows: [], columns: [], total: 0, offset: 0, limit: 25, primaryKey: [],
+  });
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(0);
+  const [rowFilter, setRowFilter] = useState('');
+  const [insertOpen, setInsertOpen] = useState(false);
 
   const [searchCol, setSearchCol] = useState('');
   const [searchQ, setSearchQ] = useState('');
@@ -196,6 +455,7 @@ export default function Database({ user }) {
     const cols = d.columns || [];
     setStructure(cols);
     if (cols[0]) setSearchCol(cols[0].field);
+    return cols;
   }, []);
 
   const loadBrowse = useCallback(async (name, offset, limit) => {
@@ -208,8 +468,13 @@ export default function Database({ user }) {
       total: d.total ?? 0,
       offset: d.offset ?? 0,
       limit: d.limit ?? limit,
+      primaryKey: d.primaryKey || [],
     });
-  }, []);
+    if (Array.isArray(d.structure) && d.structure.length) {
+      setStructure(d.structure);
+      if (d.structure[0] && !searchCol) setSearchCol(d.structure[0].field);
+    }
+  }, [searchCol]);
 
   useEffect(() => {
     if (!table) return;
@@ -231,6 +496,8 @@ export default function Database({ user }) {
     setTable(name);
     setTab('browse');
     setPage(0);
+    setRowFilter('');
+    setInsertOpen(false);
     setSearchResult({ rows: [], columns: [] });
     setSql(`SELECT * FROM \`${name.replace(/`/g, '')}\` LIMIT 50`);
     setSqlResult(null);
@@ -241,6 +508,20 @@ export default function Database({ user }) {
     setTable(null);
     setTab('overview');
     setPage(0);
+    setInsertOpen(false);
+  }
+
+  async function refreshBrowse() {
+    if (!table) return;
+    setBusy(true);
+    setErr('');
+    try {
+      await loadBrowse(table, page * pageSize, pageSize);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runSql(e) {
@@ -257,6 +538,7 @@ export default function Database({ user }) {
         if (d.insertId) parts.push(t('db.lastId', { id: d.insertId }));
         if (d.message) parts.push(d.message);
         setMsg(parts.join(' '));
+        if (table) refreshBrowse();
       } else {
         setMsg(d.truncated ? t('db.truncated') : t('db.rows', { n: (d.rows || []).length }));
       }
@@ -287,6 +569,67 @@ export default function Database({ user }) {
     }
   }
 
+  async function saveCell(pk, col, value) {
+    setErr('');
+    setMsg('');
+    try {
+      await api('/api/database/row', {
+        method: 'POST',
+        body: { action: 'update', table, pk, set: { [col]: value } },
+      });
+      setBrowse((b) => {
+        const pkKeys = b.primaryKey || [];
+        const rows = b.rows.map((row) => {
+          const match = pkKeys.every((k) => String(row[k]) === String(pk[k]));
+          return match ? { ...row, [col]: value } : row;
+        });
+        return { ...b, rows };
+      });
+      setMsg(t('db.saved'));
+    } catch (e) {
+      setErr(e.message);
+      throw e;
+    }
+  }
+
+  async function deleteRow(pk) {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      await api('/api/database/row', {
+        method: 'POST',
+        body: { action: 'delete', table, pk },
+      });
+      setMsg(t('db.deleted'));
+      await loadBrowse(table, page * pageSize, pageSize);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function insertRow(values) {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      const d = await api('/api/database/row', {
+        method: 'POST',
+        body: { action: 'insert', table, values },
+      });
+      setMsg(d.insertId ? t('db.insertedId', { id: d.insertId }) : t('db.inserted'));
+      setInsertOpen(false);
+      setPage(0);
+      await loadBrowse(table, 0, pageSize);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const pageCount = table && tab === 'browse'
     ? Math.max(1, Math.ceil(browse.total / pageSize))
     : 1;
@@ -302,6 +645,15 @@ export default function Database({ user }) {
   }));
 
   const overviewFiltered = overview.filter((tbl) => filteredTables.includes(tbl.name));
+
+  const filteredBrowseRows = useMemo(() => {
+    const q = rowFilter.trim().toLowerCase();
+    if (!q) return browse.rows;
+    return browse.rows.filter((row) => browse.columns.some((c) => {
+      const { text } = cellValue(row[c]);
+      return text.toLowerCase().includes(q);
+    }));
+  }, [browse.rows, browse.columns, rowFilter]);
 
   return (
     <Page className="db-page ws-module-flush">
@@ -374,7 +726,7 @@ export default function Database({ user }) {
               type="button"
               role="tab"
               className={`db-tab${tab === 'overview' ? ' active' : ''}`}
-              onClick={() => { setTab('overview'); setTable(null); }}
+              onClick={() => { setTab('overview'); setTable(null); setInsertOpen(false); }}
             >
               {t('db.overview')}
             </button>
@@ -428,23 +780,23 @@ export default function Database({ user }) {
                   {t('db.pickHintAfter')}
                 </p>
                 <div className="db-scroll">
-                  <table className="ws-table db-overview-table">
+                  <table className="ws-table db-grid db-overview-table">
                     <thead>
                       <tr>
                         <th>{t('db.table')}</th>
                         <th>{t('db.rowsApprox')}</th>
-                        <th>{t('db.engine')}</th>
-                        <th>{t('db.size')}</th>
                         <th />
                       </tr>
                     </thead>
                     <tbody>
                       {overviewFiltered.map((row) => (
                         <tr key={row.name}>
-                          <td className="mono">{row.name}</td>
+                          <td>
+                            <button type="button" className="db-link mono" onClick={() => selectTable(row.name)}>
+                              {row.name}
+                            </button>
+                          </td>
                           <td>{row.rows}</td>
-                          <td>{row.engine || '—'}</td>
-                          <td>{fmtBytes(row.size)}</td>
                           <td>
                             <button type="button" className="btn btn-sm" onClick={() => selectTable(row.name)}>
                               {t('db.open')}
@@ -481,42 +833,90 @@ export default function Database({ user }) {
 
             {tab === 'browse' && table && (
               <>
-                <div className="db-pager">
-                  <span>
-                    {browse.total === 0 ? t('db.rowsZero') : (
-                      t('db.rowsRange', {
-                        from: browse.offset + 1,
-                        to: Math.min(browse.offset + browse.limit, browse.total),
-                        total: browse.total,
-                      })
+                <div className="db-toolbar">
+                  <div className="db-pager">
+                    <span>
+                      {browse.total === 0 ? t('db.rowsZero') : (
+                        t('db.rowsRange', {
+                          from: browse.offset + 1,
+                          to: Math.min(browse.offset + browse.limit, browse.total),
+                          total: browse.total,
+                        })
+                      )}
+                    </span>
+                    <label>
+                      {t('db.limit')}
+                      <select
+                        value={pageSize}
+                        onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+                      >
+                        {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                    <button type="button" className="btn btn-sm" disabled={page <= 0 || busy} onClick={() => setPage((p) => p - 1)}>{t('common.back')}</button>
+                    <span>{page + 1} / {pageCount}</span>
+                    <button type="button" className="btn btn-sm" disabled={page + 1 >= pageCount || busy} onClick={() => setPage((p) => p + 1)}>{t('db.next')}</button>
+                  </div>
+                  <div className="db-toolbar-actions">
+                    <input
+                      className="search db-row-filter"
+                      type="search"
+                      value={rowFilter}
+                      onChange={(e) => setRowFilter(e.target.value)}
+                      placeholder={t('db.rowFilterPh')}
+                      aria-label={t('db.rowFilterPh')}
+                    />
+                    {canEdit && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        disabled={busy}
+                        onClick={() => {
+                          if (!structure.length) loadStructure(table).then(() => setInsertOpen(true));
+                          else setInsertOpen((v) => !v);
+                        }}
+                      >
+                        {t('db.insertRow')}
+                      </button>
                     )}
-                  </span>
-                  <label>
-                    {t('db.limit')}
-                    <select
-                      value={pageSize}
-                      onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
+                    <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshBrowse}>
+                      {t('db.refresh')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={!browse.rows.length}
+                      onClick={() => exportCsv(`${table}.csv`, browse.columns, browse.rows)}
                     >
-                      {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  </label>
-                  <button type="button" className="btn btn-sm" disabled={page <= 0 || busy} onClick={() => setPage((p) => p - 1)}>{t('common.back')}</button>
-                  <span>{page + 1} / {pageCount}</span>
-                  <button type="button" className="btn btn-sm" disabled={page + 1 >= pageCount || busy} onClick={() => setPage((p) => p + 1)}>{t('db.next')}</button>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    disabled={!browse.rows.length}
-                    onClick={() => exportCsv(`${table}.csv`, browse.columns, browse.rows)}
-                  >
-                    {t('db.csv')}
-                  </button>
+                      {t('db.csv')}
+                    </button>
+                  </div>
                 </div>
-                <DataTable
+
+                {insertOpen && canEdit && (
+                  <InsertForm
+                    structure={structure}
+                    busy={busy}
+                    onInsert={insertRow}
+                    onCancel={() => setInsertOpen(false)}
+                    t={t}
+                  />
+                )}
+
+                <p className="muted db-edit-tip">{t('db.dblClickTip')}</p>
+
+                <BrowseTable
                   columns={browse.columns}
-                  rows={browse.rows}
+                  rows={filteredBrowseRows}
+                  primaryKey={browse.primaryKey}
+                  structure={structure}
                   emptyColumns={t('db.noColumns')}
                   emptyRows={t('db.noRows')}
+                  canEdit={canEdit}
+                  busy={busy}
+                  onSaveCell={saveCell}
+                  onDeleteRow={(pk) => deleteRow(pk)}
+                  t={t}
                 />
               </>
             )}
