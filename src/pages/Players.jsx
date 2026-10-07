@@ -64,6 +64,68 @@ function banLengthLabel(created, expires, t) {
   return mins === 1 ? t('players.histLenMin') : t('players.histLenMins', { n: mins });
 }
 
+/** Datum-Varianten für Verlauf-Suche (Anzeige + tippbar: 05.10.2026, 2026-10-05 …). */
+function histDateSearchBits(ts) {
+  const n = Number(ts);
+  if (!n) return [];
+  const d = new Date(n);
+  if (Number.isNaN(d.getTime())) return [];
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = String(d.getFullYear());
+  const yy = yyyy.slice(-2);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return [
+    fmtFull(n),
+    `${dd}.${mm}.${yyyy}`,
+    `${dd}.${mm}.${yy}`,
+    `${yyyy}-${mm}-${dd}`,
+    `${dd}/${mm}/${yyyy}`,
+    `${dd}.${mm}.${yyyy}, ${hh}:${mi}`,
+    `${dd}.${mm}.${yyyy} ${hh}:${mi}`,
+    `${hh}:${mi}`,
+  ];
+}
+
+function histEntrySearchText(e, t) {
+  const parts = [
+    e.kind,
+    String(e.id),
+    e.reason,
+    e.author,
+    e.revokedBy,
+    e.kind === 'ban' ? t('players.histBan') : t('players.histWarn'),
+    ...histDateSearchBits(e.created),
+  ];
+  if (e.author) {
+    parts.push(
+      e.kind === 'ban'
+        ? t('players.histBannedBy', { name: e.author })
+        : t('players.histWarnedBy', { name: e.author }),
+    );
+  }
+  if (e.kind === 'ban') {
+    const len = banLengthLabel(e.created, e.expires, t);
+    parts.push(len, t('common.permanent'));
+    if (e.expires) {
+      parts.push(
+        ...histDateSearchBits(e.expires),
+        t('players.banUntil', { when: fmtFull(e.expires) }),
+        'bis',
+        'until',
+      );
+    }
+    if (e.live) parts.push(t('players.banned'));
+    if (e.revoked) {
+      parts.push(t('players.banRevoked'), 'aufgehoben', 'revoked');
+      if (e.revokedBy) parts.push(t('players.histRevokedBy', { name: e.revokedBy }));
+      if (e.revokedAt) parts.push(...histDateSearchBits(e.revokedAt));
+    }
+  }
+  return parts.filter(Boolean).join(' ').toLowerCase();
+}
+
 export default function Players({ user }) {
   const { t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -999,17 +1061,7 @@ export default function Players({ user }) {
 
                     const needle = histQ.trim().toLowerCase();
                     const visible = needle
-                      ? entries.filter((e) => {
-                          const hay = [
-                            e.kind,
-                            String(e.id),
-                            e.reason,
-                            e.author,
-                            e.revokedBy,
-                            e.kind === 'ban' ? t('players.histBan') : t('players.histWarn'),
-                          ].join(' ').toLowerCase();
-                          return hay.includes(needle);
-                        })
+                      ? entries.filter((e) => histEntrySearchText(e, t).includes(needle))
                       : entries;
                     const liveBans = entries.filter((e) => e.kind === 'ban' && e.live).length;
                     return (
