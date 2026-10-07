@@ -1635,21 +1635,11 @@ export default function Database({ user }) {
             <button
               type="button"
               role="tab"
-              className={`db-tab${tab === 'overview' ? ' active' : ''}`}
+              className={`db-tab${tab === 'overview' || tab === 'create' ? ' active' : ''}`}
               onClick={() => { setTab('overview'); setTable(null); setInsertDraft(null); setInsertMode('insert'); }}
             >
               {t('db.overview')}
             </button>
-            {canEdit && (
-              <button
-                type="button"
-                role="tab"
-                className={`db-tab${tab === 'create' ? ' active' : ''}`}
-                onClick={() => { setTable(null); setTab('create'); }}
-              >
-                {t('db.createTableTab')}
-              </button>
-            )}
             <button
               type="button"
               role="tab"
@@ -1703,41 +1693,34 @@ export default function Database({ user }) {
             {msg && <div className="banner">{msg}</div>}
 
             {tab === 'overview' && (
-              <>
-                <p className="db-lead">
-                  {t('db.pickHintBefore')}
-                  <button type="button" className="db-link" onClick={() => setTab('sql')}>{t('db.pickHintSql')}</button>
-                  {t('db.pickHintAfter')}
-                </p>
-                <div className="db-scroll">
-                  <table className="ws-table db-grid db-overview-table">
-                    <thead>
-                      <tr>
-                        <th>{t('db.table')}</th>
-                        <th>{t('db.rowsApprox')}</th>
-                        <th />
+              <div className="db-scroll">
+                <table className="ws-table db-grid db-overview-table">
+                  <thead>
+                    <tr>
+                      <th>{t('db.table')}</th>
+                      <th>{t('db.rowsApprox')}</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overviewFiltered.map((row) => (
+                      <tr key={row.name}>
+                        <td>
+                          <button type="button" className="db-link mono" onClick={() => selectTable(row.name)}>
+                            {row.name}
+                          </button>
+                        </td>
+                        <td>{row.rows}</td>
+                        <td>
+                          <button type="button" className="db-btn" onClick={() => selectTable(row.name)}>
+                            {t('db.open')}
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {overviewFiltered.map((row) => (
-                        <tr key={row.name}>
-                          <td>
-                            <button type="button" className="db-link mono" onClick={() => selectTable(row.name)}>
-                              {row.name}
-                            </button>
-                          </td>
-                          <td>{row.rows}</td>
-                          <td>
-                            <button type="button" className="db-btn" onClick={() => selectTable(row.name)}>
-                              {t('db.open')}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {tab === 'create' && canEdit && (
