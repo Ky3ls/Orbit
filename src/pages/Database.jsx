@@ -646,7 +646,7 @@ function CreateTableForm({ busy, onCreate, onCancel, t }) {
 
   return (
     <form
-      className="db-create"
+      className="db-insert db-create"
       onSubmit={(e) => {
         e.preventDefault();
         const tableName = name.trim();
@@ -671,76 +671,83 @@ function CreateTableForm({ busy, onCreate, onCancel, t }) {
           autoFocus
         />
       </label>
-      <div className="db-create-cols">
-        {cols.map((col, i) => (
-          <div key={i} className="db-create-col">
-            <div className="db-create-col-head">
-              <span className="muted">{t('db.column')} {i + 1}</span>
-              <button
-                type="button"
-                className="db-act-btn danger"
-                disabled={busy || cols.length <= 1}
-                onClick={() => removeCol(i)}
-              >
-                {t('db.dropCol')}
-              </button>
-            </div>
-            <div className="db-col-editor">
-              <label className="db-col-field">
-                <span>{t('db.column')}</span>
-                <input
-                  className="db-insert-input"
-                  value={col.name}
-                  disabled={busy}
-                  onChange={(e) => updateCol(i, { name: e.target.value })}
-                />
-              </label>
-              <label className="db-col-field">
-                <span>{t('db.col.type')}</span>
-                <input
-                  className="db-insert-input"
-                  list="db-type-suggestions"
-                  value={col.type}
-                  disabled={busy}
-                  onChange={(e) => updateCol(i, { type: e.target.value })}
-                />
-              </label>
-              <label className="db-col-check">
-                <input
-                  type="checkbox"
-                  checked={col.primary}
-                  disabled={busy}
-                  onChange={(e) => updateCol(i, {
-                    primary: e.target.checked,
-                    nullable: e.target.checked ? false : col.nullable,
-                  })}
-                />
-                <span>PK</span>
-              </label>
-              <label className="db-col-check">
-                <input
-                  type="checkbox"
-                  checked={col.autoIncrement}
-                  disabled={busy}
-                  onChange={(e) => updateCol(i, {
-                    autoIncrement: e.target.checked,
-                    nullable: e.target.checked ? false : col.nullable,
-                  })}
-                />
-                <span>AI</span>
-              </label>
-              <label className="db-col-check">
-                <input
-                  type="checkbox"
-                  checked={col.nullable}
-                  disabled={busy || col.autoIncrement || col.primary}
-                  onChange={(e) => updateCol(i, { nullable: e.target.checked })}
-                />
-                <span>{t('db.col.null')}</span>
-              </label>
-            </div>
-          </div>
-        ))}
+      <div className="db-insert-scroll">
+        <table className="db-insert-table">
+          <thead>
+            <tr>
+              <th>{t('db.column')}</th>
+              <th>{t('db.col.type')}</th>
+              <th>PK</th>
+              <th>AI</th>
+              <th>{t('db.col.null')}</th>
+              <th>{t('db.actions')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cols.map((col, i) => (
+              <tr key={i} className={col.primary ? 'is-pk' : undefined}>
+                <td>
+                  <input
+                    className="db-insert-input"
+                    value={col.name}
+                    disabled={busy}
+                    onChange={(e) => updateCol(i, { name: e.target.value })}
+                    placeholder="column_name"
+                  />
+                </td>
+                <td>
+                  <input
+                    className="db-insert-input"
+                    list="db-type-suggestions"
+                    value={col.type}
+                    disabled={busy}
+                    onChange={(e) => updateCol(i, { type: e.target.value })}
+                  />
+                </td>
+                <td className="db-insert-null">
+                  <input
+                    type="checkbox"
+                    checked={col.primary}
+                    disabled={busy}
+                    onChange={(e) => updateCol(i, {
+                      primary: e.target.checked,
+                      nullable: e.target.checked ? false : col.nullable,
+                    })}
+                  />
+                </td>
+                <td className="db-insert-null">
+                  <input
+                    type="checkbox"
+                    checked={col.autoIncrement}
+                    disabled={busy}
+                    onChange={(e) => updateCol(i, {
+                      autoIncrement: e.target.checked,
+                      nullable: e.target.checked ? false : col.nullable,
+                    })}
+                  />
+                </td>
+                <td className="db-insert-null">
+                  <input
+                    type="checkbox"
+                    checked={col.nullable}
+                    disabled={busy || col.autoIncrement || col.primary}
+                    onChange={(e) => updateCol(i, { nullable: e.target.checked })}
+                  />
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="db-act-btn danger"
+                    disabled={busy || cols.length <= 1}
+                    onClick={() => removeCol(i)}
+                  >
+                    {t('db.dropCol')}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <datalist id="db-type-suggestions">
         {TYPE_SUGGESTIONS.map((x) => <option key={x} value={x} />)}
