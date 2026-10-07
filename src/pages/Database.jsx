@@ -651,7 +651,6 @@ export default function Database({ user }) {
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(0);
   const [rowFilter, setRowFilter] = useState('');
-  const [insertOpen, setInsertOpen] = useState(false);
   const [insertMode, setInsertMode] = useState('insert');
   const [insertDraft, setInsertDraft] = useState(null);
   const [insertKey, setInsertKey] = useState(0);
@@ -731,7 +730,7 @@ export default function Database({ user }) {
   useEffect(() => {
     if (!table) return;
     setErr('');
-    if (tab === 'structure' || tab === 'search') {
+    if (tab === 'structure' || tab === 'search' || tab === 'insert') {
       setBusy(true);
       loadStructure(table)
         .catch((e) => setErr(e.message))
@@ -749,7 +748,8 @@ export default function Database({ user }) {
     setTab('browse');
     setPage(0);
     setRowFilter('');
-    setInsertOpen(false);
+    setInsertMode('insert');
+    setInsertDraft(null);
     setSearchResult({ rows: [], columns: [] });
     setSql(`SELECT * FROM \`${name.replace(/`/g, '')}\` LIMIT 50`);
     setSqlResult(null);
@@ -760,7 +760,8 @@ export default function Database({ user }) {
     setTable(null);
     setTab('overview');
     setPage(0);
-    setInsertOpen(false);
+    setInsertMode('insert');
+    setInsertDraft(null);
   }
 
   async function refreshBrowse() {
@@ -874,9 +875,9 @@ export default function Database({ user }) {
   }
 
   function closeInsert() {
-    setInsertOpen(false);
     setInsertDraft(null);
     setInsertMode('insert');
+    if (table) setTab('browse');
   }
 
   async function openInsertEditor(mode = 'insert', seed = null) {
@@ -891,7 +892,7 @@ export default function Database({ user }) {
       setInsertMode(mode);
       setInsertDraft(draft);
       setInsertKey((k) => k + 1);
-      setInsertOpen(true);
+      setTab('insert');
     } catch (e) {
       setErr(e.message);
     }
@@ -1054,7 +1055,7 @@ export default function Database({ user }) {
               type="button"
               role="tab"
               className={`db-tab${tab === 'overview' ? ' active' : ''}`}
-              onClick={() => { setTab('overview'); setTable(null); setInsertOpen(false); }}
+              onClick={() => { setTab('overview'); setTable(null); setInsertDraft(null); setInsertMode('insert'); }}
             >
               {t('db.overview')}
             </button>
@@ -1084,6 +1085,16 @@ export default function Database({ user }) {
                 >
                   {t('db.structure')}
                 </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    role="tab"
+                    className={`db-tab${tab === 'insert' ? ' active' : ''}`}
+                    onClick={() => openInsertEditor('insert')}
+                  >
+                    {t('db.insertTab')}
+                  </button>
+                )}
                 <button
                   type="button"
                   role="tab"
@@ -1159,6 +1170,19 @@ export default function Database({ user }) {
               />
             )}
 
+            {tab === 'insert' && table && canEdit && (
+              <InsertForm
+                key={insertKey}
+                structure={structure}
+                busy={busy}
+                mode={insertMode}
+                draft={insertDraft || buildInsertDraft(structure)}
+                onInsert={insertRow}
+                onCancel={closeInsert}
+                t={t}
+              />
+            )}
+
             {tab === 'browse' && table && (
               <>
                 <div className="db-toolbar">
@@ -1197,12 +1221,9 @@ export default function Database({ user }) {
                     {canEdit && (
                       <button
                         type="button"
-                        className={`db-tool-btn${insertOpen && insertMode === 'insert' ? ' is-on' : ''}`}
+                        className="db-tool-btn"
                         disabled={busy}
-                        onClick={() => {
-                          if (insertOpen && insertMode === 'insert') closeInsert();
-                          else openInsertEditor('insert');
-                        }}
+                        onClick={() => openInsertEditor('insert')}
                       >
                         {t('db.insertRow')}
                       </button>
@@ -1220,19 +1241,6 @@ export default function Database({ user }) {
                     </button>
                   </div>
                 </div>
-
-                {insertOpen && canEdit && (
-                  <InsertForm
-                    key={insertKey}
-                    structure={structure}
-                    busy={busy}
-                    mode={insertMode}
-                    draft={insertDraft}
-                    onInsert={insertRow}
-                    onCancel={closeInsert}
-                    t={t}
-                  />
-                )}
 
                 <BrowseTable
                   columns={browse.columns}
