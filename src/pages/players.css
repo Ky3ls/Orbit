@@ -652,6 +652,14 @@ html[data-theme="light"] .pl-card {
   font-size: 12px;
 }
 
+.pl-hist-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
 .pl-hist-summary {
   display: flex;
   flex-wrap: wrap;
@@ -659,6 +667,19 @@ html[data-theme="light"] .pl-card {
   gap: 5px;
   font-size: 11px;
   color: var(--muted);
+  min-width: 0;
+}
+
+.pl-hist-search {
+  flex: 0 1 160px;
+  width: 160px;
+  min-width: 100px;
+  max-width: 200px;
+  margin: 0;
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1.2;
+  border-radius: 8px;
 }
 
 .pl-hist-dot {

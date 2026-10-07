@@ -82,6 +82,7 @@ export default function Players({ user }) {
   const [err, setErr] = useState('');
   const [sort, setSort] = useState('status');
   const [busy, setBusy] = useState(false);
+  const [histQ, setHistQ] = useState('');
   const qRef = useRef(q);
   qRef.current = q;
   const dataRef = useRef(data);
@@ -202,6 +203,7 @@ export default function Players({ user }) {
       setDurationId('2d');
       setCustomDays('');
       setCustomHhmm('');
+      setHistQ('');
     }
     setErr('');
     loadBanTemplates();
@@ -975,22 +977,48 @@ export default function Players({ user }) {
                       })),
                     ].sort((a, b) => (b.created || 0) - (a.created || 0));
 
+                    const needle = histQ.trim().toLowerCase();
+                    const visible = needle
+                      ? entries.filter((e) => {
+                          const hay = [
+                            e.kind,
+                            String(e.id),
+                            e.reason,
+                            e.author,
+                            e.kind === 'ban' ? t('players.histBan') : t('players.histWarn'),
+                          ].join(' ').toLowerCase();
+                          return hay.includes(needle);
+                        })
+                      : entries;
                     const liveBans = entries.filter((e) => e.kind === 'ban' && e.live).length;
                     return (
                       <>
-                        <div className="pl-hist-summary">
-                          <span>{t('players.histBans', { n: bans.length })}</span>
-                          <span className="pl-hist-dot" aria-hidden="true">·</span>
-                          <span>{t('players.histWarns', { n: warns.length })}</span>
-                          {liveBans > 0 && (
-                            <>
-                              <span className="pl-hist-dot" aria-hidden="true">·</span>
-                              <span className="pl-hist-live">{t('players.histActive', { n: liveBans })}</span>
-                            </>
-                          )}
+                        <div className="pl-hist-bar">
+                          <div className="pl-hist-summary">
+                            <span>{t('players.histBans', { n: bans.length })}</span>
+                            <span className="pl-hist-dot" aria-hidden="true">·</span>
+                            <span>{t('players.histWarns', { n: warns.length })}</span>
+                            {liveBans > 0 && (
+                              <>
+                                <span className="pl-hist-dot" aria-hidden="true">·</span>
+                                <span className="pl-hist-live">{t('players.histActive', { n: liveBans })}</span>
+                              </>
+                            )}
+                          </div>
+                          <input
+                            className="search pl-hist-search"
+                            type="search"
+                            value={histQ}
+                            onChange={(e) => setHistQ(e.target.value)}
+                            placeholder={t('players.histSearch')}
+                            aria-label={t('players.histSearch')}
+                          />
                         </div>
+                        {visible.length === 0 ? (
+                          <p className="pl-hist-empty muted">{t('players.histNoMatch')}</p>
+                        ) : (
                         <ol className="pl-hist-list">
-                          {entries.map((e) => (
+                          {visible.map((e) => (
                             <li
                               key={`${e.kind}-${e.id}`}
                               className={`pl-hist-item ${e.kind}${e.live ? ' live' : ''}${e.revoked ? ' revoked' : ''}`}
@@ -1040,6 +1068,7 @@ export default function Players({ user }) {
                             </li>
                           ))}
                         </ol>
+                        )}
                       </>
                     );
                   })()}
