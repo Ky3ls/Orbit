@@ -241,6 +241,137 @@ export async function tableStructure(settings, tableName) {
   }));
 }
 
+export async function tableIndexes(settings, tableName) {
+  const table = assertTableName(tableName);
+  const p = getMysqlPool(settings);
+  const [rows] = await p.query(`SHOW INDEX FROM \`${table}\``);
+  const byKey = new Map();
+  for (const r of rows || []) {
+    const name = String(r.Key_name || '');
+    if (!byKey.has(name)) {
+      byKey.set(name, {
+        name,
+        unique: Number(r.Non_unique) === 0,
+        primary: name === 'PRIMARY',
+        type: String(r.Index_type || ''),
+        columns: [],
+      });
+    }
+    byKey.get(name).columns.push(String(r.Column_name || ''));
+  }
+  return [...byKey.values()];
+}
+
+function assertColumnType(type) {
+  const t = String(type || '').trim();
+  if (!t || t.length > 128) throw new Error('Ungültiger Spaltentyp.');
+  if (!/^[a-zA-Z][a-zA-Z0-9_\s(),.'"-]*$/.test(t)) throw new Error('Ungültiger Spaltentyp.');
+  if (/;|--|\/\*|\*\//.test(t)) throw new Error('Ungültiger Spaltentyp.');
+  return t;
+}
+
+function assertComment(comment) {
+  const c = String(comment ?? '');
+  if (c.length > 255) throw new Error('Kommentar zu lang.');
+  if (/;|--|\/\*|\*\//.test(c)) throw new Error('Ungültiger Kommentar.');
+  return c;
+}
+
+function buildColumnSql(def, escapeFn) {
+  const name = assertTableName(def.name || def.field);
+  const type = assertColumnType(def.type);
+  const nullable = def.nullable === true || String(def.null).toUpperCase() === 'YES';
+  const autoIncrement = Boolean(def.autoIncrement || /\bauto_increment\b/i.test(String(def.extra || '')));
+  const comment = assertComment(def.comment || '');
+  let sql = `\`${name}\` ${type}`;
+  sql += nullable ? ' NULL' : ' NOT NULL';
+  if (autoIncrement) {
+    sql += ' AUTO_INCREMENT';
+  } else if (def.default === null || def.defaultValue === null) {
+    if (nullable) sql += ' DEFAULT NULL';
+  } else {
+    const raw = def.defaultValue !== undefined ? def.defaultValue : def.default;
+    if (raw !== undefined && raw !== '') {
+      const s = String(raw).trim();
+      if (/^(CURRENT_TIMESTAMP(?:\(\d*\))?|NULL)$/i.test(s)) {
+        sql += ` DEFAULT ${s}`;
+      } else {
+        sql += ` DEFAULT ${escapeFn(s)}`;
+      }
+    }
+  }
+  if (comment) sql += ` COMMENT ${escapeFn(comment)}`;
+  return sql;
+}
+
+function afterClause(after, structure) {
+  if (!after || after === 'FIRST') return ' FIRST';
+  const col = assertTableName(after);
+  if (!structure.some((c) => c.field === col)) throw new Error(`Spalte nicht gefunden: ${col}`);
+  return ` AFTER \`${col}\``;
+}
+
+export async function addTableColumn(settings, tableName, def, after = null) {
+  const table = assertTableName(tableName);
+  const structure = await tableStructure(settings, table);
+  const name = assertTableName(def?.name || def?.field);
+  if (structure.some((c) => c.field === name)) throw new Error(`Spalte existiert bereits: ${name}`);
+  const p = getMysqlPool(settings);
+  const colSql = buildColumnSql({ ...def, name }, (v) => p.escape(v));
+  const pos = after ? afterClause(after, structure) : '';
+  await p.query({
+    sql: `ALTER TABLE \`${table}\` ADD COLUMN ${colSql}${pos}`,
+    timeout: 30_000,
+  });
+  return { ok: true, field: name };
+}
+
+export async function modifyTableColumn(settings, tableName, column, def) {
+  const table = assertTableName(tableName);
+  const oldName = assertTableName(column);
+  const structure = await tableStructure(settings, table);
+  if (!structure.some((c) => c.field === oldName)) throw new Error(`Spalte nicht gefunden: ${oldName}`);
+  const newName = assertTableName(def?.name || def?.field || oldName);
+  if (newName !== oldName && structure.some((c) => c.field === newName)) {
+    throw new Error(`Spalte existiert bereits: ${newName}`);
+  }
+  const p = getMysqlPool(settings);
+  const colSql = buildColumnSql({ ...def, name: newName }, (v) => p.escape(v));
+  const sql = newName === oldName
+    ? `ALTER TABLE \`${table}\` MODIFY COLUMN ${colSql}`
+    : `ALTER TABLE \`${table}\` CHANGE COLUMN \`${oldName}\` ${colSql}`;
+  await p.query({ sql, timeout: 30_000 });
+  return { ok: true, field: newName };
+}
+
+export async function dropTableColumn(settings, tableName, column) {
+  const table = assertTableName(tableName);
+  const col = assertTableName(column);
+  const structure = await tableStructure(settings, table);
+  if (!structure.some((c) => c.field === col)) throw new Error(`Spalte nicht gefunden: ${col}`);
+  if (structure.length <= 1) throw new Error('Letzte Spalte kann nicht gelöscht werden.');
+  const p = getMysqlPool(settings);
+  await p.query({
+    sql: `ALTER TABLE \`${table}\` DROP COLUMN \`${col}\``,
+    timeout: 30_000,
+  });
+  return { ok: true, field: col };
+}
+
+export async function dropTableIndex(settings, tableName, indexName) {
+  const table = assertTableName(tableName);
+  const name = String(indexName || '').trim();
+  if (!name || name.length > 64) throw new Error('Ungültiger Index.');
+  if (!/^[a-zA-Z0-9_$]+$/.test(name)) throw new Error('Ungültiger Index.');
+  const p = getMysqlPool(settings);
+  if (name === 'PRIMARY') {
+    await p.query({ sql: `ALTER TABLE \`${table}\` DROP PRIMARY KEY`, timeout: 30_000 });
+  } else {
+    await p.query({ sql: `ALTER TABLE \`${table}\` DROP INDEX \`${name}\``, timeout: 30_000 });
+  }
+  return { ok: true, index: name };
+}
+
 export async function browseTable(settings, tableName, offset = 0, limit = 25) {
   const table = assertTableName(tableName);
   const off = Math.max(Number(offset) || 0, 0);

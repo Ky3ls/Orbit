@@ -8,13 +8,9 @@ import './database.css';
 const PAGE_SIZES = [25, 50, 100, 250];
 const PAGE_SIZE_OPTS = PAGE_SIZES.map((n) => ({ value: n, label: String(n) }));
 
-const STRUCTURE_COLS = [
-  { key: 'field', labelKey: 'db.col.field' },
-  { key: 'type', labelKey: 'db.col.type' },
-  { key: 'null', labelKey: 'db.col.null' },
-  { key: 'key', labelKey: 'db.col.key' },
-  { key: 'default', labelKey: 'db.col.default' },
-  { key: 'extra', labelKey: 'db.col.extra' },
+const TYPE_SUGGESTIONS = [
+  'int', 'bigint', 'tinyint(1)', 'varchar(50)', 'varchar(255)', 'text', 'longtext',
+  'decimal(10,2)', 'float', 'double', 'datetime', 'timestamp', 'date', 'json',
 ];
 
 function cellValue(v) {
@@ -480,7 +476,7 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult, t }) {
           />
         </label>
         <div className="db-sql-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <button type="submit" className="db-btn db-btn-primary" disabled={busy}>
             {busy ? t('db.running') : t('db.run')}
           </button>
           <span className="muted db-sql-dump-hint">{t('db.sqlDumpHint')}</span>
@@ -497,6 +493,344 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult, t }) {
         </div>
       )}
     </>
+  );
+}
+
+function emptyColumnDraft() {
+  return {
+    name: '',
+    type: 'varchar(50)',
+    nullable: true,
+    defaultValue: '',
+    defaultNull: false,
+    autoIncrement: false,
+    comment: '',
+  };
+}
+
+function columnToDraft(col) {
+  const def = col.default;
+  const isNullDefault = def === null;
+  return {
+    name: col.field || '',
+    type: col.type || 'varchar(50)',
+    nullable: String(col.null).toUpperCase() === 'YES',
+    defaultValue: isNullDefault ? '' : String(def ?? ''),
+    defaultNull: isNullDefault,
+    autoIncrement: /\bauto_increment\b/i.test(String(col.extra || '')),
+    comment: col.comment || '',
+  };
+}
+
+function ColumnEditor({ draft, setDraft, busy, t, nameLocked = false }) {
+  return (
+    <div className="db-col-editor">
+      <label className="db-col-field">
+        <span>{t('db.column')}</span>
+        <input
+          className="db-insert-input"
+          value={draft.name}
+          disabled={busy || nameLocked}
+          onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+          placeholder="column_name"
+        />
+      </label>
+      <label className="db-col-field">
+        <span>{t('db.col.type')}</span>
+        <input
+          className="db-insert-input"
+          list="db-type-suggestions"
+          value={draft.type}
+          disabled={busy}
+          onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value }))}
+        />
+        <datalist id="db-type-suggestions">
+          {TYPE_SUGGESTIONS.map((x) => <option key={x} value={x} />)}
+        </datalist>
+      </label>
+      <label className="db-col-check">
+        <input
+          type="checkbox"
+          checked={draft.nullable}
+          disabled={busy || draft.autoIncrement}
+          onChange={(e) => setDraft((d) => ({ ...d, nullable: e.target.checked }))}
+        />
+        <span>{t('db.col.null')}</span>
+      </label>
+      <label className="db-col-check">
+        <input
+          type="checkbox"
+          checked={draft.autoIncrement}
+          disabled={busy}
+          onChange={(e) => setDraft((d) => ({
+            ...d,
+            autoIncrement: e.target.checked,
+            nullable: e.target.checked ? false : d.nullable,
+          }))}
+        />
+        <span>AUTO_INCREMENT</span>
+      </label>
+      <label className="db-col-field">
+        <span>{t('db.col.default')}</span>
+        <div className="db-col-default">
+          <input
+            className="db-insert-input"
+            value={draft.defaultNull ? '' : draft.defaultValue}
+            disabled={busy || draft.defaultNull || draft.autoIncrement}
+            onChange={(e) => setDraft((d) => ({ ...d, defaultValue: e.target.value, defaultNull: false }))}
+            placeholder={draft.defaultNull ? 'NULL' : ''}
+          />
+          <label className="db-col-check compact">
+            <input
+              type="checkbox"
+              checked={draft.defaultNull}
+              disabled={busy || draft.autoIncrement}
+              onChange={(e) => setDraft((d) => ({ ...d, defaultNull: e.target.checked }))}
+            />
+            <span>NULL</span>
+          </label>
+        </div>
+      </label>
+      <label className="db-col-field grow">
+        <span>{t('db.col.comment')}</span>
+        <input
+          className="db-insert-input"
+          value={draft.comment}
+          disabled={busy}
+          onChange={(e) => setDraft((d) => ({ ...d, comment: e.target.value }))}
+        />
+      </label>
+    </div>
+  );
+}
+
+function draftToPayload(draft) {
+  return {
+    name: String(draft.name || '').trim(),
+    type: String(draft.type || '').trim(),
+    nullable: Boolean(draft.nullable),
+    autoIncrement: Boolean(draft.autoIncrement),
+    comment: String(draft.comment || ''),
+    defaultValue: draft.autoIncrement
+      ? undefined
+      : (draft.defaultNull ? null : draft.defaultValue),
+  };
+}
+
+function StructureEditor({
+  structure,
+  indexes,
+  busy,
+  canEdit,
+  onSaveColumn,
+  onAddColumn,
+  onDropColumn,
+  onDropIndex,
+  t,
+}) {
+  const [editField, setEditField] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [addDraft, setAddDraft] = useState(() => emptyColumnDraft());
+  const [afterCol, setAfterCol] = useState('');
+
+  function startEdit(col) {
+    setAdding(false);
+    setEditField(col.field);
+    setEditDraft(columnToDraft(col));
+  }
+
+  function cancelEdit() {
+    setEditField(null);
+    setEditDraft(null);
+  }
+
+  const afterOpts = useMemo(
+    () => [
+      { value: '', label: t('db.afterEnd') },
+      { value: 'FIRST', label: t('db.afterFirst') },
+      ...structure.map((c) => ({ value: c.field, label: t('db.afterCol', { name: c.field }) })),
+    ],
+    [structure, t],
+  );
+
+  return (
+    <div className="db-structure">
+      <div className="db-scroll">
+        <table className="ws-table db-grid db-structure-grid">
+          <thead>
+            <tr>
+              <th>{t('db.col.field')}</th>
+              <th>{t('db.col.type')}</th>
+              <th>{t('db.col.null')}</th>
+              <th>{t('db.col.key')}</th>
+              <th>{t('db.col.default')}</th>
+              <th>{t('db.col.extra')}</th>
+              {canEdit && <th>{t('db.actions')}</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {structure.length === 0 ? (
+              <tr><td colSpan={canEdit ? 7 : 6} className="muted">{t('db.noColumns')}</td></tr>
+            ) : structure.map((col) => (
+              <tr key={col.field} className={editField === col.field ? 'is-editing' : undefined}>
+                <td className="mono">{col.field}</td>
+                <td className="mono muted">{col.type}</td>
+                <td>{col.null}</td>
+                <td>{col.key || '—'}</td>
+                <td className="mono">{col.default === null ? 'NULL' : String(col.default ?? '—')}</td>
+                <td className="muted">{col.extra || '—'}</td>
+                {canEdit && (
+                  <td>
+                    <div className="db-act-row">
+                      <button type="button" className="db-act-btn" disabled={busy} onClick={() => startEdit(col)}>
+                        {t('db.editCol')}
+                      </button>
+                      <button
+                        type="button"
+                        className="db-act-btn danger"
+                        disabled={busy || structure.length <= 1}
+                        onClick={() => {
+                          if (!window.confirm(t('db.dropColConfirm', { name: col.field }))) return;
+                          onDropColumn(col.field);
+                        }}
+                      >
+                        {t('db.dropCol')}
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {canEdit && editField && editDraft && (
+        <div className="db-struct-panel">
+          <h4 className="db-insert-title">{t('db.editColTitle', { name: editField })}</h4>
+          <ColumnEditor draft={editDraft} setDraft={setEditDraft} busy={busy} t={t} />
+          <div className="db-form-actions">
+            <button
+              type="button"
+              className="db-btn db-btn-primary"
+              disabled={busy || !editDraft.name.trim() || !editDraft.type.trim()}
+              onClick={async () => {
+                try {
+                  await onSaveColumn(editField, draftToPayload(editDraft));
+                  cancelEdit();
+                } catch { /* Fehler bereits gesetzt */ }
+              }}
+            >
+              {t('db.saveCol')}
+            </button>
+            <button type="button" className="db-btn" disabled={busy} onClick={cancelEdit}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="db-struct-panel">
+          {!adding ? (
+            <button
+              type="button"
+              className="db-btn db-btn-primary"
+              disabled={busy}
+              onClick={() => {
+                cancelEdit();
+                setAddDraft(emptyColumnDraft());
+                setAfterCol(structure[structure.length - 1]?.field || '');
+                setAdding(true);
+              }}
+            >
+              {t('db.addCol')}
+            </button>
+          ) : (
+            <>
+              <h4 className="db-insert-title">{t('db.addCol')}</h4>
+              <ColumnEditor draft={addDraft} setDraft={setAddDraft} busy={busy} t={t} />
+              <label className="db-col-field">
+                <span>{t('db.afterPos')}</span>
+                <OrbitSelect
+                  className="db-after-select"
+                  value={afterCol}
+                  options={afterOpts}
+                  onChange={(v) => setAfterCol(v)}
+                />
+              </label>
+              <div className="db-form-actions">
+                <button
+                  type="button"
+                  className="db-btn db-btn-primary"
+                  disabled={busy || !addDraft.name.trim() || !addDraft.type.trim()}
+                  onClick={async () => {
+                    try {
+                      await onAddColumn(draftToPayload(addDraft), afterCol || null);
+                      setAdding(false);
+                      setAddDraft(emptyColumnDraft());
+                    } catch { /* Fehler bereits gesetzt */ }
+                  }}
+                >
+                  {t('db.addColSave')}
+                </button>
+                <button type="button" className="db-btn" disabled={busy} onClick={() => setAdding(false)}>
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="db-struct-panel">
+        <h4 className="db-insert-title">{t('db.indexes')}</h4>
+        {indexes.length === 0 ? (
+          <p className="muted">{t('db.noIndexes')}</p>
+        ) : (
+          <div className="db-scroll">
+            <table className="ws-table db-grid">
+              <thead>
+                <tr>
+                  <th>{t('db.indexName')}</th>
+                  <th>{t('db.indexType')}</th>
+                  <th>{t('db.indexCols')}</th>
+                  {canEdit && <th>{t('db.actions')}</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {indexes.map((idx) => (
+                  <tr key={idx.name}>
+                    <td className="mono">{idx.name}</td>
+                    <td className="muted">
+                      {idx.primary ? 'PRIMARY' : (idx.unique ? 'UNIQUE' : 'INDEX')}
+                      {idx.type ? ` · ${idx.type}` : ''}
+                    </td>
+                    <td className="mono">{(idx.columns || []).join(', ')}</td>
+                    {canEdit && (
+                      <td>
+                        <button
+                          type="button"
+                          className="db-act-btn danger"
+                          disabled={busy}
+                          onClick={() => {
+                            if (!window.confirm(t('db.dropIndexConfirm', { name: idx.name }))) return;
+                            onDropIndex(idx.name);
+                          }}
+                        >
+                          {t('db.dropIndex')}
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -616,10 +950,10 @@ function InsertForm({ structure, busy, onInsert, onCancel, t, mode = 'insert', d
           </tbody>
         </table>
       </div>
-      <div className="db-insert-actions">
-        <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{t('db.insert')}</button>
-        <button type="button" className="btn btn-sm" disabled={busy} onClick={reset}>{t('db.insertReset')}</button>
-        <button type="button" className="btn btn-sm" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
+      <div className="db-form-actions">
+        <button type="submit" className="db-btn db-btn-primary" disabled={busy}>{t('db.insert')}</button>
+        <button type="button" className="db-btn" disabled={busy} onClick={reset}>{t('db.insertReset')}</button>
+        <button type="button" className="db-btn" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
       </div>
     </form>
   );
@@ -645,6 +979,7 @@ export default function Database({ user }) {
   const [msg, setMsg] = useState('');
 
   const [structure, setStructure] = useState([]);
+  const [indexes, setIndexes] = useState([]);
   const [browse, setBrowse] = useState({
     rows: [], columns: [], total: 0, offset: 0, limit: 25, primaryKey: [],
   });
@@ -705,6 +1040,7 @@ export default function Database({ user }) {
     const d = await api(`/api/database/structure?table=${encodeURIComponent(name)}`);
     const cols = d.columns || [];
     setStructure(cols);
+    setIndexes(d.indexes || []);
     if (cols[0]) setSearchCol(cols[0].field);
     return cols;
   }, []);
@@ -726,6 +1062,80 @@ export default function Database({ user }) {
       if (d.structure[0] && !searchCol) setSearchCol(d.structure[0].field);
     }
   }, [searchCol]);
+
+  async function saveColumn(oldName, def) {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      await api('/api/database/structure', {
+        method: 'POST',
+        body: { action: 'modify', table, column: oldName, def },
+      });
+      setMsg(t('db.colSaved'));
+      await loadStructure(table);
+    } catch (e) {
+      setErr(e.message);
+      throw e;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addColumn(def, after) {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      await api('/api/database/structure', {
+        method: 'POST',
+        body: { action: 'add', table, column: def, after: after || null },
+      });
+      setMsg(t('db.colAdded'));
+      await loadStructure(table);
+    } catch (e) {
+      setErr(e.message);
+      throw e;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function dropColumn(field) {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      await api('/api/database/structure', {
+        method: 'POST',
+        body: { action: 'drop', table, column: field },
+      });
+      setMsg(t('db.colDropped'));
+      await loadStructure(table);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function dropIndex(name) {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      await api('/api/database/structure', {
+        method: 'POST',
+        body: { action: 'dropIndex', table, index: name },
+      });
+      setMsg(t('db.indexDropped'));
+      await loadStructure(table);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!table) return;
@@ -963,16 +1373,6 @@ export default function Database({ user }) {
     ? Math.max(1, Math.ceil(browse.total / pageSize))
     : 1;
 
-  const structureCols = STRUCTURE_COLS.map((c) => ({ key: c.key, label: t(c.labelKey) }));
-  const structureRows = structure.map((col) => ({
-    field: col.field,
-    type: col.type,
-    null: col.null,
-    key: col.key || '—',
-    default: col.default === null ? 'NULL' : String(col.default ?? '—'),
-    extra: col.extra || '—',
-  }));
-
   const overviewFiltered = overview.filter((tbl) => filteredTables.includes(tbl.name));
 
   const filteredBrowseRows = useMemo(() => {
@@ -1162,11 +1562,16 @@ export default function Database({ user }) {
             )}
 
             {tab === 'structure' && table && (
-              <DataTable
-                columns={structureCols}
-                rows={structureRows}
-                emptyColumns={t('db.noColumns')}
-                emptyRows={t('db.noRows')}
+              <StructureEditor
+                structure={structure}
+                indexes={indexes}
+                busy={busy}
+                canEdit={canEdit}
+                onSaveColumn={saveColumn}
+                onAddColumn={addColumn}
+                onDropColumn={dropColumn}
+                onDropIndex={dropIndex}
+                t={t}
               />
             )}
 
@@ -1275,7 +1680,7 @@ export default function Database({ user }) {
                     <span>{t('db.contains')}</span>
                     <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder={t('db.searchPh')} />
                   </label>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{t('db.search')}</button>
+                  <button type="submit" className="db-btn db-btn-primary" disabled={busy}>{t('db.search')}</button>
                 </form>
                 <DataTable
                   columns={searchResult.columns}
