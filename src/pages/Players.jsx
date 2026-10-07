@@ -1062,7 +1062,6 @@ export default function Players({ user }) {
                                       {e.kind === 'ban' && !e.live && !e.revoked && e.expires && (
                                         <span className="pl-hist-pill off">{t('players.histExpired')}</span>
                                       )}
-                                      <p className="pl-hist-reason">{e.reason || '—'}</p>
                                       {e.kind === 'ban' && e.live && canRevoke && (
                                         <button
                                           type="button"
@@ -1074,6 +1073,7 @@ export default function Players({ user }) {
                                         </button>
                                       )}
                                     </div>
+                                    <p className="pl-hist-reason">{e.reason || '—'}</p>
                                     <div className="pl-hist-meta">
                                       {e.author && (
                                         <span>
@@ -1083,7 +1083,10 @@ export default function Players({ user }) {
                                         </span>
                                       )}
                                       {e.kind === 'ban' && e.revoked && e.revokedBy && (
-                                        <span>{t('players.histRevokedBy', { name: e.revokedBy })}</span>
+                                        <>
+                                          <span className="pl-hist-sep" aria-hidden="true">–</span>
+                                          <span>{t('players.histRevokedBy', { name: e.revokedBy })}</span>
+                                        </>
                                       )}
                                     </div>
                                   </div>
