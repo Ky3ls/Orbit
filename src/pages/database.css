@@ -420,8 +420,24 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 
 .db-inline-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   margin-top: 2px;
+  align-items: center;
+}
+
+.db-inline-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.db-inline-icon.ok {
+  color: var(--accent);
+}
+
+.db-inline-icon.ok:hover:not(:disabled) {
+  background: var(--accent-dim);
+  color: var(--accent);
 }
 
 .db-pk-warn,

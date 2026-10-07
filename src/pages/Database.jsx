@@ -243,11 +243,31 @@ function BrowseTable({
                           )}
                           <span>{t('db.editHint')}</span>
                           <div className="db-inline-actions">
-                            <button type="button" className="btn btn-sm btn-primary" disabled={saving} onMouseDown={(e) => e.preventDefault()} onClick={commitEdit}>
-                              {t('common.save')}
+                            <button
+                              type="button"
+                              className="o-icon-btn db-inline-icon ok"
+                              disabled={saving}
+                              title={t('common.save')}
+                              aria-label={t('common.save')}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={commitEdit}
+                            >
+                              <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 6 9 17l-5-5" />
+                              </svg>
                             </button>
-                            <button type="button" className="btn btn-sm" disabled={saving} onMouseDown={(e) => e.preventDefault()} onClick={cancelEdit}>
-                              {t('common.cancel')}
+                            <button
+                              type="button"
+                              className="o-icon-btn db-inline-icon"
+                              disabled={saving}
+                              title={t('common.cancel')}
+                              aria-label={t('common.cancel')}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={cancelEdit}
+                            >
+                              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                                <path d="M18 6 6 18M6 6l12 12" />
+                              </svg>
                             </button>
                           </div>
                         </div>
