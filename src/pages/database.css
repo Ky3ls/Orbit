@@ -492,6 +492,14 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 
 .db-sql-actions {
   margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.db-sql-dump-hint {
+  font-size: 12px;
 }
 
 .db-sql-hint {

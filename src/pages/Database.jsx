@@ -301,6 +301,7 @@ function SqlWorkspace({ hint, sql, setSql, busy, onRun, sqlResult, t }) {
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? t('db.running') : t('db.run')}
           </button>
+          <span className="muted db-sql-dump-hint">{t('db.sqlDumpHint')}</span>
         </div>
       </form>
       {sqlResult?.kind === 'resultset' && (sqlResult.rows?.length > 0 || sqlColumns.length > 0) && (
@@ -412,7 +413,7 @@ export default function Database({ user }) {
   const [sqlResult, setSqlResult] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  const sqlHint = isOwner ? t('db.sqlHintOwner') : t('db.sqlHintSelect');
+  const sqlHint = t('db.sqlHintOwner');
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 901px)');
@@ -532,14 +533,25 @@ export default function Database({ user }) {
     setSqlResult(null);
     try {
       const d = await api('/api/database/query', { method: 'POST', body: { sql, limit: 500 } });
-      setSqlResult(d);
+      const view = d.resultset && d.kind === 'ok' ? d.resultset : d;
+      setSqlResult(view?.kind === 'resultset' ? view : (d.kind === 'resultset' ? d : null));
       if (d.kind === 'ok') {
-        const parts = [t('db.affected', { n: d.affectedRows })];
+        const parts = [];
+        if (d.statements > 1) parts.push(t('db.scriptDone', { n: d.statements }));
+        parts.push(t('db.affected', { n: d.affectedRows ?? 0 }));
         if (d.insertId) parts.push(t('db.lastId', { id: d.insertId }));
-        if (d.message) parts.push(d.message);
+        if (d.message && !parts.includes(d.message)) parts.push(d.message);
         setMsg(parts.join(' '));
         if (table) refreshBrowse();
-      } else {
+        /* Tabellenliste nach CREATE/DROP aktualisieren */
+        api('/api/database/overview')
+          .then((o) => {
+            const list = o.tables || [];
+            setOverview(list);
+            setTables(list.map((tbl) => tbl.name));
+          })
+          .catch(() => {});
+      } else if (d.kind === 'resultset') {
         setMsg(d.truncated ? t('db.truncated') : t('db.rows', { n: (d.rows || []).length }));
       }
     } catch (error) {

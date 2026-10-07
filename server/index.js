@@ -160,7 +160,6 @@ import {
   listTables,
   mysqlReady,
   runOwnerQuery,
-  runSelect,
   searchTable,
   tableStructure,
   updateTableRow,
@@ -3280,17 +3279,23 @@ async function handleApi(req, res, url) {
 
   if (method === 'POST' && pathname === '/api/database/query') {
     if (!hasPerm(me, 'database') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
-    if (!hit(`sql:${me.id}`, 30, 60_000)) return json(res, 429, { error: 'Zu viele Abfragen.' });
+    if (!hit(`sql:${me.id}`, 20, 60_000)) return json(res, 429, { error: 'Zu viele Abfragen.' });
     const settings = settingMap(db);
     if (!mysqlReady(settings)) return json(res, 503, { error: 'MySQL nicht konfiguriert.' });
-    const body = await readBody(req);
-    const sql = str(body.sql, 8000);
-    const ownerSql = me.role === 'owner';
+    const body = await readBody(req, 2_000_000);
+    const sqlRaw = typeof body.sql === 'string' ? body.sql : '';
+    if (!sqlRaw.trim()) return json(res, 400, { error: 'Leere Abfrage.' });
+    if (sqlRaw.length > 1_500_000) return json(res, 413, { error: 'SQL zu groß (max. ~1,5 MB).' });
     try {
-      const result = ownerSql
-        ? await runOwnerQuery(settings, sql, body.limit)
-        : await runSelect(settings, sql, body.limit);
-      audit(db, me.username, ownerSql ? 'sql.exec' : 'sql.select', sql.slice(0, 120), ip);
+      /* database-Recht: Dumps/DDL/DML (mehrere Statements). DROP DATABASE u. Ä. bleiben gesperrt. */
+      const result = await runOwnerQuery(settings, sqlRaw, body.limit);
+      audit(
+        db,
+        me.username,
+        'sql.exec',
+        `${sqlRaw.slice(0, 100)} (${result.statements || result.executed || 1} stmt)`,
+        ip,
+      );
       return json(res, 200, result);
     } catch (err) {
       return json(res, 400, { error: err.message });
