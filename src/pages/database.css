@@ -270,22 +270,212 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   -webkit-overflow-scrolling: touch;
 }
 
-.db-scroll .ws-table {
+.db-scroll .ws-table,
+.db-scroll .db-grid {
   width: max-content;
   min-width: 100%;
+  border-collapse: collapse;
+}
+
+.db-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--bg-2) 88%, var(--card));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.db-grid tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--bg-2) 55%, transparent);
+}
+
+.db-grid tbody tr:hover {
+  background: rgba(var(--accent-rgb), 0.08);
 }
 
 .db-scroll .ws-table th,
-.db-scroll .ws-table td {
+.db-scroll .ws-table td,
+.db-scroll .db-grid th,
+.db-scroll .db-grid td {
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  vertical-align: middle;
+  border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  padding: 5px 8px;
+  font-size: 12.5px;
 }
 
-.db-scroll .ws-table td.null {
+.db-scroll .db-grid td.null {
   font-style: italic;
   color: var(--faint);
+}
+
+.db-grid th.pk::after {
+  content: ' 🔑';
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.db-act-col {
+  width: 1%;
+  white-space: nowrap !important;
+}
+
+.db-act-cell {
+  white-space: nowrap !important;
+  max-width: none !important;
+  overflow: visible !important;
+}
+
+.db-act-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.db-act-btn.danger {
+  color: #e07070;
+}
+
+.db-act-btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.db-act-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.db-cell-editable {
+  cursor: cell;
+}
+
+.db-cell-editable:hover {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -1px;
+}
+
+.db-cell-edit {
+  max-width: 420px !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  background: var(--card) !important;
+  vertical-align: top !important;
+}
+
+.db-inline-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.db-inline-input {
+  width: 100%;
+  min-width: 160px;
+  max-width: 380px;
+  box-sizing: border-box;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--text);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+
+.db-inline-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-elevated, var(--card));
+  font-size: 11px;
+  color: var(--muted);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.db-inline-null {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.db-inline-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.db-pk-warn,
+.db-edit-tip {
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.db-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.db-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.db-row-filter {
+  min-width: 160px;
+  max-width: 240px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.db-insert {
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.db-insert-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.db-insert-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px 12px;
+}
+
+.db-insert-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .db-overview-table .mono {

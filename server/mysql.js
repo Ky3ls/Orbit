@@ -138,6 +138,8 @@ export async function browseTable(settings, tableName, offset = 0, limit = 25) {
   const off = Math.max(Number(offset) || 0, 0);
   const lim = Math.min(Math.max(Number(limit) || 25, 1), 500);
   const p = getMysqlPool(settings);
+  const structure = await tableStructure(settings, table);
+  const primaryKey = structure.filter((c) => c.key === 'PRI').map((c) => c.field);
   const [[countRow]] = await p.query(`SELECT COUNT(*) AS c FROM \`${table}\``);
   const total = Number(countRow?.c ?? 0);
   const [rows, fields] = await p.query({
@@ -147,7 +149,98 @@ export async function browseTable(settings, tableName, offset = 0, limit = 25) {
   });
   const list = Array.isArray(rows) ? rows : [];
   const columns = fields?.map((f) => f.name) || Object.keys(list[0] || {});
-  return { rows: list, columns, total, offset: off, limit: lim };
+  return { rows: list, columns, total, offset: off, limit: lim, primaryKey, structure };
+}
+
+function assertKnownColumns(structure, names) {
+  const allowed = new Set(structure.map((c) => c.field));
+  for (const name of names) {
+    const col = assertTableName(name);
+    if (!allowed.has(col)) throw new Error(`Ungültige Spalte: ${col}`);
+  }
+}
+
+function primaryKeyFields(structure) {
+  const pk = structure.filter((c) => c.key === 'PRI').map((c) => c.field);
+  if (!pk.length) throw new Error('Tabelle hat keinen Primärschlüssel — Editieren nicht möglich.');
+  return pk;
+}
+
+function normalizeCellValue(v) {
+  if (v === undefined) return null;
+  if (v === null) return null;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  return v;
+}
+
+export async function updateTableRow(settings, tableName, pk, changes) {
+  const table = assertTableName(tableName);
+  const structure = await tableStructure(settings, table);
+  const pkFields = primaryKeyFields(structure);
+  const pkObj = pk && typeof pk === 'object' ? pk : {};
+  for (const field of pkFields) {
+    if (!(field in pkObj)) throw new Error(`Primärschlüssel fehlt: ${field}`);
+  }
+  const setKeys = Object.keys(changes || {}).filter((k) => !(pkFields.includes(k) && structure.find((c) => c.field === k)?.extra?.includes('auto_increment')));
+  if (!setKeys.length) throw new Error('Keine Änderungen.');
+  assertKnownColumns(structure, setKeys);
+  const sets = setKeys.map((k) => `\`${assertTableName(k)}\` = ?`);
+  const wheres = pkFields.map((k) => `\`${k}\` = ?`);
+  const values = [
+    ...setKeys.map((k) => normalizeCellValue(changes[k])),
+    ...pkFields.map((k) => normalizeCellValue(pkObj[k])),
+  ];
+  const p = getMysqlPool(settings);
+  const [result] = await p.query({
+    sql: `UPDATE \`${table}\` SET ${sets.join(', ')} WHERE ${wheres.join(' AND ')} LIMIT 1`,
+    values,
+    timeout: 15_000,
+  });
+  return { affectedRows: Number(result?.affectedRows ?? 0) };
+}
+
+export async function insertTableRow(settings, tableName, values) {
+  const table = assertTableName(tableName);
+  const structure = await tableStructure(settings, table);
+  const payload = values && typeof values === 'object' ? values : {};
+  const keys = Object.keys(payload).filter((k) => {
+    const col = structure.find((c) => c.field === k);
+    if (!col) return false;
+    if (col.extra?.includes('auto_increment') && (payload[k] === '' || payload[k] == null)) return false;
+    return true;
+  });
+  if (!keys.length) throw new Error('Keine Werte zum Einfügen.');
+  assertKnownColumns(structure, keys);
+  const cols = keys.map((k) => `\`${assertTableName(k)}\``);
+  const placeholders = keys.map(() => '?');
+  const p = getMysqlPool(settings);
+  const [result] = await p.query({
+    sql: `INSERT INTO \`${table}\` (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`,
+    values: keys.map((k) => normalizeCellValue(payload[k])),
+    timeout: 15_000,
+  });
+  return {
+    affectedRows: Number(result?.affectedRows ?? 0),
+    insertId: result?.insertId != null ? Number(result.insertId) : undefined,
+  };
+}
+
+export async function deleteTableRow(settings, tableName, pk) {
+  const table = assertTableName(tableName);
+  const structure = await tableStructure(settings, table);
+  const pkFields = primaryKeyFields(structure);
+  const pkObj = pk && typeof pk === 'object' ? pk : {};
+  for (const field of pkFields) {
+    if (!(field in pkObj)) throw new Error(`Primärschlüssel fehlt: ${field}`);
+  }
+  const wheres = pkFields.map((k) => `\`${k}\` = ?`);
+  const p = getMysqlPool(settings);
+  const [result] = await p.query({
+    sql: `DELETE FROM \`${table}\` WHERE ${wheres.join(' AND ')} LIMIT 1`,
+    values: pkFields.map((k) => normalizeCellValue(pkObj[k])),
+    timeout: 15_000,
+  });
+  return { affectedRows: Number(result?.affectedRows ?? 0) };
 }
 
 export async function runSelect(settings, sql, limit = 200) {

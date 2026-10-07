@@ -154,13 +154,16 @@ import { pollFxJournal } from './fxJournal.js';
 import {
   browseTable,
   databaseOverview,
+  deleteTableRow,
   getDatabaseMeta,
+  insertTableRow,
   listTables,
   mysqlReady,
   runOwnerQuery,
   runSelect,
   searchTable,
   tableStructure,
+  updateTableRow,
 } from './mysql.js';
 import { buildResourceGroups, resolveResourceActual, syncResourcesFromDisk } from './resourceScan.js';
 import { drainCommandQueue } from './queueWorker.js';
@@ -3239,6 +3242,37 @@ async function handleApi(req, res, url) {
     try {
       const result = await browseTable(settings, table, offset, limit);
       return json(res, 200, result);
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  if (method === 'POST' && pathname === '/api/database/row') {
+    if (!hasPerm(me, 'database') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hit(`sql:${me.id}`, 40, 60_000)) return json(res, 429, { error: 'Zu viele Abfragen.' });
+    const settings = settingMap(db);
+    if (!mysqlReady(settings)) return json(res, 503, { error: 'MySQL nicht konfiguriert.' });
+    const body = await readBody(req);
+    const table = str(body.table, 128);
+    const action = str(body.action || 'update', 16);
+    if (!table) return json(res, 400, { error: 'Tabelle fehlt.' });
+    try {
+      if (action === 'update') {
+        const result = await updateTableRow(settings, table, body.pk, body.set || body.changes || {});
+        audit(db, me.username, 'sql.row.update', `${table}`, ip);
+        return json(res, 200, { ok: true, ...result });
+      }
+      if (action === 'insert') {
+        const result = await insertTableRow(settings, table, body.values || body.set || {});
+        audit(db, me.username, 'sql.row.insert', `${table}`, ip);
+        return json(res, 200, { ok: true, ...result });
+      }
+      if (action === 'delete') {
+        const result = await deleteTableRow(settings, table, body.pk);
+        audit(db, me.username, 'sql.row.delete', `${table}`, ip);
+        return json(res, 200, { ok: true, ...result });
+      }
+      return json(res, 400, { error: 'Unbekannte Aktion.' });
     } catch (err) {
       return json(res, 400, { error: err.message });
     }
