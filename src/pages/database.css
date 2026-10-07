@@ -327,10 +327,28 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   white-space: nowrap !important;
 }
 
+.db-act-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .db-act-cell {
   white-space: nowrap !important;
   max-width: none !important;
   overflow: visible !important;
+}
+
+.db-act-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.db-act-row input[type="checkbox"],
+.db-act-head input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
 }
 
 .db-act-btn {
@@ -350,11 +368,34 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 
 .db-act-btn:hover:not(:disabled) {
   text-decoration: underline;
+  color: var(--text);
+}
+
+.db-act-btn.danger:hover:not(:disabled) {
+  color: #f09090;
 }
 
 .db-act-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.db-browse-grid tbody tr.is-selected {
+  background: rgba(var(--accent-rgb), 0.1) !important;
+}
+
+.db-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-2);
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .db-cell-editable {
