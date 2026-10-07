@@ -196,8 +196,8 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   min-width: 0;
 }
 
-.db-nav-toggle {
-  display: none;
+.db-crumb-idle {
+  font-size: 13px;
 }
 
 .db-crumb {
@@ -1085,18 +1085,10 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
     display: block;
   }
 
-  .db-shell-aside:not(.is-open) {
-    display: none;
-  }
-
-  .db-shell-aside.is-open {
+  .db-shell-aside {
     display: flex;
-    max-height: min(45vh, 360px);
+    max-height: min(40vh, 320px);
     border-bottom: 1px solid var(--line);
-  }
-
-  .db-nav-toggle {
-    display: inline-flex;
   }
 
   .db-panel {
