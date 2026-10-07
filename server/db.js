@@ -129,6 +129,8 @@ export function getDb() {
     'ALTER TABLE users ADD COLUMN discord_id TEXT',
     'ALTER TABLE users ADD COLUMN permissions TEXT',
     'ALTER TABLE bans ADD COLUMN ids TEXT',
+    'ALTER TABLE bans ADD COLUMN revoked_by TEXT',
+    'ALTER TABLE bans ADD COLUMN revoked_at INTEGER',
     'ALTER TABLE players ADD COLUMN play_ms INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE resources ADD COLUMN folder TEXT',
     "ALTER TABLE schedule ADD COLUMN kind TEXT NOT NULL DEFAULT 'restart'",

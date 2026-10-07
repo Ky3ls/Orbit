@@ -2094,7 +2094,9 @@ async function handleApi(req, res, url) {
   const revoke = pathname.match(/^\/api\/bans\/(\d+)\/revoke$/);
   if (method === 'POST' && revoke) {
     if (!hasPerm(me, 'bans.revoke')) return json(res, 403, { error: 'Keine Berechtigung.' });
-    db.prepare('UPDATE bans SET revoked = 1 WHERE id = ?').run(Number(revoke[1]));
+    ensureModerationSchema(db);
+    db.prepare('UPDATE bans SET revoked = 1, revoked_by = ?, revoked_at = ? WHERE id = ?')
+      .run(me.username, Date.now(), Number(revoke[1]));
     audit(db, me.username, 'unban', revoke[1], ip);
     return json(res, 200, { ok: true });
   }
