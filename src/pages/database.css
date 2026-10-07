@@ -543,15 +543,40 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   white-space: nowrap;
 }
 
-.db-toolbar-limit select {
+.db-toolbar-limit {
+  width: 72px;
+  flex: 0 0 auto;
+  gap: 0;
+}
+
+.db-toolbar-limit .osel-trigger {
   height: 28px;
+  min-height: 28px;
   padding: 0 8px;
   border-radius: 6px;
-  border: 1px solid var(--line);
-  background: var(--bg-2);
-  color: var(--text);
-  font: inherit;
   font-size: 12px;
+  gap: 6px;
+  background: var(--bg-2);
+}
+
+.db-toolbar-limit .osel-caret {
+  border-left-width: 4px;
+  border-right-width: 4px;
+  border-top-width: 5px;
+}
+
+.db-search-col {
+  min-width: 140px;
+  flex: 0 1 180px;
+}
+
+.db-search-col .osel-trigger {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--bg-2);
 }
 
 .db-toolbar-pages {

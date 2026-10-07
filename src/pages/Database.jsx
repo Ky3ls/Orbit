@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
+import OrbitSelect from '../components/OrbitSelect.jsx';
 import { Badge, Page, PageHeader } from '../components/Ui.jsx';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 import './database.css';
 
 const PAGE_SIZES = [25, 50, 100, 250];
+const PAGE_SIZE_OPTS = PAGE_SIZES.map((n) => ({ value: n, label: String(n) }));
 
 const STRUCTURE_COLS = [
   { key: 'field', labelKey: 'db.col.field' },
@@ -1065,15 +1067,13 @@ export default function Database({ user }) {
                         })
                       )}
                     </span>
-                    <label className="db-toolbar-limit">
-                      <select
-                        value={pageSize}
-                        aria-label={t('db.limit')}
-                        onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
-                      >
-                        {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                    </label>
+                    <OrbitSelect
+                      className="db-toolbar-limit"
+                      value={pageSize}
+                      options={PAGE_SIZE_OPTS}
+                      placeholder={t('db.limit')}
+                      onChange={(v) => { setPageSize(Number(v)); setPage(0); }}
+                    />
                     <div className="db-toolbar-pages">
                       <button type="button" className="db-nav-btn" disabled={page <= 0 || busy} onClick={() => setPage((p) => p - 1)} aria-label={t('common.back')}>‹</button>
                       <span>{page + 1}/{pageCount}</span>
@@ -1148,14 +1148,13 @@ export default function Database({ user }) {
             {tab === 'search' && table && (
               <>
                 <form className="db-search-form" onSubmit={runSearch}>
-                  <label className="field">
-                    <span>{t('db.column')}</span>
-                    <select value={searchCol} onChange={(e) => setSearchCol(e.target.value)}>
-                      {structure.map((c) => (
-                        <option key={c.field} value={c.field}>{c.field}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <OrbitSelect
+                    className="db-search-col"
+                    label={t('db.column')}
+                    value={searchCol}
+                    options={structure.map((c) => ({ value: c.field, label: c.field }))}
+                    onChange={(v) => setSearchCol(v)}
+                  />
                   <label className="field grow">
                     <span>{t('db.contains')}</span>
                     <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder={t('db.searchPh')} />
