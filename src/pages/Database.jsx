@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import OrbitSelect from '../components/OrbitSelect.jsx';
 import { Page, PageHeader } from '../components/Ui.jsx';
@@ -159,7 +160,10 @@ function BrowseTable({
   const [asNull, setAsNull] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
+  const [editPos, setEditPos] = useState(null);
   const inputRef = useRef(null);
+  const editCellRef = useRef(null);
+  const editPanelRef = useRef(null);
   const pkSet = useMemo(() => new Set(primaryKey || []), [primaryKey]);
   const nullable = useMemo(() => {
     const map = new Map();
@@ -172,16 +176,53 @@ function BrowseTable({
     [rows, primaryKey],
   );
 
+  const editColMeta = edit ? structure?.find((c) => c.field === edit.col) : null;
+  const useArea = !!(edit && (isLongCol(editColMeta) || draft.length > 40 || draft.includes('\n')));
+
   useEffect(() => {
     setSelected(new Set());
   }, [rows]);
 
   useEffect(() => {
-    if (edit && inputRef.current) {
+    if (edit && editPos && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select?.();
     }
-  }, [edit]);
+  }, [edit, editPos]);
+
+  useLayoutEffect(() => {
+    if (!edit) return undefined;
+    const place = () => {
+      const cell = editCellRef.current;
+      if (!cell) return;
+      const r = cell.getBoundingClientRect();
+      const preferW = useArea
+        ? Math.min(640, window.innerWidth * 0.92)
+        : Math.min(420, window.innerWidth * 0.8);
+      const width = Math.max(r.width, preferW, 220);
+      let left = r.left;
+      let top = r.top;
+      if (left + width > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - width - 8);
+      }
+      const panelH = editPanelRef.current?.offsetHeight || (useArea ? 160 : 88);
+      if (top + panelH > window.innerHeight - 8) {
+        top = Math.max(8, window.innerHeight - panelH - 8);
+      }
+      setEditPos((prev) => (
+        prev && prev.top === top && prev.left === left && prev.width === width
+          ? prev
+          : { top, left, width }
+      ));
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [edit, useArea, draft.length, asNull]);
 
   const allSelected = rows.length > 0 && rowKeys.every((k) => selected.has(k));
   const someSelected = selected.size > 0;
@@ -199,20 +240,37 @@ function BrowseTable({
     });
   }
 
-  function startEdit(rowIdx, col) {
+  function startEdit(rowIdx, col, cellEl) {
     if (!canEdit || busy || saving) return;
     if (!primaryKey?.length) return;
     if (pkSet.has(col) && structure?.find((c) => c.field === col)?.extra?.includes('auto_increment')) return;
     const row = rows[rowIdx];
     const raw = row?.[col];
     const isNull = raw === null || raw === undefined;
+    const text = isNull ? '' : cellValue(raw).text;
+    if (cellEl) {
+      const r = cellEl.getBoundingClientRect();
+      const wide = isLongCol(structure?.find((c) => c.field === col))
+        || text.length > 40
+        || text.includes('\n');
+      const preferW = wide
+        ? Math.min(640, window.innerWidth * 0.92)
+        : Math.min(420, window.innerWidth * 0.8);
+      const width = Math.max(r.width, preferW, 220);
+      let left = r.left;
+      if (left + width > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - width - 8);
+      }
+      setEditPos({ top: r.top, left, width });
+    }
     setEdit({ rowIdx, col });
     setAsNull(isNull);
-    setDraft(isNull ? '' : cellValue(raw).text);
+    setDraft(text);
   }
 
   function cancelEdit() {
     setEdit(null);
+    setEditPos(null);
     setDraft('');
     setAsNull(false);
   }
@@ -320,113 +378,17 @@ function BrowseTable({
                   {columns.map((col) => {
                     const isEditing = edit?.rowIdx === rowIdx && edit?.col === col;
                     const { text, null: isNull } = cellValue(row[col]);
-                    if (isEditing) {
-                      const colMeta = structure?.find((c) => c.field === col);
-                      const useArea = isLongCol(colMeta)
-                        || draft.length > 40
-                        || draft.includes('\n');
-                      return (
-                        <td key={col} className="db-cell-edit">
-                          <div
-                            className={`db-inline-edit${useArea ? ' is-wide' : ''}`}
-                            title={t('db.editHint')}
-                            onBlur={(e) => {
-                              if (e.currentTarget.contains(e.relatedTarget)) return;
-                              cancelEdit();
-                            }}
-                          >
-                            {!asNull ? (
-                              useArea ? (
-                                <textarea
-                                  ref={inputRef}
-                                  className="db-inline-input is-area"
-                                  rows={Math.min(8, Math.max(3, Math.ceil(draft.length / 48)))}
-                                  value={draft}
-                                  disabled={saving}
-                                  onChange={(e) => setDraft(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Escape') {
-                                      e.preventDefault();
-                                      cancelEdit();
-                                    } else if (e.key === 'Enter' && !e.shiftKey) {
-                                      e.preventDefault();
-                                      commitEdit();
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <input
-                                  ref={inputRef}
-                                  className="db-inline-input"
-                                  type="text"
-                                  value={draft}
-                                  disabled={saving}
-                                  size={Math.min(72, Math.max(18, draft.length + 2))}
-                                  onChange={(e) => setDraft(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Escape') {
-                                      e.preventDefault();
-                                      cancelEdit();
-                                    } else if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      commitEdit();
-                                    }
-                                  }}
-                                />
-                              )
-                            ) : (
-                              <span className="db-inline-nullval">NULL</span>
-                            )}
-                            <div className="db-inline-tools">
-                              {nullable.get(col) && (
-                                <label className="db-inline-null" title="NULL">
-                                  <input
-                                    type="checkbox"
-                                    checked={asNull}
-                                    disabled={saving}
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onChange={(e) => setAsNull(e.target.checked)}
-                                  />
-                                  <span>N</span>
-                                </label>
-                              )}
-                              <button
-                                type="button"
-                                className="db-inline-ico ok"
-                                disabled={saving}
-                                title={t('common.save')}
-                                aria-label={t('common.save')}
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={commitEdit}
-                              >
-                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M20 6 9 17l-5-5" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                className="db-inline-ico"
-                                disabled={saving}
-                                title={t('common.cancel')}
-                                aria-label={t('common.cancel')}
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={cancelEdit}
-                              >
-                                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                                  <path d="M18 6 6 18M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      );
-                    }
                     return (
                       <td
                         key={col}
-                        className={`${isNull ? 'null' : ''}${canEdit && primaryKey?.length ? ' db-cell-editable' : ''}`}
+                        ref={isEditing ? editCellRef : undefined}
+                        className={[
+                          isNull ? 'null' : '',
+                          canEdit && primaryKey?.length ? 'db-cell-editable' : '',
+                          isEditing ? 'db-cell-edit' : '',
+                        ].filter(Boolean).join(' ') || undefined}
                         title={canEdit && primaryKey?.length ? t('db.dblClickEdit') : undefined}
-                        onDoubleClick={() => startEdit(rowIdx, col)}
+                        onDoubleClick={(e) => startEdit(rowIdx, col, e.currentTarget)}
                       >
                         {text}
                       </td>
@@ -477,6 +439,101 @@ function BrowseTable({
             {t('db.clearSelection')}
           </button>
         </div>
+      )}
+      {edit && editPos && createPortal(
+        <div
+          ref={editPanelRef}
+          className={`db-inline-edit is-float${useArea ? ' is-wide' : ''}`}
+          style={{ top: editPos.top, left: editPos.left, width: editPos.width }}
+          title={t('db.editHint')}
+          onBlur={(e) => {
+            if (e.currentTarget.contains(e.relatedTarget)) return;
+            cancelEdit();
+          }}
+        >
+          {!asNull ? (
+            useArea ? (
+              <textarea
+                ref={inputRef}
+                className="db-inline-input is-area"
+                rows={Math.min(8, Math.max(3, Math.ceil(draft.length / 48)))}
+                value={draft}
+                disabled={saving}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelEdit();
+                  } else if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    commitEdit();
+                  }
+                }}
+              />
+            ) : (
+              <input
+                ref={inputRef}
+                className="db-inline-input"
+                type="text"
+                value={draft}
+                disabled={saving}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelEdit();
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitEdit();
+                  }
+                }}
+              />
+            )
+          ) : (
+            <span className="db-inline-nullval">NULL</span>
+          )}
+          <div className="db-inline-tools">
+            {nullable.get(edit.col) && (
+              <label className="db-inline-null" title="NULL">
+                <input
+                  type="checkbox"
+                  checked={asNull}
+                  disabled={saving}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onChange={(e) => setAsNull(e.target.checked)}
+                />
+                <span>N</span>
+              </label>
+            )}
+            <button
+              type="button"
+              className="db-inline-ico ok"
+              disabled={saving}
+              title={t('common.save')}
+              aria-label={t('common.save')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={commitEdit}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="db-inline-ico"
+              disabled={saving}
+              title={t('common.cancel')}
+              aria-label={t('common.cancel')}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={cancelEdit}
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
