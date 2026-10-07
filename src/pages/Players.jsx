@@ -1059,9 +1059,6 @@ export default function Players({ user }) {
                                       {e.kind === 'ban' && e.revoked && (
                                         <span className="pl-hist-pill off">{t('players.banRevoked')}</span>
                                       )}
-                                      {e.kind === 'ban' && !e.live && !e.revoked && e.expires && (
-                                        <span className="pl-hist-pill off">{t('players.histExpired')}</span>
-                                      )}
                                       {e.kind === 'ban' && e.live && canRevoke && (
                                         <button
                                           type="button"
