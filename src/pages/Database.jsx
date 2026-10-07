@@ -225,7 +225,8 @@ function BrowseTable({
                               }
                             }}
                             onBlur={() => {
-                              /* keep open; save via Enter or click outside handled below */
+                              /* Tabs/Klick außerhalb → Edit schließen (Icon-Buttons: onMouseDown preventDefault) */
+                              cancelEdit();
                             }}
                           />
                         )}
