@@ -58,11 +58,10 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   color: var(--muted);
 }
 
-.db-aside-create {
-  margin: 8px 10px 0;
-  width: calc(100% - 20px);
-  box-sizing: border-box;
-  flex-shrink: 0;
+.db-aside-top-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .db-aside-search {
@@ -71,21 +70,6 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   min-width: 0;
   box-sizing: border-box;
   flex-shrink: 0;
-}
-
-.db-overview-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.db-overview-head .db-lead {
-  margin: 0;
-  flex: 1;
-  min-width: 180px;
 }
 
 .db-create {
