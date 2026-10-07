@@ -68,6 +68,114 @@ export function assertSingleStatement(sql) {
   return q;
 }
 
+/** SQL-Dump in Einzelstatements splitten (Strings/Kommentare beachten). */
+export function splitSqlStatements(sql) {
+  const src = String(sql || '');
+  const out = [];
+  let buf = '';
+  let i = 0;
+  let quote = null;
+  let lineComment = false;
+  let blockComment = false;
+
+  const flush = () => {
+    const stmt = buf.replace(/^\s+|\s+$/g, '');
+    buf = '';
+    if (!stmt) return;
+    const withoutComments = stmt
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/--[^\n]*/g, ' ')
+      .replace(/#[^\n]*/g, ' ')
+      .trim();
+    if (withoutComments) out.push(stmt);
+  };
+
+  while (i < src.length) {
+    const c = src[i];
+    const n = src[i + 1];
+
+    if (lineComment) {
+      buf += c;
+      if (c === '\n') lineComment = false;
+      i += 1;
+      continue;
+    }
+    if (blockComment) {
+      buf += c;
+      if (c === '*' && n === '/') {
+        buf += '/';
+        i += 2;
+        blockComment = false;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+    if (quote) {
+      buf += c;
+      if (c === '\\' && quote !== '`') {
+        if (n != null) {
+          buf += n;
+          i += 2;
+          continue;
+        }
+      }
+      if (c === quote) {
+        if ((quote === "'" || quote === '"') && n === quote) {
+          buf += n;
+          i += 2;
+          continue;
+        }
+        quote = null;
+      }
+      i += 1;
+      continue;
+    }
+
+    if (c === '-' && n === '-') {
+      lineComment = true;
+      buf += c;
+      i += 1;
+      continue;
+    }
+    if (c === '#') {
+      lineComment = true;
+      buf += c;
+      i += 1;
+      continue;
+    }
+    if (c === '/' && n === '*') {
+      blockComment = true;
+      buf += c;
+      i += 1;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      quote = c;
+      buf += c;
+      i += 1;
+      continue;
+    }
+    if (c === ';') {
+      flush();
+      i += 1;
+      continue;
+    }
+    buf += c;
+    i += 1;
+  }
+  flush();
+  return out;
+}
+
+function assertScriptStatementAllowed(stmt) {
+  const head = String(stmt || '').replace(/^\s+/, '').slice(0, 80);
+  if (/\b(drop\s+database|create\s+database|grant\b|revoke\b|create\s+user|alter\s+user|set\s+password|load\s+data|into\s+outfile|into\s+dumpfile)\b/i.test(head)
+    || /\b(drop\s+database|create\s+database|grant\b|revoke\b|create\s+user|alter\s+user|load\s+data|into\s+outfile)\b/i.test(stmt)) {
+    throw new Error('Diese Anweisung ist im Panel nicht erlaubt.');
+  }
+}
+
 export async function listTables(settings) {
   const p = getMysqlPool(settings);
   const [rows] = await p.query('SHOW TABLES');
@@ -261,32 +369,60 @@ export async function runSelect(settings, sql, limit = 200) {
 }
 
 export async function runOwnerQuery(settings, sql, limit = 500) {
-  const q = assertSingleStatement(sql);
+  const statements = splitSqlStatements(sql);
+  if (!statements.length) throw new Error('Leere Abfrage.');
+  if (statements.length === 1 && !/[;]/.test(String(sql || '').trim())) {
+    /* ein Statement ohne Trailing-; — wie bisher */
+  }
+  const maxStmt = 400;
+  if (statements.length > maxStmt) {
+    throw new Error(`Zu viele Anweisungen (max. ${maxStmt}).`);
+  }
+  for (const stmt of statements) assertScriptStatementAllowed(stmt);
+
   const capped = Math.min(Math.max(Number(limit) || 500, 1), 500);
   const p = getMysqlPool(settings);
-  const [result, fields] = await p.query({ sql: q, timeout: 30_000 });
-  if (Array.isArray(result)) {
-    const list = result;
-    if (list.length > capped) {
-      return {
-        kind: 'resultset',
-        rows: list.slice(0, capped),
-        truncated: true,
-        columns: fields?.map((f) => f.name) || [],
-      };
+  let affectedRows = 0;
+  let insertId;
+  let lastResultset = null;
+  let okCount = 0;
+
+  for (let idx = 0; idx < statements.length; idx += 1) {
+    const q = statements[idx];
+    try {
+      const [result, fields] = await p.query({ sql: q, timeout: 60_000 });
+      if (Array.isArray(result)) {
+        const list = result;
+        lastResultset = {
+          kind: 'resultset',
+          rows: list.length > capped ? list.slice(0, capped) : list,
+          truncated: list.length > capped,
+          columns: fields?.map((f) => f.name) || Object.keys(list[0] || {}),
+          statementIndex: idx + 1,
+        };
+      } else {
+        affectedRows += Number(result?.affectedRows ?? 0);
+        if (result?.insertId != null) insertId = Number(result.insertId);
+        okCount += 1;
+      }
+    } catch (err) {
+      const preview = q.length > 120 ? `${q.slice(0, 120)}…` : q;
+      throw new Error(`Anweisung ${idx + 1}/${statements.length}: ${err.message}\n→ ${preview}`);
     }
-    return {
-      kind: 'resultset',
-      rows: list,
-      truncated: false,
-      columns: fields?.map((f) => f.name) || Object.keys(list[0] || {}),
-    };
   }
+
+  if (statements.length === 1 && lastResultset) return lastResultset;
+  if (lastResultset && okCount === 0 && statements.length === 1) return lastResultset;
+
   return {
     kind: 'ok',
-    affectedRows: Number(result?.affectedRows ?? 0),
-    insertId: result?.insertId != null ? Number(result.insertId) : undefined,
-    warningStatus: result?.warningStatus,
-    message: result?.info ? String(result.info) : undefined,
+    affectedRows,
+    insertId,
+    statements: statements.length,
+    executed: okCount + (lastResultset ? 1 : 0),
+    message: statements.length > 1
+      ? `${statements.length} Anweisungen ausgeführt.`
+      : undefined,
+    resultset: lastResultset || undefined,
   };
 }
