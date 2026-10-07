@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import OrbitSelect from '../components/OrbitSelect.jsx';
-import { Badge, Page, PageHeader } from '../components/Ui.jsx';
+import { Page, PageHeader } from '../components/Ui.jsx';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 import './database.css';
 
@@ -1124,9 +1124,6 @@ export default function Database({ user }) {
   const [filter, setFilter] = useState('');
   const [table, setTable] = useState(null);
   const [tab, setTab] = useState('overview');
-  const [navOpen, setNavOpen] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 901px)').matches,
-  );
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -1151,17 +1148,6 @@ export default function Database({ user }) {
   const [busy, setBusy] = useState(false);
 
   const sqlHint = t('db.sqlHintOwner');
-
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 901px)');
-    const onChange = () => {
-      if (mq.matches) setNavOpen(true);
-      else setNavOpen(false);
-    };
-    onChange();
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1348,7 +1334,6 @@ export default function Database({ user }) {
     setSearchResult({ rows: [], columns: [] });
     setSql(`SELECT * FROM \`${name.replace(/`/g, '')}\` LIMIT 50`);
     setSqlResult(null);
-    if (window.matchMedia('(max-width: 900px)').matches) setNavOpen(false);
   }
 
   function goDatabase() {
@@ -1572,14 +1557,12 @@ export default function Database({ user }) {
   return (
     <Page className="db-page ws-module-flush">
       <PageHeader
-        eyebrow={t('db.eyebrow')}
-        title={meta.database || 'MySQL'}
+        title={t('db.eyebrow')}
         description={meta.version ? t('db.serverVer', { version: meta.version }) : undefined}
-        actions={<Badge tone="info">{t('db.tablesCount', { n: tables.length })}</Badge>}
       />
 
       <div className="db-shell">
-        <aside className={`db-shell-aside${navOpen ? ' is-open' : ''}`} aria-label={t('db.tablesAria')}>
+        <aside className="db-shell-aside" aria-label={t('db.tablesAria')}>
           <div className="db-aside-top">
             <span className="db-aside-label">{t('db.tables')}</span>
             <span className="db-aside-count mono">{tables.length}</span>
@@ -1629,23 +1612,15 @@ export default function Database({ user }) {
         <div className="db-main">
           <div className="db-main-head">
             <div className="db-main-head-start">
-              <button
-                type="button"
-                className="db-nav-toggle btn btn-sm"
-                aria-expanded={navOpen}
-                onClick={() => setNavOpen((v) => !v)}
-              >
-                {navOpen ? t('db.hideList') : t('db.showTables', { n: tables.length })}
-              </button>
-              <nav className="db-crumb" aria-label={t('db.crumbAria')}>
-                <button type="button" onClick={goDatabase}>{meta.database || t('db.eyebrow')}</button>
-                {table && (
-                  <>
-                    <span className="sep">›</span>
-                    <strong>{table}</strong>
-                  </>
-                )}
-              </nav>
+              {table ? (
+                <nav className="db-crumb" aria-label={t('db.crumbAria')}>
+                  <button type="button" onClick={goDatabase}>{t('db.overview')}</button>
+                  <span className="sep">›</span>
+                  <strong>{table}</strong>
+                </nav>
+              ) : (
+                <span className="db-crumb-idle muted">{t('db.overview')}</span>
+              )}
             </div>
             {busy && <span className="muted db-busy">{t('db.loading')}</span>}
           </div>
