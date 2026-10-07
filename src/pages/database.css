@@ -58,12 +58,69 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   color: var(--muted);
 }
 
+.db-aside-create {
+  margin: 8px 10px 0;
+  width: calc(100% - 20px);
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
 .db-aside-search {
   margin: 8px 10px;
   width: calc(100% - 20px);
   min-width: 0;
   box-sizing: border-box;
   flex-shrink: 0;
+}
+
+.db-overview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.db-overview-head .db-lead {
+  margin: 0;
+  flex: 1;
+  min-width: 180px;
+}
+
+.db-create {
+  max-width: 920px;
+}
+
+.db-create-name {
+  margin: 0 0 12px;
+  max-width: 320px;
+}
+
+.db-create-cols {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.db-create-col {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg, #0a0a0a);
+}
+
+.db-create-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.db-create-col .db-col-editor {
+  margin: 0;
 }
 
 .db-table-list {

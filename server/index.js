@@ -154,6 +154,7 @@ import { pollFxJournal } from './fxJournal.js';
 import {
   addTableColumn,
   browseTable,
+  createTable,
   databaseOverview,
   deleteTableRow,
   dropTableColumn,
@@ -3233,6 +3234,27 @@ async function handleApi(req, res, url) {
         tableIndexes(settings, table),
       ]);
       return json(res, 200, { table, columns, indexes });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  if (method === 'POST' && pathname === '/api/database/table') {
+    if (!hasPerm(me, 'database') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hit(`sql:${me.id}`, 20, 60_000)) return json(res, 429, { error: 'Zu viele Abfragen.' });
+    const settings = settingMap(db);
+    if (!mysqlReady(settings)) return json(res, 503, { error: 'MySQL nicht konfiguriert.' });
+    const body = await readBody(req);
+    const action = str(body.action || 'create', 16);
+    try {
+      if (action === 'create') {
+        const name = str(body.name || body.table || '', 128);
+        if (!name) return json(res, 400, { error: 'Tabellenname fehlt.' });
+        const result = await createTable(settings, name, body.columns || []);
+        audit(db, me.username, 'sql.table.create', name, ip);
+        return json(res, 200, result);
+      }
+      return json(res, 400, { error: 'Unbekannte Aktion.' });
     } catch (err) {
       return json(res, 400, { error: err.message });
     }

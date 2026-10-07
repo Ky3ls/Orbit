@@ -311,6 +311,31 @@ function afterClause(after, structure) {
   return ` AFTER \`${col}\``;
 }
 
+export async function createTable(settings, tableName, columns = []) {
+  const table = assertTableName(tableName);
+  const cols = Array.isArray(columns) ? columns : [];
+  if (!cols.length) throw new Error('Mindestens eine Spalte nötig.');
+  if (cols.length > 64) throw new Error('Zu viele Spalten (max. 64).');
+  const names = cols.map((c) => assertTableName(c?.name || c?.field));
+  if (new Set(names).size !== names.length) throw new Error('Spaltnamen müssen eindeutig sein.');
+  const existing = await listTables(settings);
+  if (existing.includes(table)) throw new Error(`Tabelle existiert bereits: ${table}`);
+  const p = getMysqlPool(settings);
+  const escapeFn = (v) => p.escape(v);
+  const defs = cols.map((c) => buildColumnSql(c, escapeFn));
+  const pk = cols
+    .filter((c) => c.primary || c.key === 'PRI')
+    .map((c) => assertTableName(c.name || c.field));
+  if (pk.length) {
+    defs.push(`PRIMARY KEY (${pk.map((c) => `\`${c}\``).join(', ')})`);
+  }
+  await p.query({
+    sql: `CREATE TABLE \`${table}\` (${defs.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    timeout: 30_000,
+  });
+  return { ok: true, table };
+}
+
 export async function addTableColumn(settings, tableName, def, after = null) {
   const table = assertTableName(tableName);
   const structure = await tableStructure(settings, table);

@@ -504,8 +504,22 @@ function emptyColumnDraft() {
     defaultValue: '',
     defaultNull: false,
     autoIncrement: false,
+    primary: false,
     comment: '',
   };
+}
+
+function defaultCreateColumns() {
+  return [{
+    name: 'id',
+    type: 'int',
+    nullable: false,
+    defaultValue: '',
+    defaultNull: false,
+    autoIncrement: true,
+    primary: true,
+    comment: '',
+  }];
 }
 
 function columnToDraft(col) {
@@ -610,11 +624,149 @@ function draftToPayload(draft) {
     type: String(draft.type || '').trim(),
     nullable: Boolean(draft.nullable),
     autoIncrement: Boolean(draft.autoIncrement),
+    primary: Boolean(draft.primary),
     comment: String(draft.comment || ''),
     defaultValue: draft.autoIncrement
       ? undefined
       : (draft.defaultNull ? null : draft.defaultValue),
   };
+}
+
+function CreateTableForm({ busy, onCreate, onCancel, t }) {
+  const [name, setName] = useState('');
+  const [cols, setCols] = useState(() => defaultCreateColumns());
+
+  function updateCol(i, patch) {
+    setCols((list) => list.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  }
+
+  function removeCol(i) {
+    setCols((list) => (list.length <= 1 ? list : list.filter((_, idx) => idx !== i)));
+  }
+
+  return (
+    <form
+      className="db-create"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const tableName = name.trim();
+        if (!tableName) return;
+        const columns = cols.map(draftToPayload).filter((c) => c.name && c.type);
+        if (!columns.length) return;
+        onCreate(tableName, columns);
+      }}
+    >
+      <div className="db-insert-head">
+        <h4 className="db-insert-title">{t('db.createTable')}</h4>
+        <p className="muted db-insert-hint">{t('db.createTableHint')}</p>
+      </div>
+      <label className="db-col-field db-create-name">
+        <span>{t('db.table')}</span>
+        <input
+          className="db-insert-input"
+          value={name}
+          disabled={busy}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="my_table"
+          autoFocus
+        />
+      </label>
+      <div className="db-create-cols">
+        {cols.map((col, i) => (
+          <div key={i} className="db-create-col">
+            <div className="db-create-col-head">
+              <span className="muted">{t('db.column')} {i + 1}</span>
+              <button
+                type="button"
+                className="db-act-btn danger"
+                disabled={busy || cols.length <= 1}
+                onClick={() => removeCol(i)}
+              >
+                {t('db.dropCol')}
+              </button>
+            </div>
+            <div className="db-col-editor">
+              <label className="db-col-field">
+                <span>{t('db.column')}</span>
+                <input
+                  className="db-insert-input"
+                  value={col.name}
+                  disabled={busy}
+                  onChange={(e) => updateCol(i, { name: e.target.value })}
+                />
+              </label>
+              <label className="db-col-field">
+                <span>{t('db.col.type')}</span>
+                <input
+                  className="db-insert-input"
+                  list="db-type-suggestions"
+                  value={col.type}
+                  disabled={busy}
+                  onChange={(e) => updateCol(i, { type: e.target.value })}
+                />
+              </label>
+              <label className="db-col-check">
+                <input
+                  type="checkbox"
+                  checked={col.primary}
+                  disabled={busy}
+                  onChange={(e) => updateCol(i, {
+                    primary: e.target.checked,
+                    nullable: e.target.checked ? false : col.nullable,
+                  })}
+                />
+                <span>PK</span>
+              </label>
+              <label className="db-col-check">
+                <input
+                  type="checkbox"
+                  checked={col.autoIncrement}
+                  disabled={busy}
+                  onChange={(e) => updateCol(i, {
+                    autoIncrement: e.target.checked,
+                    nullable: e.target.checked ? false : col.nullable,
+                  })}
+                />
+                <span>AI</span>
+              </label>
+              <label className="db-col-check">
+                <input
+                  type="checkbox"
+                  checked={col.nullable}
+                  disabled={busy || col.autoIncrement || col.primary}
+                  onChange={(e) => updateCol(i, { nullable: e.target.checked })}
+                />
+                <span>{t('db.col.null')}</span>
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+      <datalist id="db-type-suggestions">
+        {TYPE_SUGGESTIONS.map((x) => <option key={x} value={x} />)}
+      </datalist>
+      <div className="db-form-actions">
+        <button
+          type="button"
+          className="db-btn"
+          disabled={busy || cols.length >= 64}
+          onClick={() => setCols((list) => [...list, emptyColumnDraft()])}
+        >
+          {t('db.addCol')}
+        </button>
+        <button
+          type="submit"
+          className="db-btn db-btn-primary"
+          disabled={busy || !name.trim() || !cols.some((c) => c.name.trim() && c.type.trim())}
+        >
+          {t('db.createTableSave')}
+        </button>
+        <button type="button" className="db-btn" disabled={busy} onClick={onCancel}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    </form>
+  );
 }
 
 function StructureEditor({
@@ -1036,6 +1188,14 @@ export default function Database({ user }) {
     return tables.filter((name) => name.toLowerCase().includes(q));
   }, [tables, filter]);
 
+  const reloadOverview = useCallback(async () => {
+    const o = await api('/api/database/overview');
+    const list = o.tables || [];
+    setOverview(list);
+    setTables(list.map((tbl) => tbl.name));
+    return list;
+  }, []);
+
   const loadStructure = useCallback(async (name) => {
     const d = await api(`/api/database/structure?table=${encodeURIComponent(name)}`);
     const cols = d.columns || [];
@@ -1130,6 +1290,31 @@ export default function Database({ user }) {
       });
       setMsg(t('db.indexDropped'));
       await loadStructure(table);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createNewTable(tableName, columns) {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      await api('/api/database/table', {
+        method: 'POST',
+        body: { action: 'create', name: tableName, columns },
+      });
+      setMsg(t('db.tableCreated', { name: tableName }));
+      await reloadOverview();
+      setTable(tableName);
+      setTab('structure');
+      setPage(0);
+      setRowFilter('');
+      setInsertMode('insert');
+      setInsertDraft(null);
+      await loadStructure(tableName);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -1399,6 +1584,21 @@ export default function Database({ user }) {
             <span className="db-aside-label">{t('db.tables')}</span>
             <span className="db-aside-count mono">{tables.length}</span>
           </div>
+          {canEdit && (
+            <button
+              type="button"
+              className="db-btn db-btn-primary db-aside-create"
+              disabled={busy}
+              onClick={() => {
+                setTable(null);
+                setTab('create');
+                setErr('');
+                setMsg('');
+              }}
+            >
+              {t('db.createTable')}
+            </button>
+          )}
           <input
             className="search db-aside-search"
             type="search"
@@ -1459,6 +1659,16 @@ export default function Database({ user }) {
             >
               {t('db.overview')}
             </button>
+            {canEdit && (
+              <button
+                type="button"
+                role="tab"
+                className={`db-tab${tab === 'create' ? ' active' : ''}`}
+                onClick={() => { setTable(null); setTab('create'); }}
+              >
+                {t('db.createTableTab')}
+              </button>
+            )}
             <button
               type="button"
               role="tab"
@@ -1513,11 +1723,18 @@ export default function Database({ user }) {
 
             {tab === 'overview' && (
               <>
-                <p className="db-lead">
-                  {t('db.pickHintBefore')}
-                  <button type="button" className="db-link" onClick={() => setTab('sql')}>{t('db.pickHintSql')}</button>
-                  {t('db.pickHintAfter')}
-                </p>
+                <div className="db-overview-head">
+                  <p className="db-lead">
+                    {t('db.pickHintBefore')}
+                    <button type="button" className="db-link" onClick={() => setTab('sql')}>{t('db.pickHintSql')}</button>
+                    {t('db.pickHintAfter')}
+                  </p>
+                  {canEdit && (
+                    <button type="button" className="db-btn db-btn-primary" disabled={busy} onClick={() => setTab('create')}>
+                      {t('db.createTable')}
+                    </button>
+                  )}
+                </div>
                 <div className="db-scroll">
                   <table className="ws-table db-grid db-overview-table">
                     <thead>
@@ -1537,7 +1754,7 @@ export default function Database({ user }) {
                           </td>
                           <td>{row.rows}</td>
                           <td>
-                            <button type="button" className="btn btn-sm" onClick={() => selectTable(row.name)}>
+                            <button type="button" className="db-btn" onClick={() => selectTable(row.name)}>
                               {t('db.open')}
                             </button>
                           </td>
@@ -1547,6 +1764,16 @@ export default function Database({ user }) {
                   </table>
                 </div>
               </>
+            )}
+
+            {tab === 'create' && canEdit && (
+              <CreateTableForm
+                key="create-table"
+                busy={busy}
+                onCreate={createNewTable}
+                onCancel={() => setTab('overview')}
+                t={t}
+              />
             )}
 
             {tab === 'sql' && (
