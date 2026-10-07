@@ -826,11 +826,155 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
   border-color: var(--accent);
 }
 
-.db-insert-actions {
+.db-form-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 12px;
+}
+
+/* DB-Buttons: flach, auto-width — kein Pill / kein width:100% von .btn-primary */
+.db-page .btn,
+.db-page .btn-sm,
+.db-page .btn-primary {
+  width: auto;
+  min-width: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 32px;
+  font-size: 12.5px;
+  font-weight: 600;
+  transform: none;
+  box-shadow: none;
+}
+
+.db-page .btn:hover,
+.db-page .btn-sm:hover,
+.db-page .btn-primary:hover {
+  transform: none;
+}
+
+.db-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.db-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--accent);
+}
+
+.db-btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.db-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  color: #fff;
+}
+
+.db-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.db-structure {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.db-structure-grid tbody tr.is-editing {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.db-struct-panel {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.db-col-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px 12px;
+  margin: 10px 0;
+  align-items: end;
+}
+
+.db-col-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.db-col-field.grow {
+  grid-column: 1 / -1;
+}
+
+.db-col-field > span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.db-col-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text);
+  padding-bottom: 6px;
+}
+
+.db-col-check.compact {
+  padding-bottom: 0;
+  flex-shrink: 0;
+}
+
+.db-col-default {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.db-col-default .db-insert-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.db-after-select {
+  width: 100%;
+}
+
+.db-after-select .osel-trigger {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: var(--bg, #0a0a0a);
 }
 
 .db-overview-table .mono {

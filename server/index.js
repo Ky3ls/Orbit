@@ -152,15 +152,20 @@ import { notifyServerEvent, notifyPlayerDrop } from './discord.js';
 import { refreshDiscordBot, setDiscordBotDeps, sendDiscordWarning, forceStatusRefresh } from './discordBot.js';
 import { pollFxJournal } from './fxJournal.js';
 import {
+  addTableColumn,
   browseTable,
   databaseOverview,
   deleteTableRow,
+  dropTableColumn,
+  dropTableIndex,
   getDatabaseMeta,
   insertTableRow,
   listTables,
+  modifyTableColumn,
   mysqlReady,
   runOwnerQuery,
   searchTable,
+  tableIndexes,
   tableStructure,
   updateTableRow,
 } from './mysql.js';
@@ -3223,8 +3228,53 @@ async function handleApi(req, res, url) {
     const table = str(url.searchParams.get('table') || '', 128);
     if (!table) return json(res, 400, { error: 'Tabellenname fehlt.' });
     try {
-      const columns = await tableStructure(settings, table);
-      return json(res, 200, { table, columns });
+      const [columns, indexes] = await Promise.all([
+        tableStructure(settings, table),
+        tableIndexes(settings, table),
+      ]);
+      return json(res, 200, { table, columns, indexes });
+    } catch (err) {
+      return json(res, 400, { error: err.message });
+    }
+  }
+
+  if (method === 'POST' && pathname === '/api/database/structure') {
+    if (!hasPerm(me, 'database') && me.role !== 'owner') return json(res, 403, { error: 'Keine Berechtigung.' });
+    if (!hit(`sql:${me.id}`, 30, 60_000)) return json(res, 429, { error: 'Zu viele Abfragen.' });
+    const settings = settingMap(db);
+    if (!mysqlReady(settings)) return json(res, 503, { error: 'MySQL nicht konfiguriert.' });
+    const body = await readBody(req);
+    const table = str(body.table, 128);
+    const action = str(body.action || '', 16);
+    if (!table) return json(res, 400, { error: 'Tabelle fehlt.' });
+    try {
+      if (action === 'add') {
+        const result = await addTableColumn(settings, table, body.column || body.def || {}, body.after || null);
+        audit(db, me.username, 'sql.structure.add', `${table}.${result.field}`, ip);
+        return json(res, 200, result);
+      }
+      if (action === 'modify') {
+        const col = str(body.column || body.field || '', 128);
+        if (!col) return json(res, 400, { error: 'Spalte fehlt.' });
+        const result = await modifyTableColumn(settings, table, col, body.def || body.columnDef || {});
+        audit(db, me.username, 'sql.structure.modify', `${table}.${col}`, ip);
+        return json(res, 200, result);
+      }
+      if (action === 'drop') {
+        const col = str(body.column || body.field || '', 128);
+        if (!col) return json(res, 400, { error: 'Spalte fehlt.' });
+        const result = await dropTableColumn(settings, table, col);
+        audit(db, me.username, 'sql.structure.drop', `${table}.${col}`, ip);
+        return json(res, 200, result);
+      }
+      if (action === 'dropIndex') {
+        const idx = str(body.index || body.name || '', 64);
+        if (!idx) return json(res, 400, { error: 'Index fehlt.' });
+        const result = await dropTableIndex(settings, table, idx);
+        audit(db, me.username, 'sql.structure.dropIndex', `${table}.${idx}`, ip);
+        return json(res, 200, result);
+      }
+      return json(res, 400, { error: 'Unbekannte Aktion.' });
     } catch (err) {
       return json(res, 400, { error: err.message });
     }
