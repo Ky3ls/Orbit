@@ -206,7 +206,13 @@ function BrowseTable({
                 if (isEditing) {
                   return (
                     <td key={col} className="db-cell-edit">
-                      <div className="db-inline-edit">
+                      <div
+                        className="db-inline-edit"
+                        onBlur={(e) => {
+                          if (e.currentTarget.contains(e.relatedTarget)) return;
+                          cancelEdit();
+                        }}
+                      >
                         {!asNull && (
                           <textarea
                             ref={inputRef}
@@ -224,10 +230,6 @@ function BrowseTable({
                                 commitEdit();
                               }
                             }}
-                            onBlur={() => {
-                              /* Tabs/Klick außerhalb → Edit schließen (Icon-Buttons: onMouseDown preventDefault) */
-                              cancelEdit();
-                            }}
                           />
                         )}
                         <div className="db-inline-hint">
@@ -237,6 +239,7 @@ function BrowseTable({
                                 type="checkbox"
                                 checked={asNull}
                                 disabled={saving}
+                                onMouseDown={(e) => e.preventDefault()}
                                 onChange={(e) => setAsNull(e.target.checked)}
                               />
                               NULL
