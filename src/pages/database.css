@@ -73,38 +73,24 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 }
 
 .db-create {
-  max-width: 920px;
+  max-width: 960px;
 }
 
 .db-create-name {
   margin: 0 0 12px;
-  max-width: 320px;
+  max-width: 280px;
 }
 
-.db-create-cols {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 4px;
+.db-create .db-insert-scroll {
+  margin-bottom: 2px;
 }
 
-.db-create-col {
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg, #0a0a0a);
+.db-create .db-insert-table td {
+  vertical-align: middle;
 }
 
-.db-create-col-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  font-size: 12px;
-}
-
-.db-create-col .db-col-editor {
-  margin: 0;
+.db-create .db-insert-table .db-insert-input {
+  min-width: 100px;
 }
 
 .db-table-list {
