@@ -1055,8 +1055,8 @@ export default function Database({ user }) {
             {tab === 'browse' && table && (
               <>
                 <div className="db-toolbar">
-                  <div className="db-pager">
-                    <span>
+                  <div className="db-toolbar-left">
+                    <span className="db-toolbar-meta">
                       {browse.total === 0 ? t('db.rowsZero') : (
                         t('db.rowsRange', {
                           from: browse.offset + 1,
@@ -1065,22 +1065,24 @@ export default function Database({ user }) {
                         })
                       )}
                     </span>
-                    <label>
-                      {t('db.limit')}
+                    <label className="db-toolbar-limit">
                       <select
                         value={pageSize}
+                        aria-label={t('db.limit')}
                         onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}
                       >
                         {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </label>
-                    <button type="button" className="btn btn-sm" disabled={page <= 0 || busy} onClick={() => setPage((p) => p - 1)}>{t('common.back')}</button>
-                    <span>{page + 1} / {pageCount}</span>
-                    <button type="button" className="btn btn-sm" disabled={page + 1 >= pageCount || busy} onClick={() => setPage((p) => p + 1)}>{t('db.next')}</button>
+                    <div className="db-toolbar-pages">
+                      <button type="button" className="db-nav-btn" disabled={page <= 0 || busy} onClick={() => setPage((p) => p - 1)} aria-label={t('common.back')}>‹</button>
+                      <span>{page + 1}/{pageCount}</span>
+                      <button type="button" className="db-nav-btn" disabled={page + 1 >= pageCount || busy} onClick={() => setPage((p) => p + 1)} aria-label={t('db.next')}>›</button>
+                    </div>
                   </div>
-                  <div className="db-toolbar-actions">
+                  <div className="db-toolbar-right">
                     <input
-                      className="search db-row-filter"
+                      className="db-row-filter"
                       type="search"
                       value={rowFilter}
                       onChange={(e) => setRowFilter(e.target.value)}
@@ -1090,7 +1092,7 @@ export default function Database({ user }) {
                     {canEdit && (
                       <button
                         type="button"
-                        className="btn btn-sm btn-primary"
+                        className={`db-tool-btn${insertOpen ? ' is-on' : ''}`}
                         disabled={busy}
                         onClick={() => {
                           if (!structure.length) loadStructure(table).then(() => setInsertOpen(true));
@@ -1100,12 +1102,12 @@ export default function Database({ user }) {
                         {t('db.insertRow')}
                       </button>
                     )}
-                    <button type="button" className="btn btn-sm" disabled={busy} onClick={refreshBrowse}>
+                    <button type="button" className="db-tool-btn" disabled={busy} onClick={refreshBrowse}>
                       {t('db.refresh')}
                     </button>
                     <button
                       type="button"
-                      className="btn btn-sm"
+                      className="db-tool-btn"
                       disabled={!browse.rows.length}
                       onClick={() => exportCsv(`${table}.csv`, browse.columns, browse.rows)}
                     >
@@ -1123,8 +1125,6 @@ export default function Database({ user }) {
                     t={t}
                   />
                 )}
-
-                <p className="muted db-edit-tip">{t('db.dblClickTip')}</p>
 
                 <BrowseTable
                   columns={browse.columns}
