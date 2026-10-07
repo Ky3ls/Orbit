@@ -752,7 +752,7 @@ function CreateTableForm({ busy, onCreate, onCancel, t }) {
       <datalist id="db-type-suggestions">
         {TYPE_SUGGESTIONS.map((x) => <option key={x} value={x} />)}
       </datalist>
-      <div className="db-form-actions">
+      <div className="db-form-actions db-create-actions">
         <button
           type="button"
           className="db-btn"
@@ -761,16 +761,18 @@ function CreateTableForm({ busy, onCreate, onCancel, t }) {
         >
           {t('db.addCol')}
         </button>
-        <button
-          type="submit"
-          className="db-btn db-btn-primary"
-          disabled={busy || !name.trim() || !cols.some((c) => c.name.trim() && c.type.trim())}
-        >
-          {t('db.createTableSave')}
-        </button>
-        <button type="button" className="db-btn" disabled={busy} onClick={onCancel}>
-          {t('common.cancel')}
-        </button>
+        <div className="db-create-actions-main">
+          <button
+            type="submit"
+            className="db-btn db-btn-primary"
+            disabled={busy || !name.trim() || !cols.some((c) => c.name.trim() && c.type.trim())}
+          >
+            {t('db.createTableSave')}
+          </button>
+          <button type="button" className="db-btn" disabled={busy} onClick={onCancel}>
+            {t('common.cancel')}
+          </button>
+        </div>
       </div>
     </form>
   );
