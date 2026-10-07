@@ -55,6 +55,21 @@ function rowPk(row, primaryKey) {
   return pk;
 }
 
+function rowSelKey(row, primaryKey, rowIdx) {
+  const pk = rowPk(row, primaryKey);
+  if (pk) return primaryKey.map((k) => `${k}:${pk[k]}`).join('|');
+  return `idx:${rowIdx}`;
+}
+
+function valuesForCopy(row, structure) {
+  const out = {};
+  for (const col of structure || []) {
+    if (col.extra?.includes('auto_increment')) continue;
+    out[col.field] = row[col.field] === undefined ? null : row[col.field];
+  }
+  return out;
+}
+
 function DataTable({ columns, rows, emptyColumns, emptyRows }) {
   if (!columns.length) {
     return <p className="muted">{emptyColumns}</p>;
@@ -96,12 +111,16 @@ function BrowseTable({
   busy,
   onSaveCell,
   onDeleteRow,
+  onCopyRow,
+  onCopyMany,
+  onDeleteMany,
   t,
 }) {
   const [edit, setEdit] = useState(null);
   const [draft, setDraft] = useState('');
   const [asNull, setAsNull] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
   const inputRef = useRef(null);
   const pkSet = useMemo(() => new Set(primaryKey || []), [primaryKey]);
   const nullable = useMemo(() => {
@@ -110,12 +129,37 @@ function BrowseTable({
     return map;
   }, [structure]);
 
+  const rowKeys = useMemo(
+    () => rows.map((row, i) => rowSelKey(row, primaryKey, i)),
+    [rows, primaryKey],
+  );
+
+  useEffect(() => {
+    setSelected(new Set());
+  }, [rows]);
+
   useEffect(() => {
     if (edit && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select?.();
     }
   }, [edit]);
+
+  const allSelected = rows.length > 0 && rowKeys.every((k) => selected.has(k));
+  const someSelected = selected.size > 0;
+
+  function toggleAll(checked) {
+    setSelected(checked ? new Set(rowKeys) : new Set());
+  }
+
+  function toggleOne(key, checked) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
 
   function startEdit(rowIdx, col) {
     if (!canEdit || busy || saving) return;
@@ -165,137 +209,211 @@ function BrowseTable({
   }
 
   return (
-    <div className="db-scroll">
-      <table className="ws-table db-grid db-browse-grid">
-        <thead>
-          <tr>
-            {canEdit && <th className="db-act-col">{t('db.actions')}</th>}
-            {columns.map((c) => (
-              <th key={c} className={pkSet.has(c) ? 'pk' : undefined}>{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
+    <div className="db-browse-wrap">
+      <div className="db-scroll">
+        <table className="ws-table db-grid db-browse-grid">
+          <thead>
             <tr>
-              <td colSpan={columns.length + (canEdit ? 1 : 0)} className="muted">{emptyRows}</td>
-            </tr>
-          ) : rows.map((row, rowIdx) => (
-            <tr key={rowIdx}>
               {canEdit && (
-                <td className="db-act-cell">
-                  <button
-                    type="button"
-                    className="db-act-btn danger"
-                    disabled={busy || saving || !primaryKey?.length}
-                    title={primaryKey?.length ? t('db.deleteRow') : t('db.noPrimaryKey')}
-                    onClick={() => {
-                      const pk = rowPk(row, primaryKey);
-                      if (!pk) return;
-                      if (!window.confirm(t('db.deleteConfirm'))) return;
-                      onDeleteRow(pk, rowIdx);
-                    }}
-                  >
-                    {t('db.deleteRow')}
-                  </button>
-                </td>
+                <th className="db-act-col">
+                  <div className="db-act-head">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      disabled={!rows.length || busy}
+                      onChange={(e) => toggleAll(e.target.checked)}
+                      title={t('db.selectAll')}
+                      aria-label={t('db.selectAll')}
+                    />
+                    <span>{t('db.actions')}</span>
+                  </div>
+                </th>
               )}
-              {columns.map((col) => {
-                const isEditing = edit?.rowIdx === rowIdx && edit?.col === col;
-                const { text, null: isNull } = cellValue(row[col]);
-                if (isEditing) {
-                  return (
-                    <td key={col} className="db-cell-edit">
-                      <div
-                        className="db-inline-edit"
-                        onBlur={(e) => {
-                          if (e.currentTarget.contains(e.relatedTarget)) return;
-                          cancelEdit();
-                        }}
-                      >
-                        {!asNull && (
-                          <textarea
-                            ref={inputRef}
-                            className="db-inline-input"
-                            value={draft}
-                            rows={Math.min(6, Math.max(1, String(draft).split('\n').length))}
-                            disabled={saving}
-                            onChange={(e) => setDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Escape') {
-                                e.preventDefault();
-                                cancelEdit();
-                              } else if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                commitEdit();
-                              }
-                            }}
-                          />
-                        )}
-                        <div className="db-inline-hint">
-                          {nullable.get(col) && (
-                            <label className="db-inline-null">
-                              <input
-                                type="checkbox"
-                                checked={asNull}
-                                disabled={saving}
-                                onMouseDown={(e) => e.preventDefault()}
-                                onChange={(e) => setAsNull(e.target.checked)}
-                              />
-                              NULL
-                            </label>
-                          )}
-                          <span>{t('db.editHint')}</span>
-                          <div className="db-inline-actions">
-                            <button
-                              type="button"
-                              className="o-icon-btn db-inline-icon ok"
-                              disabled={saving}
-                              title={t('common.save')}
-                              aria-label={t('common.save')}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={commitEdit}
-                            >
-                              <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M20 6 9 17l-5-5" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              className="o-icon-btn db-inline-icon"
-                              disabled={saving}
-                              title={t('common.cancel')}
-                              aria-label={t('common.cancel')}
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={cancelEdit}
-                            >
-                              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                                <path d="M18 6 6 18M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
+              {columns.map((c) => (
+                <th key={c} className={pkSet.has(c) ? 'pk' : undefined}>{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + (canEdit ? 1 : 0)} className="muted">{emptyRows}</td>
+              </tr>
+            ) : rows.map((row, rowIdx) => {
+              const key = rowKeys[rowIdx];
+              return (
+                <tr key={key} className={selected.has(key) ? 'is-selected' : undefined}>
+                  {canEdit && (
+                    <td className="db-act-cell">
+                      <div className="db-act-row">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(key)}
+                          disabled={busy || saving}
+                          onChange={(e) => toggleOne(key, e.target.checked)}
+                          aria-label={t('db.selectRow')}
+                        />
+                        <button
+                          type="button"
+                          className="db-act-btn"
+                          disabled={busy || saving}
+                          title={t('db.copyRow')}
+                          onClick={() => onCopyRow?.(valuesForCopy(row, structure))}
+                        >
+                          {t('db.copyRow')}
+                        </button>
+                        <button
+                          type="button"
+                          className="db-act-btn danger"
+                          disabled={busy || saving || !primaryKey?.length}
+                          title={primaryKey?.length ? t('db.deleteRow') : t('db.noPrimaryKey')}
+                          onClick={() => {
+                            const pk = rowPk(row, primaryKey);
+                            if (!pk) return;
+                            if (!window.confirm(t('db.deleteConfirm'))) return;
+                            onDeleteRow(pk);
+                          }}
+                        >
+                          {t('db.deleteRow')}
+                        </button>
                       </div>
                     </td>
-                  );
-                }
-                return (
-                  <td
-                    key={col}
-                    className={`${isNull ? 'null' : ''}${canEdit && primaryKey?.length ? ' db-cell-editable' : ''}`}
-                    title={canEdit && primaryKey?.length ? t('db.dblClickEdit') : undefined}
-                    onDoubleClick={() => startEdit(rowIdx, col)}
-                  >
-                    {text}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                  )}
+                  {columns.map((col) => {
+                    const isEditing = edit?.rowIdx === rowIdx && edit?.col === col;
+                    const { text, null: isNull } = cellValue(row[col]);
+                    if (isEditing) {
+                      return (
+                        <td key={col} className="db-cell-edit">
+                          <div
+                            className="db-inline-edit"
+                            onBlur={(e) => {
+                              if (e.currentTarget.contains(e.relatedTarget)) return;
+                              cancelEdit();
+                            }}
+                          >
+                            {!asNull && (
+                              <textarea
+                                ref={inputRef}
+                                className="db-inline-input"
+                                value={draft}
+                                rows={Math.min(6, Math.max(1, String(draft).split('\n').length))}
+                                disabled={saving}
+                                onChange={(e) => setDraft(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    cancelEdit();
+                                  } else if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    commitEdit();
+                                  }
+                                }}
+                              />
+                            )}
+                            <div className="db-inline-hint">
+                              {nullable.get(col) && (
+                                <label className="db-inline-null">
+                                  <input
+                                    type="checkbox"
+                                    checked={asNull}
+                                    disabled={saving}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onChange={(e) => setAsNull(e.target.checked)}
+                                  />
+                                  NULL
+                                </label>
+                              )}
+                              <span>{t('db.editHint')}</span>
+                              <div className="db-inline-actions">
+                                <button
+                                  type="button"
+                                  className="o-icon-btn db-inline-icon ok"
+                                  disabled={saving}
+                                  title={t('common.save')}
+                                  aria-label={t('common.save')}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={commitEdit}
+                                >
+                                  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20 6 9 17l-5-5" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="o-icon-btn db-inline-icon"
+                                  disabled={saving}
+                                  title={t('common.cancel')}
+                                  aria-label={t('common.cancel')}
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={cancelEdit}
+                                >
+                                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                                    <path d="M18 6 6 18M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return (
+                      <td
+                        key={col}
+                        className={`${isNull ? 'null' : ''}${canEdit && primaryKey?.length ? ' db-cell-editable' : ''}`}
+                        title={canEdit && primaryKey?.length ? t('db.dblClickEdit') : undefined}
+                        onDoubleClick={() => startEdit(rowIdx, col)}
+                      >
+                        {text}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {canEdit && !primaryKey?.length && (
         <p className="muted db-pk-warn">{t('db.noPrimaryKey')}</p>
+      )}
+      {canEdit && someSelected && (
+        <div className="db-bulk">
+          <span>{t('db.selected', { n: selected.size })}</span>
+          <button
+            type="button"
+            className="db-act-btn"
+            disabled={busy}
+            onClick={() => {
+              const picked = rows
+                .filter((_, i) => selected.has(rowKeys[i]))
+                .map((row) => valuesForCopy(row, structure));
+              onCopyMany?.(picked);
+            }}
+          >
+            {t('db.copySelected')}
+          </button>
+          <button
+            type="button"
+            className="db-act-btn danger"
+            disabled={busy || !primaryKey?.length}
+            onClick={() => {
+              const pks = rows
+                .filter((_, i) => selected.has(rowKeys[i]))
+                .map((row) => rowPk(row, primaryKey))
+                .filter(Boolean);
+              if (!pks.length) return;
+              if (!window.confirm(t('db.deleteSelectedConfirm', { n: pks.length }))) return;
+              onDeleteMany?.(pks);
+            }}
+          >
+            {t('db.deleteSelected')}
+          </button>
+          <button type="button" className="db-act-btn" disabled={busy} onClick={() => setSelected(new Set())}>
+            {t('db.clearSelection')}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -646,7 +764,31 @@ export default function Database({ user }) {
     }
   }
 
-  async function insertRow(values) {
+  async function insertRow(values, { silent = false } = {}) {
+    setBusy(true);
+    setErr('');
+    if (!silent) setMsg('');
+    try {
+      const d = await api('/api/database/row', {
+        method: 'POST',
+        body: { action: 'insert', table, values },
+      });
+      if (!silent) {
+        setMsg(d.insertId ? t('db.insertedId', { id: d.insertId }) : t('db.inserted'));
+        setInsertOpen(false);
+        setPage(0);
+        await loadBrowse(table, 0, pageSize);
+      }
+      return d;
+    } catch (e) {
+      setErr(e.message);
+      throw e;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyRow(values) {
     setBusy(true);
     setErr('');
     setMsg('');
@@ -655,12 +797,57 @@ export default function Database({ user }) {
         method: 'POST',
         body: { action: 'insert', table, values },
       });
-      setMsg(d.insertId ? t('db.insertedId', { id: d.insertId }) : t('db.inserted'));
-      setInsertOpen(false);
-      setPage(0);
-      await loadBrowse(table, 0, pageSize);
+      setMsg(d.insertId ? t('db.copiedId', { id: d.insertId }) : t('db.copied'));
+      await loadBrowse(table, page * pageSize, pageSize);
     } catch (e) {
       setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyMany(valueList) {
+    if (!valueList?.length) return;
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      let n = 0;
+      for (const values of valueList) {
+        await api('/api/database/row', {
+          method: 'POST',
+          body: { action: 'insert', table, values },
+        });
+        n += 1;
+      }
+      setMsg(t('db.copiedMany', { n }));
+      await loadBrowse(table, page * pageSize, pageSize);
+    } catch (e) {
+      setErr(e.message);
+      try { await loadBrowse(table, page * pageSize, pageSize); } catch { /* */ }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteMany(pks) {
+    setBusy(true);
+    setErr('');
+    setMsg('');
+    try {
+      let n = 0;
+      for (const pk of pks) {
+        await api('/api/database/row', {
+          method: 'POST',
+          body: { action: 'delete', table, pk },
+        });
+        n += 1;
+      }
+      setMsg(t('db.deletedMany', { n }));
+      await loadBrowse(table, page * pageSize, pageSize);
+    } catch (e) {
+      setErr(e.message);
+      try { await loadBrowse(table, page * pageSize, pageSize); } catch { /* */ }
     } finally {
       setBusy(false);
     }
@@ -952,6 +1139,9 @@ export default function Database({ user }) {
                   busy={busy}
                   onSaveCell={saveCell}
                   onDeleteRow={(pk) => deleteRow(pk)}
+                  onCopyRow={copyRow}
+                  onCopyMany={copyMany}
+                  onDeleteMany={deleteMany}
                   t={t}
                 />
               </>
