@@ -62,19 +62,46 @@ resolve_source() {
   [[ -f "$SRC/package.json" ]] || { echo "package.json nicht im Repo-Root."; exit 1; }
 }
 
+ensure_orbit_user() {
+  local home="/home/$USER_NAME"
+  if ! id "$USER_NAME" &>/dev/null; then
+    # -r (Systemuser): auf manchen Distros wird -m ignoriert → Home immer manuell anlegen
+    useradd -r -d "$home" -s /bin/bash "$USER_NAME" 2>/dev/null \
+      || useradd -d "$home" -s /bin/bash "$USER_NAME"
+  fi
+  # passwd kann Home setzen, obwohl Ordner fehlt (Reinstall / gelöschtes Home)
+  mkdir -p "$home"
+  chown -R "$USER_NAME:$USER_NAME" "$home"
+  chmod 755 "$home"
+  # npm-Cache unter Install-Pfad — unabhängig von /home-Rechten
+  mkdir -p "$INSTALL_DIR/.npm-cache"
+  chown -R "$USER_NAME:$USER_NAME" "$INSTALL_DIR/.npm-cache"
+}
+
+run_as_orbit() {
+  # HOME + Cache explizit, sonst: EACCES mkdir /home/orbit wenn Home fehlt
+  runuser -u "$USER_NAME" -- env \
+    HOME="/home/$USER_NAME" \
+    npm_config_cache="$INSTALL_DIR/.npm-cache" \
+    npm_config_update_notifier=false \
+    "$@"
+}
+
 need_root
 echo "==> Orbit Installer"
 ensure_pkgs
-
-id "$USER_NAME" &>/dev/null || useradd -r -m -d "/home/$USER_NAME" -s /bin/bash "$USER_NAME"
 mkdir -p "$INSTALL_DIR" "$ARTIFACTS" "$SERVERS" "$DATA_DIR"
+ensure_orbit_user
 
 resolve_source
+
+# Laufender Dienst hält oft Dateien in node_modules → TAR_ENTRY_ERROR / ENOTEMPTY
+systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
 echo "==> Dateien → $INSTALL_DIR (nur Code; kein Root-rsync --delete)"
 mkdir -p "$INSTALL_DIR"
 # WICHTIG: Niemals rsync --delete auf den ganzen INSTALL_DIR-Tree.
-# Persistenz (data/artifacts/servers/alpine) und node_modules bleiben unberührt.
+# Persistenz (data/artifacts/servers/alpine) bleibt unberührt.
 # --delete nur innerhalb einzelner Code-Unterordner.
 copy_tree() {
   local name="$1"
@@ -108,8 +135,11 @@ chown "$USER_NAME:$USER_NAME" "$INSTALL_DIR" "$DATA_DIR" "$ARTIFACTS" "$SERVERS"
 
 cd "$INSTALL_DIR"
 echo "==> npm ci + build"
-runuser -u "$USER_NAME" -- npm ci
-runuser -u "$USER_NAME" -- npm run build
+# Kaputte/teilweise node_modules von fehlgeschlagenen Installs weg
+rm -rf "$INSTALL_DIR/node_modules"
+run_as_orbit npm ci
+run_as_orbit npm run build
+chown -R "$USER_NAME:$USER_NAME" "$INSTALL_DIR/node_modules" "$INSTALL_DIR/dist" 2>/dev/null || true
 
 DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 DEFAULT_IP="${DEFAULT_IP:-127.0.0.1}"
@@ -172,6 +202,7 @@ After=network.target
 Type=simple
 User=$USER_NAME
 WorkingDirectory=$INSTALL_DIR
+Environment=HOME=/home/$USER_NAME
 $ENV_LINES
 ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
 Restart=on-failure
