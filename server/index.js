@@ -182,7 +182,7 @@ import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail
 import { syncOrbitPermissionsFile, applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
 import {
   logLine, logPanel, runtime, pushSeries, setLogHook, snapshot, onConsoleWake,
-  clearConsole, fxConsoleLive, setControlPhase,
+  fxConsoleLive, setControlPhase,
 } from './state.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
