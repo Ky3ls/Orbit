@@ -313,14 +313,9 @@ export async function handleIngamePublicApi(ctx) {
       }
 
       if (action === 'announce') {
-        const msg = str(body.message, 200);
-        if (!msg) json(res, 400, { error: 'Leer' });
-        if (!fxConsoleReady(settings)) {
-          json(res, 200, { ok: false, fallback: true });
-          return true;
-        }
-        await dispatchFxCommand(settings, `say ${msg}`);
-        json(res, 200, { ok: true });
+        // Ingame-Announce läuft über orbit:adminAnnounce → orbit:announce (NUI).
+        // Hier kein `say` — das spamt Chat und crash't esx_rpchat bei Konsolen-source.
+        json(res, 200, { ok: true, skipChat: true });
         return true;
       }
 

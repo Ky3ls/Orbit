@@ -2446,7 +2446,11 @@ async function handleApi(req, res, url) {
     if (message.length < 2) return json(res, 400, { error: 'Nachricht zu kurz.' });
     const settings = resolveConsoleSettings(db);
     if (!requireFxCommand(res, settings)) return;
-    queueCommand('console', { command: `say ${message}` }, me.username, ip);
+    // orbitEvent statt say — kein Chat-Spam / kein esx_rpchat-Crash bei source=0
+    const { orbitEventCommand } = await import('./orbitEvents.js');
+    queueCommand('console', {
+      command: orbitEventCommand('announcement', { message, author: me.username }),
+    }, me.username, ip);
     logLine('info', `Announce: ${message}`);
     return json(res, 200, { ok: true, queued: true });
   }
