@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Orbit — alles unter /opt/orbit
+# Orbit — Systemdienst als root (wie txAdmin), alles unter /opt/orbit
 #
 #   sudo git clone https://github.com/Ky3ls/Orbit.git /opt/orbit
 #   cd /opt/orbit && sudo bash scripts/install-orbit.sh
@@ -13,7 +13,6 @@ INSTALL_DIR="${ORBIT_INSTALL_DIR:-/opt/orbit}"
 ARTIFACTS="${ORBIT_ARTIFACTS_ROOT:-$INSTALL_DIR/artifacts}"
 SERVERS="${ORBIT_SERVERS_ROOT:-$INSTALL_DIR/servers}"
 DATA_DIR="${ORBIT_DATA_DIR:-$INSTALL_DIR/data}"
-USER_NAME="${ORBIT_USER:-orbit}"
 PANEL_PORT="${ORBIT_PORT:-40220}"
 # Domain NIEMALS aus alten Drop-Ins übernehmen — nur explizit via ORBIT_PUBLIC_URL,
 # sonst immer IP:Port. Domain setzt erst der Setup-Wizard.
@@ -62,36 +61,10 @@ resolve_source() {
   [[ -f "$SRC/package.json" ]] || { echo "package.json nicht im Repo-Root."; exit 1; }
 }
 
-ensure_orbit_user() {
-  local home="/home/$USER_NAME"
-  if ! id "$USER_NAME" &>/dev/null; then
-    # -r (Systemuser): auf manchen Distros wird -m ignoriert → Home immer manuell anlegen
-    useradd -r -d "$home" -s /bin/bash "$USER_NAME" 2>/dev/null \
-      || useradd -d "$home" -s /bin/bash "$USER_NAME"
-  fi
-  # passwd kann Home setzen, obwohl Ordner fehlt (Reinstall / gelöschtes Home)
-  mkdir -p "$home"
-  chown -R "$USER_NAME:$USER_NAME" "$home"
-  chmod 755 "$home"
-  # npm-Cache unter Install-Pfad — unabhängig von /home-Rechten
-  mkdir -p "$INSTALL_DIR/.npm-cache"
-  chown -R "$USER_NAME:$USER_NAME" "$INSTALL_DIR/.npm-cache"
-}
-
-run_as_orbit() {
-  # HOME + Cache explizit, sonst: EACCES mkdir /home/orbit wenn Home fehlt
-  runuser -u "$USER_NAME" -- env \
-    HOME="/home/$USER_NAME" \
-    npm_config_cache="$INSTALL_DIR/.npm-cache" \
-    npm_config_update_notifier=false \
-    "$@"
-}
-
 need_root
-echo "==> Orbit Installer"
+echo "==> Orbit Installer (Systemdienst als root)"
 ensure_pkgs
 mkdir -p "$INSTALL_DIR" "$ARTIFACTS" "$SERVERS" "$DATA_DIR"
-ensure_orbit_user
 
 resolve_source
 
@@ -110,7 +83,6 @@ copy_tree() {
   if have rsync; then
     rsync -a --delete "$SRC/$name/" "$INSTALL_DIR/$name/"
   else
-    # ohne rsync: Zielordner leeren (nur dieser Unterordner) und kopieren
     find "$INSTALL_DIR/$name" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
     cp -a "$SRC/$name/." "$INSTALL_DIR/$name/"
   fi
@@ -124,22 +96,17 @@ copy_tree resources
 for f in package.json package-lock.json index.html vite.config.js README.md .gitignore; do
   [[ -f "$SRC/$f" ]] && cp -a "$SRC/$f" "$INSTALL_DIR/$f"
 done
-# dist kommt aus lokalem Build weiter unten — hier nicht vom Quell-Repo erzwingen
-chown -R "$USER_NAME:$USER_NAME" \
-  "$INSTALL_DIR/server" "$INSTALL_DIR/src" "$INSTALL_DIR/scripts" \
-  "$INSTALL_DIR/docs" "$INSTALL_DIR/public" "$INSTALL_DIR/resources" \
-  "$INSTALL_DIR/package.json" "$INSTALL_DIR/package-lock.json" \
-  "$INSTALL_DIR/index.html" "$INSTALL_DIR/vite.config.js" \
-  2>/dev/null || true
-chown "$USER_NAME:$USER_NAME" "$INSTALL_DIR" "$DATA_DIR" "$ARTIFACTS" "$SERVERS" 2>/dev/null || true
 
 cd "$INSTALL_DIR"
 echo "==> npm ci + build"
 # Kaputte/teilweise node_modules von fehlgeschlagenen Installs weg
 rm -rf "$INSTALL_DIR/node_modules"
-run_as_orbit npm ci
-run_as_orbit npm run build
-chown -R "$USER_NAME:$USER_NAME" "$INSTALL_DIR/node_modules" "$INSTALL_DIR/dist" 2>/dev/null || true
+export HOME="${HOME:-/root}"
+export npm_config_cache="${ORBIT_NPM_CACHE:-$INSTALL_DIR/.npm-cache}"
+export npm_config_update_notifier=false
+mkdir -p "$npm_config_cache"
+npm ci
+npm run build
 
 DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 DEFAULT_IP="${DEFAULT_IP:-127.0.0.1}"
@@ -150,6 +117,7 @@ else
 fi
 
 ENV_LINES="Environment=NODE_ENV=production
+Environment=HOME=/root
 Environment=ORBIT_ARTIFACTS_ROOT=$ARTIFACTS
 Environment=ORBIT_SERVERS_ROOT=$SERVERS
 Environment=ORBIT_PANEL_PORT=$PANEL_PORT
@@ -162,37 +130,15 @@ systemctl disable tx2.service 2>/dev/null || true
 rm -f /etc/systemd/system/tx2.service
 rm -rf /etc/systemd/system/tx2.service.d
 
-# Alte Orbit-Drop-Ins (Domain/Env) verwerfen — sonst bleibt z. B. tx.ky3ls.space hängen
+# Alte Orbit-Drop-Ins (Domain/Env) verwerfen — sonst bleibt z. B. Domain hängen
 rm -rf /etc/systemd/system/${SERVICE_NAME}.service.d
 
-# sudo für Panel-User (Ordner/ACL/Host — kein Vollzugriff)
-cat > /etc/sudoers.d/orbit <<SUDOEOF
-Defaults:orbit !requiretty
-orbit ALL=(root) NOPASSWD: /usr/bin/mkdir, /bin/mkdir
-orbit ALL=(root) NOPASSWD: /usr/bin/chown, /bin/chown
-orbit ALL=(root) NOPASSWD: /usr/bin/chmod, /bin/chmod
-orbit ALL=(root) NOPASSWD: /usr/bin/setfacl
-orbit ALL=(root) NOPASSWD: /usr/bin/install
-orbit ALL=(root) NOPASSWD: /usr/bin/cp, /bin/cp
-orbit ALL=(root) NOPASSWD: /usr/bin/ln, /bin/ln
-orbit ALL=(root) NOPASSWD: /usr/bin/systemctl
-orbit ALL=(root) NOPASSWD: /usr/sbin/nginx, /usr/bin/nginx
-orbit ALL=(root) NOPASSWD: /usr/sbin/a2enmod, /usr/sbin/a2ensite
-orbit ALL=(root) NOPASSWD: /usr/bin/apt-get
-orbit ALL=(root) NOPASSWD: /usr/bin/mysql, /usr/bin/mariadb
-orbit ALL=(root) NOPASSWD: /usr/bin/certbot
-orbit ALL=(root) NOPASSWD: /usr/bin/test, /bin/test
-orbit ALL=(root) NOPASSWD: /bin/rm, /usr/bin/rm
-orbit ALL=(root) NOPASSWD: /usr/bin/pkill, /bin/pkill
-orbit ALL=(root) NOPASSWD: /usr/bin/fuser, /bin/fuser
-orbit ALL=(root) NOPASSWD: /bin/bash /opt/orbit/scripts/uninstall-orbit.sh, /usr/bin/bash /opt/orbit/scripts/uninstall-orbit.sh
-orbit ALL=(root) NOPASSWD: /usr/bin/systemd-run --uid=root --gid=root --working-directory=/ --collect /bin/bash /opt/orbit/scripts/uninstall-orbit.sh
-orbit ALL=(root) NOPASSWD: /usr/bin/systemd-run --uid=root --gid=root --working-directory=/ --collect /usr/bin/bash /opt/orbit/scripts/uninstall-orbit.sh
-SUDOEOF
-chmod 440 /etc/sudoers.d/orbit
-visudo -cf /etc/sudoers.d/orbit >/dev/null
+# Kein eigener User mehr — Sudoers-Rest von Altinstallationen entfernen
+rm -f /etc/sudoers.d/orbit
+
 chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
 
+# Wie txAdmin: systemd ohne User= → root
 cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
 Description=Orbit Panel
@@ -200,9 +146,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=$USER_NAME
 WorkingDirectory=$INSTALL_DIR
-Environment=HOME=/home/$USER_NAME
 $ENV_LINES
 ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
 Restart=on-failure
@@ -216,10 +160,9 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
 sleep 1
-systemctl is-active "$SERVICE_NAME" >/dev/null && echo "==> Dienst $SERVICE_NAME aktiv" || echo "==> WARNUNG: systemctl status $SERVICE_NAME"
+systemctl is-active "$SERVICE_NAME" >/dev/null && echo "==> Dienst $SERVICE_NAME aktiv (root)" || echo "==> WARNUNG: systemctl status $SERVICE_NAME"
 
 HOST_HINT="${PUBLIC_URL:-http://$(hostname -I 2>/dev/null | awk '{print $1}'):$PANEL_PORT}"
-# PIN-Datei vom Dienst abwarten (kein journalctl nötig)
 PIN_VAL=""
 BANNER_FILE="$DATA_DIR/BOOTSTRAP.txt"
 PIN_FILE="$DATA_DIR/BOOTSTRAP_PIN"
@@ -245,6 +188,7 @@ cat <<EOF
  Daten:    $DATA_DIR
  FX:       $ARTIFACTS
  Server:   $SERVERS
+ Dienst:   root (systemd, wie txAdmin)
 EOF
 if [[ -n "$PIN_VAL" ]]; then
   if [[ -f "$BANNER_FILE" ]]; then

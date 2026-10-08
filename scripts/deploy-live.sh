@@ -11,20 +11,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOST="${ORBIT_DEPLOY_HOST:-${TX2_DEPLOY_HOST:-}}"
 REMOTE_DIR="${ORBIT_REMOTE_DIR:-${TX2_REMOTE_DIR:-/opt/orbit}}"
-USER_NAME="${ORBIT_USER:-orbit}"
 
 cd "$ROOT"
 npm run build
 
 if [[ -z "$HOST" ]]; then
-  # Gleicher Host: safe-sync (root nötig für chown/systemctl)
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
     echo "Lokal als root ausführen: sudo bash $0"
     exit 1
   fi
   bash "$ROOT/scripts/safe-sync-live.sh" "$ROOT"
   if [[ ! -d "$REMOTE_DIR/node_modules" ]]; then
-    runuser -u "$USER_NAME" -- bash -c "cd '$REMOTE_DIR' && npm ci --omit=dev"
+    (cd "$REMOTE_DIR" && npm ci --omit=dev)
   fi
   systemctl restart orbit
   sleep 1
@@ -33,7 +31,6 @@ if [[ -z "$HOST" ]]; then
   exit 0
 fi
 
-# Remote: nur Code-Archive, extrahiert in Temp, dann safe-sync auf dem Ziel
 ARCHIVE="/tmp/orbit-deploy-$$.tgz"
 tar -czf "$ARCHIVE" \
   package.json package-lock.json \
@@ -44,10 +41,10 @@ scp "$ARCHIVE" "$HOST:/tmp/orbit-deploy.tgz"
 ssh "$HOST" "set -e
   TMP=\$(mktemp -d)
   tar -xzf /tmp/orbit-deploy.tgz -C \"\$TMP\"
-  sudo ORBIT_INSTALL_DIR='$REMOTE_DIR' ORBIT_USER='$USER_NAME' \
+  sudo ORBIT_INSTALL_DIR='$REMOTE_DIR' \
     bash \"\$TMP/scripts/safe-sync-live.sh\" \"\$TMP\"
   if [[ ! -d '$REMOTE_DIR/node_modules' ]]; then
-    sudo runuser -u '$USER_NAME' -- bash -c \"cd '$REMOTE_DIR' && npm ci --omit=dev\"
+    sudo bash -c \"cd '$REMOTE_DIR' && npm ci --omit=dev\"
   fi
   sudo systemctl restart orbit
   sleep 1

@@ -32,7 +32,7 @@ Danach alles unter einem Pfad:
 /opt/orbit/servers/      deine FiveM-Server (cfg, resources, …)
 ```
 
-Dienst: `orbit` · Port: **40220** · User: `orbit`
+Dienst: `orbit` · Port: **40220** · läuft als **root** (wie txAdmin, kein eigener Systemuser)
 
 ## Ersteinrichtung (frischer Server)
 
@@ -42,8 +42,7 @@ Dienst: `orbit` · Port: **40220** · User: `orbit`
 4. Setup-Wizard inkl. **Panel-Zugang** (IP:Port **oder Domain**)
 5. Bei Domain: nach Abschluss automatische Weiterleitung auf die neue URL
 
-Der Installer legt `/etc/sudoers.d/orbit` an (mkdir/chown/setfacl u. a.), damit Datenordner
-unter `/root/…` und `/home/…` nutzbar sind. Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram`.
+Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram` (Pfad-Policy im Panel).
 
 
 **Ingame:** `/orbit` oder `/orbitmenu` — NoClip, God, Teleport, Heal, Announce, Spieler-Aktionen, Fahrzeug-Tools.
@@ -72,9 +71,9 @@ Alternativ im Installationsordner (wenn dort ein Git-Checkout liegt):
 
 ```bash
 cd /opt/orbit
-sudo -u orbit git pull
-sudo -u orbit npm ci
-sudo -u orbit npm run build
+sudo git pull
+sudo npm ci
+sudo npm run build
 sudo systemctl restart orbit
 ```
 

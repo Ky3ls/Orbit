@@ -1,19 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PORT, FX_SERVER_ROOT } from './config.js';
 import { setSetting, settingMap } from './db.js';
 import { ensureOnce } from './cfgUpsert.js';
+import { rootRunSync } from './rootExec.js';
 
 const PANEL_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BRIDGE_SRC = path.join(PANEL_ROOT, 'resources', 'orbit_bridge');
-const PANEL_USER = process.env.ORBIT_USER || 'orbit';
-
-function sudoRun(args) {
-  execFileSync('sudo', ['-n', ...args], { timeout: 120_000, stdio: 'pipe' });
-}
 
 function rmRf(target) {
   if (!target || !fs.existsSync(target)) return;
@@ -21,7 +16,7 @@ function rmRf(target) {
     fs.rmSync(target, { recursive: true, force: true });
   } catch (err) {
     if (err.code === 'EACCES' || err.code === 'EPERM' || err.code === 'ENOTEMPTY') {
-      sudoRun(['rm', '-rf', target]);
+      rootRunSync(['rm', '-rf', target]);
       return;
     }
     throw err;
@@ -46,13 +41,9 @@ function installDir(src, dest) {
     copyDir(src, dest);
   } catch (err) {
     if (err.code !== 'EACCES' && err.code !== 'EPERM') throw err;
-    sudoRun(['mkdir', '-p', dest]);
-    sudoRun(['cp', '-a', `${src}/.`, dest]);
-    sudoRun(['chown', '-R', `${PANEL_USER}:${PANEL_USER}`, dest]);
+    rootRunSync(['mkdir', '-p', dest]);
+    rootRunSync(['cp', '-a', `${src}/.`, dest]);
   }
-  try {
-    sudoRun(['chown', '-R', `${PANEL_USER}:${PANEL_USER}`, dest]);
-  } catch { /* optional */ }
 }
 
 export function orbitPanelLocalUrl() {

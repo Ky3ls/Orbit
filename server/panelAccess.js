@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { ORIGIN, PORT } from './config.js';
+import { isRoot, rootRun } from './rootExec.js';
 
 const exec = promisify(execFile);
 const ORBIT_UNIT = 'orbit';
@@ -131,14 +132,17 @@ function proxyBlock(panelPort) {
   ].join('\n');
 }
 
-/** live/ ist root-only — orbit darf nicht fs.existsSync nutzen. */
+/** Datei existiert? Als root reicht fs; sonst test via rootRun. */
 async function sudoFileExists(filePath) {
+  if (isRoot()) {
+    try { return fs.existsSync(filePath); } catch { return false; }
+  }
   try {
-    await exec('sudo', ['-n', '/usr/bin/test', '-f', filePath], { timeout: 5000 });
+    await rootRun(['/usr/bin/test', '-f', filePath], { timeout: 5000 });
     return true;
   } catch {
     try {
-      await exec('sudo', ['-n', '/bin/test', '-f', filePath], { timeout: 5000 });
+      await rootRun(['/bin/test', '-f', filePath], { timeout: 5000 });
       return true;
     } catch {
       return false;
@@ -202,14 +206,14 @@ async function nginxHttpsBody(domain, panelPort) {
 async function writeNginxSite(site, body) {
   const tmp = `/tmp/orbit-nginx-${Date.now()}.conf`;
   fs.writeFileSync(tmp, body, 'utf8');
-  await exec('sudo', ['-n', 'mkdir', '-p', '/var/www/html'], { timeout: 10_000 }).catch(() => {});
-  await exec('sudo', ['-n', 'cp', tmp, site], { timeout: 15_000 });
+  await rootRun(['mkdir', '-p', '/var/www/html'], { timeout: 10_000 }).catch(() => {});
+  await rootRun(['cp', tmp, site], { timeout: 15_000 });
   const enabled = `/etc/nginx/sites-enabled/${path.basename(site)}`;
   try {
-    await exec('sudo', ['-n', 'ln', '-sf', site, enabled], { timeout: 5000 });
+    await rootRun(['ln', '-sf', site, enabled], { timeout: 5000 });
   } catch { /* may use conf.d */ }
-  await exec('sudo', ['-n', 'nginx', '-t'], { timeout: 20_000 });
-  await exec('sudo', ['-n', 'systemctl', 'reload', 'nginx'], { timeout: 20_000 });
+  await rootRun(['nginx', '-t'], { timeout: 20_000 });
+  await rootRun(['systemctl', 'reload', 'nginx'], { timeout: 20_000 });
 }
 
 async function configureNginx(domain, panelPort, logLine, opts = {}) {
@@ -255,10 +259,10 @@ async function configureApache(domain, panelPort, logLine) {
   ].join('\n');
   const tmp = `/tmp/orbit-apache-${Date.now()}.conf`;
   fs.writeFileSync(tmp, body, 'utf8');
-  await exec('sudo', ['-n', 'cp', tmp, site], { timeout: 15_000 });
-  await exec('sudo', ['-n', 'a2enmod', 'proxy', 'proxy_http', 'headers'], { timeout: 30_000 }).catch(() => {});
-  await exec('sudo', ['-n', 'a2ensite', path.basename(site)], { timeout: 15_000 }).catch(() => {});
-  await exec('sudo', ['-n', 'systemctl', 'reload', 'apache2'], { timeout: 20_000 });
+  await rootRun(['cp', tmp, site], { timeout: 15_000 });
+  await rootRun(['a2enmod', 'proxy', 'proxy_http', 'headers'], { timeout: 30_000 }).catch(() => {});
+  await rootRun(['a2ensite', path.basename(site)], { timeout: 15_000 }).catch(() => {});
+  await rootRun(['systemctl', 'reload', 'apache2'], { timeout: 20_000 });
   logLine('ok', `Apache VHost für ${domain} aktiv.`);
   return { ok: true, stack: 'apache', configPath: site };
 }
@@ -268,7 +272,7 @@ async function configureCaddy(domain, panelPort, logLine) {
   const body = `${domain} {\n  reverse_proxy 127.0.0.1:${panelPort}\n}\n`;
   const tmp = `/tmp/orbit-caddy-${Date.now()}`;
   fs.writeFileSync(tmp, body, 'utf8');
-  await exec('sudo', ['-n', 'cp', tmp, snippetPath], { timeout: 15_000 });
+  await rootRun(['cp', tmp, snippetPath], { timeout: 15_000 });
   const main = '/etc/caddy/Caddyfile';
   let mainText = '';
   try { mainText = fs.readFileSync(main, 'utf8'); } catch { /* */ }
@@ -277,9 +281,9 @@ async function configureCaddy(domain, panelPort, logLine) {
     const merged = `${mainText.trim()}\n\n# Orbit Panel\n${importLine}\n`;
     const tmpMain = `/tmp/Caddyfile-orbit-${Date.now()}`;
     fs.writeFileSync(tmpMain, merged, 'utf8');
-    await exec('sudo', ['-n', 'cp', tmpMain, main], { timeout: 15_000 });
+    await rootRun(['cp', tmpMain, main], { timeout: 15_000 });
   }
-  await exec('sudo', ['-n', 'systemctl', 'reload', 'caddy'], { timeout: 20_000 });
+  await rootRun(['systemctl', 'reload', 'caddy'], { timeout: 20_000 });
   logLine('ok', `Caddy vHost für ${domain} aktiv (TLS automatisch).`);
   return { ok: true, stack: 'caddy', configPath: snippetPath };
 }
@@ -291,9 +295,9 @@ async function tryCertbotWebroot(domain, logLine) {
   }
   try {
     await exec('which', ['certbot'], { timeout: 3000 });
-    await exec('sudo', ['-n', 'mkdir', '-p', '/var/www/html'], { timeout: 10_000 }).catch(() => {});
-    await exec('sudo', [
-      '-n', 'certbot', 'certonly', '--webroot', '-w', '/var/www/html',
+    await rootRun(['mkdir', '-p', '/var/www/html'], { timeout: 10_000 }).catch(() => {});
+    await rootRun([
+      'certbot', 'certonly', '--webroot', '-w', '/var/www/html',
       '-d', domain,
       '--non-interactive', '--agree-tos', '--register-unsafely-without-email',
       '--keep-until-expiring',
@@ -341,32 +345,35 @@ async function writeSystemdDropIn(env, logLine) {
   const lines = ['[Service]', ...Object.entries(env).map(([k, v]) => `Environment=${k}=${v}`), ''];
   const tmp = `/tmp/orbit-systemd-${Date.now()}.conf`;
   fs.writeFileSync(tmp, lines.join('\n'), 'utf8');
-  await exec('sudo', ['-n', 'mkdir', '-p', '/etc/systemd/system/orbit.service.d'], { timeout: 10_000 });
-  await exec('sudo', ['-n', 'cp', tmp, DROP_IN], { timeout: 10_000 });
+  await rootRun(['mkdir', '-p', '/etc/systemd/system/orbit.service.d'], { timeout: 10_000 });
+  await rootRun(['cp', tmp, DROP_IN], { timeout: 10_000 });
   // Altes Drop-In überschreibt sonst ORBIT_PUBLIC_URL (alphabetisch hinter orbit-panel.conf)
   if (fs.existsSync(LEGACY_PUBLIC_URL)) {
     try {
-      await exec('sudo', ['-n', 'rm', '-f', LEGACY_PUBLIC_URL], { timeout: 5_000 });
+      await rootRun(['rm', '-f', LEGACY_PUBLIC_URL], { timeout: 5_000 });
       logLine('info', 'Altes public-url.conf entfernt (Konflikt mit Panel-URL).');
     } catch {
       try {
         const stub = '[Service]\n# managed by Orbit — siehe zz-orbit-panel.conf\n';
         const stubTmp = `/tmp/orbit-public-url-stub-${Date.now()}.conf`;
         fs.writeFileSync(stubTmp, stub, 'utf8');
-        await exec('sudo', ['-n', 'cp', stubTmp, LEGACY_PUBLIC_URL], { timeout: 5_000 });
+        await rootRun(['cp', stubTmp, LEGACY_PUBLIC_URL], { timeout: 5_000 });
       } catch { /* ignore */ }
     }
   }
-  await exec('sudo', ['-n', 'systemctl', 'daemon-reload'], { timeout: 20_000 });
+  await rootRun(['systemctl', 'daemon-reload'], { timeout: 20_000 });
   logLine('info', 'systemd orbit.service.d aktualisiert.');
 }
 
 export function schedulePanelServiceRestart(delayMs = 600) {
   const wait = Math.max(600, Number(delayMs) || 600);
   setTimeout(() => {
-    execFile('sudo', ['-n', 'systemctl', 'restart', ORBIT_UNIT], () => {
-      setTimeout(() => process.exit(0), 200);
-    });
+    const go = () => setTimeout(() => process.exit(0), 200);
+    if (isRoot()) {
+      execFile('systemctl', ['restart', ORBIT_UNIT], go);
+    } else {
+      execFile('sudo', ['-n', 'systemctl', 'restart', ORBIT_UNIT], go);
+    }
   }, wait);
 }
 

@@ -83,6 +83,7 @@ import {
 } from './panelAccess.js';
 import { probeServerPath, resolveCustomDataPath, resolveOrbitServersRoot } from './serverPathPolicy.js';
 import { prepareServerDataPath, sudoAvailable } from './hostAccess.js';
+import { isRoot, rootRun } from './rootExec.js';
 import { detectTxAdminEnvironment, migrateFromTxAdmin } from './txAdminMigration.js';
 import {
   extraSecurityHeaders,
@@ -3432,7 +3433,7 @@ async function handleApi(req, res, url) {
         if (abs === String(ORBIT_SERVERS_ROOT).replace(/\/$/, '')) continue;
         if (!fs.existsSync(abs)) continue;
         try {
-          await exec('sudo', ['-n', 'rm', '-rf', abs], { timeout: 120_000 });
+          await rootRun(['rm', '-rf', abs], { timeout: 120_000 });
           deleted.push(abs);
           logLine('warn', `Gelöscht: ${abs}`);
         } catch (err) {
@@ -3501,25 +3502,33 @@ async function handleApi(req, res, url) {
         const onErr = (err) => {
           if (err) logLine('bad', `Uninstall: ${err.message}`);
         };
+        const startJob = (cmd, args) => execFile(cmd, args, { timeout: 15_000 }, (err) => {
+          if (!err) logLine('info', 'Uninstall-Job gestartet.');
+          else onErr(err);
+        });
         if (run) {
-          execFile('sudo', [
-            '-n', run,
-            '--uid=root',
-            '--gid=root',
-            '--working-directory=/',
-            '--collect',
-            bash, script,
-          ], { timeout: 15_000 }, (err) => {
-            if (!err) {
-              logLine('info', 'Uninstall-Job (systemd-run) gestartet.');
-              return;
-            }
-            // Fallback nohup
-            execFile('sudo', [
-              '-n', bash, '-c',
-              `setsid ${bash} ${JSON.stringify(script)} >/tmp/orbit-uninstall.log 2>&1 < /dev/null &`,
-            ], { timeout: 10_000 }, onErr);
-          });
+          const args = ['--uid=root', '--gid=root', '--working-directory=/', '--collect', bash, script];
+          if (isRoot()) {
+            execFile(run, args, { timeout: 15_000 }, (err) => {
+              if (!err) {
+                logLine('info', 'Uninstall-Job (systemd-run) gestartet.');
+                return;
+              }
+              startJob(bash, ['-c', `setsid ${bash} ${JSON.stringify(script)} >/tmp/orbit-uninstall.log 2>&1 < /dev/null &`]);
+            });
+          } else {
+            execFile('sudo', ['-n', run, ...args], { timeout: 15_000 }, (err) => {
+              if (!err) {
+                logLine('info', 'Uninstall-Job (systemd-run) gestartet.');
+                return;
+              }
+              execFile('sudo', ['-n', bash, '-c',
+                `setsid ${bash} ${JSON.stringify(script)} >/tmp/orbit-uninstall.log 2>&1 < /dev/null &`,
+              ], { timeout: 10_000 }, onErr);
+            });
+          }
+        } else if (isRoot()) {
+          startJob(bash, ['-c', `setsid ${bash} ${JSON.stringify(script)} >/tmp/orbit-uninstall.log 2>&1 < /dev/null &`]);
         } else {
           execFile('sudo', [
             '-n', bash, '-c',
