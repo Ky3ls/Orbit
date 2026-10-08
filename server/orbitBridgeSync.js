@@ -112,6 +112,7 @@ export function syncOrbitSystemResource(fxServerRoot, dataPath, onLog = () => {}
     removeOrbitFromDataPath(dataPath, onLog);
     silenceNodePackageWalk(dataPath, onLog);
   }
+  throttleBuilderBusyLogs(fxRoot, dataPath, onLog);
 
   return { ok: true, systemPath: sysDest, dataPath: '' };
 }
@@ -255,9 +256,67 @@ export function silenceNodePackageWalk(dataPath, onLog = () => {}) {
   return { fixed };
 }
 
+/**
+ * FX webpack/yarn loggen alle 3s „is busy: waiting…“ — einmal pro Wait reicht.
+ * Nur bekannte Pfade (kein Resource-Walk). Idempotent.
+ */
+export function throttleBuilderBusyLogs(fxServerRoot, dataPath, onLog = () => {}) {
+  const files = [];
+  const fxRoot = String(fxServerRoot || '').replace(/\/$/, '');
+  if (fxRoot) {
+    files.push(
+      path.join(fxRoot, 'alpine/opt/cfx-server/citizen/system_resources/webpack/webpack_builder.js'),
+      path.join(fxRoot, 'alpine/opt/cfx-server/citizen/system_resources/yarn/yarn_builder.js'),
+    );
+  }
+  const data = String(dataPath || '').replace(/\/$/, '');
+  if (data) {
+    // typische cfx-default Builder-Kopien
+    for (const rel of [
+      'resources/[cfx-default]/[system]/[builders]/webpack/webpack_builder.js',
+      'resources/[cfx-default]/[system]/[builders]/yarn/yarn_builder.js',
+      'resources/[system]/[builders]/webpack/webpack_builder.js',
+      'resources/[system]/[builders]/yarn/yarn_builder.js',
+    ]) {
+      files.push(path.join(data, rel));
+    }
+  }
+
+  let patched = 0;
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    let raw;
+    try { raw = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    if (raw.includes('webpack is busy: waiting for') || raw.includes('yarn is currently busy: waiting for')) continue;
+    let next = raw;
+    if (next.includes('webpack is busy: we are waiting to compile')) {
+      next = next.replace(
+        /while\s*\(\s*buildingInProgress\s*\)\s*\{\s*console\.log\(`webpack is busy: we are waiting to compile \$\{resourceName\} \(\$\{configName\}\)`\);\s*await sleep\(3000\);\s*\}/m,
+        'if (buildingInProgress) {\n                        console.log(`webpack is busy: waiting for ${resourceName} (${configName})`);\n                        while (buildingInProgress) {\n                            await sleep(3000);\n                        }\n                    }',
+      );
+    }
+    if (next.includes('yarn is currently busy: we are waiting to compile')) {
+      next = next.replace(
+        /while\s*\(\s*buildingInProgress\s*&&\s*currentBuildingModule\s*!==\s*resourceName\s*\)\s*\{\s*console\.log\(`yarn is currently busy: we are waiting to compile \$\{resourceName\}`\);\s*await sleep\(3000\);\s*\}/m,
+        'if (buildingInProgress && currentBuildingModule !== resourceName) {\n\t\t\t\tconsole.log(`yarn is currently busy: waiting for ${resourceName}`);\n\t\t\t\twhile (buildingInProgress && currentBuildingModule !== resourceName) {\n\t\t\t\t\tawait sleep(3000);\n\t\t\t\t}\n\t\t\t}',
+      );
+    }
+    if (next === raw) continue;
+    try {
+      fs.writeFileSync(file, next);
+      patched += 1;
+      onLog(`builder-busy throttle: ${path.basename(path.dirname(file))}/${path.basename(file)}`);
+    } catch (err) {
+      onLog(`builder-busy patch fail ${file}: ${err.message}`);
+    }
+  }
+  return { patched };
+}
+
 export function hotDeployOrbit(db, sendCmd, fxRoot, dataPath, onLog = () => {}) {
   syncOrbitSystemResource(fxRoot || FX_SERVER_ROOT, dataPath, onLog);
   ensureFxNodePackageSentinel(fxRoot || FX_SERVER_ROOT, onLog);
+  throttleBuilderBusyLogs(fxRoot || FX_SERVER_ROOT, dataPath, onLog);
   if (dataPath) silenceNodePackageWalk(dataPath, onLog);
   const token = ensureIngameToken(db);
   const panel = orbitPanelLocalUrl();

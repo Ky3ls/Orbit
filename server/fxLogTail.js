@@ -22,6 +22,10 @@ export function appendOrbitFxLog(dataPath, line) {
   fs.appendFileSync(orbitLogFile(dataPath), `${line}\n`, 'utf8');
 }
 
+/** webpack/yarn „is busy“ — gleiche Zeile max. 1× / 45s in die Panel-Konsole */
+const busySpamAt = new Map();
+const BUSY_SPAM_RE = /(?:webpack is busy|yarn is currently busy):\s*(?:we are )?waiting/i;
+
 /**
  * Live: Datei + Panel-Konsole gleichzeitig, Offset vorschieben (kein Doppel-Dump per poll).
  * @param {string} dataPath
@@ -31,6 +35,15 @@ export function appendOrbitFxLog(dataPath, line) {
 export function emitFxConsoleLine(dataPath, line, logLine) {
   const trimmed = String(line || '').trimEnd();
   if (!trimmed) return;
+  const isBusySpam = BUSY_SPAM_RE.test(trimmed);
+  let skipPanel = false;
+  if (isBusySpam) {
+    const key = trimmed.slice(0, 160);
+    const now = Date.now();
+    const last = busySpamAt.get(key) || 0;
+    if (now - last < 45_000) skipPanel = true;
+    else busySpamAt.set(key, now);
+  }
   if (dataPath) {
     appendOrbitFxLog(dataPath, trimmed);
     const file = orbitLogFile(dataPath);
@@ -38,7 +51,7 @@ export function emitFxConsoleLine(dataPath, line, logLine) {
       consoleOffsets.set(file, fs.statSync(file).size);
     } catch { /* */ }
   }
-  if (!logLine) return;
+  if (!logLine || skipPanel) return;
   const lv = /(error|failed|fatal)/i.test(trimmed) ? 'bad' : /(warn|warning)/i.test(trimmed) ? 'warn' : 'info';
   logLine(lv, trimmed.slice(0, 500));
 }
@@ -121,6 +134,13 @@ export function pollFxConsole(dataPath, logLine) {
   for (const line of buf.toString('utf8').split(/\r?\n/)) {
     const trimmed = line.trimEnd();
     if (!trimmed) continue;
+    if (BUSY_SPAM_RE.test(trimmed)) {
+      const key = trimmed.slice(0, 160);
+      const now = Date.now();
+      const last = busySpamAt.get(key) || 0;
+      if (now - last < 45_000) continue;
+      busySpamAt.set(key, now);
+    }
     const lv = /(error|failed|fatal)/i.test(trimmed) ? 'bad' : /(warn|warning)/i.test(trimmed) ? 'warn' : 'info';
     logLine(lv, trimmed.slice(0, 500));
     n += 1;
