@@ -188,7 +188,7 @@ export async function handlePlatformApi(ctx) {
       let started = null;
       if (doStart) {
         const srvSettings = buildSettingsForServer(db, row);
-        started = await controlFx('start', srvSettings, logLine, { instanceId: String(row.id) });
+        started = await controlFx('start', srvSettings, logLine, { instanceId: String(row.id), db });
         steps.push('FX gestartet');
       }
       return json(res, 200, {
@@ -216,7 +216,7 @@ export async function handlePlatformApi(ctx) {
     if (!row) return json(res, 404, { error: 'Server nicht gefunden.' });
     const settings = buildSettingsForServer(db, row);
     try {
-      await controlFx(action, settings, logLine, { instanceId: String(id) });
+      await controlFx(action, settings, logLine, { instanceId: String(id), db });
       audit(db, me.username, `server.${action}`, row.slug, ip);
       return json(res, 200, { ok: true, action, instanceId: String(id) });
     } catch (err) {

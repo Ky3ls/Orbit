@@ -1623,7 +1623,12 @@ async function handleApi(req, res, url) {
         }
       }
     } catch (err) {
-      nextSteps.push(`FX Build: unter Einstellungen → FX Builds installieren (${err.message})`);
+      logLine('bad', `FX Artifact: ${err.message}`);
+      nextSteps.push(`FX Build: ${err.message}`);
+      // Existing ohne Binary ist unbenutzbar — hart fehlschlagen
+      if (deploy === 'existing' || !settingMap(db).fxServerRoot) {
+        return json(res, 500, { error: `FXServer-Artifact fehlt/fehlgeschlagen: ${err.message}` });
+      }
     }
 
     const settingsAfter = settingMap(db);
@@ -2749,7 +2754,7 @@ async function handleApi(req, res, url) {
     logLine('info', `${me.username} → Server ${action}`);
     audit(db, me.username, `server.${action}`, '', ip);
     try {
-      await controlFx(action, settings, logLine);
+      await controlFx(action, settings, logLine, { db });
       const via = orbitControlMode(settings) === 'orbit' ? 'Orbit FXServer' : FX_UNIT;
       logLine('ok', `${action} → ${via}`);
       notifyServerEvent(settings, `Server ${action}`, `${settings.hostname || 'Server'} via ${via}`).catch(() => {});

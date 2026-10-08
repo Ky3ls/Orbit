@@ -135,6 +135,38 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   const key = resolveInstanceKey(settings, opts.instanceId);
   const inst = getInst(key);
   const port = Number(settings?.fivemPort) || 30120;
+
+  // FX-Artifact nachziehen, falls Setup ohne Download durchlief (API-Wechsel)
+  try {
+    const { fetchRecommendedBuild, installArtifact, findAnyInstalledArtifact } = await import('./artifacts.js');
+    const root = String(settings.fxServerRoot || '').replace(/\/$/, '');
+    const has = root && (await import('node:fs')).default.existsSync(
+      `${root}/alpine/opt/cfx-server/FXServer`,
+    );
+    if (!has && !findAnyInstalledArtifact()) {
+      logLine('info', 'FX-Artifact fehlt — lade empfohlenen Build…');
+      const build = await fetchRecommendedBuild();
+      const installed = await installArtifact(build, (t) => logLine('info', t));
+      settings = { ...settings, fxServerRoot: installed.path };
+      if (opts.db) {
+        const { setSetting } = await import('./db.js');
+        setSetting(opts.db, 'fxServerRoot', installed.path);
+        setSetting(opts.db, 'fxArtifactBuild', installed.build);
+        const { getActiveOrbitServer } = await import('./orbitServersDb.js');
+        const row = getActiveOrbitServer(opts.db);
+        if (row) {
+          opts.db.prepare('UPDATE orbit_servers SET fx_root = ? WHERE id = ?').run(installed.path, row.id);
+        }
+      }
+      logLine('ok', `FX Artifact ${installed.build} → ${installed.path}`);
+    } else if (!has) {
+      const found = findAnyInstalledArtifact();
+      if (found) settings = { ...settings, fxServerRoot: found.path };
+    }
+  } catch (err) {
+    logLine('warn', `FX-Artifact Auto-Install: ${err.message}`);
+  }
+
   const launch = resolveFxLaunch(settings, { db: opts.db });
 
   // Sofort leeren — Live-Konsole zeigt danach nur Start-/Stop-vor-Start-Logs
