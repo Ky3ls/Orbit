@@ -1744,8 +1744,8 @@ async function handleApi(req, res, url) {
         send('console', fresh);
       }
     };
-    // Offline/idle: keine historischen Buffer-Zeilen — während Start/Boot schon
-    if (fxConsoleLive()) {
+    // Immer letzte Zeilen schicken — auch offline/Crash (sonst wirkt Konsole „geleert“)
+    if (runtime.console.length) {
       send('console', runtime.console.slice(-200));
     } else if (runtime.consoleClearId) {
       send('console_clear', { id: runtime.consoleClearId, at: runtime.consoleClearedAt });

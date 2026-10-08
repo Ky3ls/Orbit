@@ -106,6 +106,7 @@ export function syncOrbitSystemResource(fxServerRoot, dataPath, onLog = () => {}
   const sysDest = path.join(fxRoot, 'alpine/opt/cfx-server/citizen/system_resources/orbit');
   installDir(BRIDGE_SRC, sysDest);
   onLog(`orbit → system_resources (${sysDest})`);
+  ensureFxNodePackageSentinel(fxRoot, onLog);
 
   if (dataPath) {
     removeOrbitFromDataPath(dataPath, onLog);
@@ -131,6 +132,50 @@ export function orbitFxLaunchExtras(db) {
     '+set', 'orbit_luaComToken', token,
     '+ensure', 'orbit',
   ];
+}
+
+/**
+ * FX system_resources/yarn (und webpack) wandern von
+ * …/alpine/opt/cfx-server/citizen/system_resources/yarn nach oben und treffen
+ * sonst /opt/orbit/package.json ("type":"module") → yarn_cli.js crasht.
+ * Sentinel OHNE type:module stoppt den Walk im Artifact.
+ */
+export function ensureFxNodePackageSentinel(fxServerRoot, onLog = () => {}) {
+  const fxRoot = String(fxServerRoot || '').replace(/\/$/, '');
+  if (!fxRoot || !fs.existsSync(fxRoot)) return { wrote: 0 };
+  const body = `${JSON.stringify({ name: 'cfx-fxserver', private: true }, null, 2)}\n`;
+  const targets = [
+    fxRoot,
+    path.join(fxRoot, 'alpine'),
+    path.join(fxRoot, 'alpine/opt/cfx-server'),
+    path.join(fxRoot, 'alpine/opt/cfx-server/citizen/system_resources'),
+    path.join(fxRoot, 'alpine/opt/cfx-server/citizen/system_resources/yarn'),
+    path.join(fxRoot, 'alpine/opt/cfx-server/citizen/system_resources/webpack'),
+  ];
+  let wrote = 0;
+  for (const dir of targets) {
+    if (!fs.existsSync(dir)) continue;
+    const pj = path.join(dir, 'package.json');
+    let need = true;
+    if (fs.existsSync(pj)) {
+      try {
+        const cur = JSON.parse(fs.readFileSync(pj, 'utf8'));
+        // Nur überschreiben wenn type:module (oder kaputt) — echte package.json der Resource schonen
+        if (cur && typeof cur === 'object' && cur.type !== 'module' && cur.name) need = false;
+      } catch {
+        need = true;
+      }
+    }
+    if (!need) continue;
+    try {
+      fs.writeFileSync(pj, body);
+      wrote += 1;
+    } catch (err) {
+      onLog(`package-sentinel fail ${dir}: ${err.message}`);
+    }
+  }
+  if (wrote) onLog(`FX node package-sentinel: ${wrote} Datei(en) unter ${fxRoot}`);
+  return { wrote };
 }
 
 /**
@@ -203,6 +248,7 @@ export function silenceNodePackageWalk(dataPath, onLog = () => {}) {
 
 export function hotDeployOrbit(db, sendCmd, fxRoot, dataPath, onLog = () => {}) {
   syncOrbitSystemResource(fxRoot || FX_SERVER_ROOT, dataPath, onLog);
+  ensureFxNodePackageSentinel(fxRoot || FX_SERVER_ROOT, onLog);
   if (dataPath) silenceNodePackageWalk(dataPath, onLog);
   const token = ensureIngameToken(db);
   const panel = orbitPanelLocalUrl();

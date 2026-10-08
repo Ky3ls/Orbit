@@ -208,6 +208,10 @@ export async function installArtifact(build, onLog = () => {}) {
     throw new Error('Entpacken OK, aber FXServer-Binary fehlt — Artifact-Layout geändert?');
   }
   onLog(`Artifact bereit: ${dest}`);
+  try {
+    const { ensureFxNodePackageSentinel } = await import('./orbitBridgeSync.js');
+    ensureFxNodePackageSentinel(dest, onLog);
+  } catch { /* optional */ }
   return { path: dest, build: buildNum, skipped: false };
 }
 

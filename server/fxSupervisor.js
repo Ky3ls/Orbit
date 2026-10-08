@@ -215,12 +215,21 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   // System-Resource vor Start syncen
   try {
     const { getDb, auditLogger } = await import('./db.js');
-    const { syncOrbitSystemResource, ensureIngameToken } = await import('./orbitBridgeSync.js');
+    const {
+      syncOrbitSystemResource,
+      ensureIngameToken,
+      ensureFxNodePackageSentinel,
+      silenceNodePackageWalk,
+    } = await import('./orbitBridgeSync.js');
     const { syncChatFromArtifact } = await import('./cfxDefaults.js');
     const { syncOrbitPermissionsFile, loadMasterIdentity } = await import('./cfgPermissions.js');
     const database = opts.db || getDb();
     ensureIngameToken(database);
+    ensureFxNodePackageSentinel(launch.fxRoot, (t) => logPanel('info', `[FX:${key}] ${t}`));
     syncOrbitSystemResource(launch.fxRoot, launch.dataPath, auditLogger(database, 'orbit.sync'));
+    if (launch.dataPath) {
+      silenceNodePackageWalk(launch.dataPath, (t) => logPanel('info', `[FX:${key}] ${t}`));
+    }
     if (launch.dataPath) {
       syncChatFromArtifact(launch.dataPath, launch.fxRoot, (m) => logPanel('info', `[FX:${key}] ${m}`));
       const cfgName = String(settings.fxCfgPath || 'server.cfg').replace(/^\/+/, '') || 'server.cfg';
