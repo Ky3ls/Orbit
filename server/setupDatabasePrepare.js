@@ -7,6 +7,7 @@ import { ensureEsxAddonColumns, patchMysql8CompatInResources } from './mysqlComp
 import mysql from 'mysql2/promise';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { rootRunSync } from './rootExec.js';
 
 const exec = promisify(execFile);
 
@@ -16,7 +17,7 @@ function rmRf(target) {
     fs.rmSync(target, { recursive: true, force: true });
   } catch {
     try {
-      execFile('sudo', ['-n', 'rm', '-rf', target], { timeout: 120_000 });
+      rootRunSync(['rm', '-rf', target], { timeout: 120_000 });
     } catch { /* */ }
   }
 }

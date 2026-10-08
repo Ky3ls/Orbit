@@ -12,6 +12,7 @@ import {
   listOrbitServers,
 } from './orbitServersDb.js';
 import { syncOrbitBridgeToDataPath } from './orbitBridgeSync.js';
+import { rootRun } from './rootExec.js';
 import { setSetting } from './db.js';
 import { importTxAdminModeration, playersDbPathForProfile } from './txAdminPlayersDb.js';
 
@@ -235,18 +236,18 @@ function applyCfgToSettings(db, cfgText) {
 async function ensureDataPathAcl(dataPaths, fxRoot, logLine) {
   for (const dp of dataPaths) {
     try {
-      await exec('sudo', ['-n', 'setfacl', '-R', '-m', `u:${TX2_USER}:rwx`, dp], { timeout: 120_000 });
-      await exec('sudo', ['-n', 'setfacl', '-R', '-d', '-m', `u:${TX2_USER}:rwx`, dp], { timeout: 120_000 });
+      await rootRun(['setfacl', '-R', '-m', `u:${TX2_USER}:rwx`, dp], { timeout: 120_000 });
+      await rootRun(['setfacl', '-R', '-d', '-m', `u:${TX2_USER}:rwx`, dp], { timeout: 120_000 });
     } catch (err) {
       logLine('warn', `ACL ${dp}: ${err.message}`);
     }
   }
   if (fxRoot && fs.existsSync(fxRoot)) {
     try {
-      await exec('sudo', ['-n', 'setfacl', '-m', `u:${TX2_USER}:rx`, fxRoot], { timeout: 30_000 });
+      await rootRun(['setfacl', '-m', `u:${TX2_USER}:rx`, fxRoot], { timeout: 30_000 });
       const alpine = path.join(fxRoot, 'alpine');
       if (fs.existsSync(alpine)) {
-        await exec('sudo', ['-n', 'setfacl', '-R', '-m', `u:${TX2_USER}:rx`, alpine], { timeout: 120_000 });
+        await rootRun(['setfacl', '-R', '-m', `u:${TX2_USER}:rx`, alpine], { timeout: 120_000 });
       }
     } catch (err) {
       logLine('warn', `ACL FX-Root: ${err.message}`);
@@ -260,8 +261,8 @@ async function disableTxAdmin(logLine) {
     try {
       const st = await unitState(unit);
       if (!st.present && !st.active) continue;
-      await exec('sudo', ['-n', 'systemctl', 'stop', unit], { timeout: 60_000 }).catch(() => {});
-      await exec('sudo', ['-n', 'systemctl', 'disable', unit], { timeout: 30_000 }).catch(() => {});
+      await rootRun(['systemctl', 'stop', unit], { timeout: 60_000 }).catch(() => {});
+      await rootRun(['systemctl', 'disable', unit], { timeout: 30_000 }).catch(() => {});
       stopped.push(unit);
       logLine('ok', `${unit} gestoppt und deaktiviert.`);
     } catch { /* */ }
@@ -270,8 +271,8 @@ async function disableTxAdmin(logLine) {
     try {
       const st = await unitState(FX_UNIT);
       if (st.active || st.enabled) {
-        await exec('sudo', ['-n', 'systemctl', 'stop', FX_UNIT], { timeout: 60_000 }).catch(() => {});
-        await exec('sudo', ['-n', 'systemctl', 'disable', FX_UNIT], { timeout: 30_000 }).catch(() => {});
+        await rootRun(['systemctl', 'stop', FX_UNIT], { timeout: 60_000 }).catch(() => {});
+        await rootRun(['systemctl', 'disable', FX_UNIT], { timeout: 30_000 }).catch(() => {});
         stopped.push(FX_UNIT);
         logLine('ok', `${FX_UNIT} (txAdmin FX) deaktiviert.`);
       }

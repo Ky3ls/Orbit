@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { rootRun } from './rootExec.js';
 import { randomBytes } from 'node:crypto';
 import mysql from 'mysql2/promise';
 import { portOpen } from './fivem.js';
@@ -66,7 +67,7 @@ export async function installMysql(logLine = () => {}) {
     logLine('info', 'MySQL/MariaDB installiert, Dienst starten…');
     for (const svc of ['mysql', 'mariadb']) {
       try {
-        await exec('sudo', ['-n', 'systemctl', 'enable', '--now', svc], { timeout: 60_000 });
+        await rootRun(['systemctl', 'enable', '--now', svc], { timeout: 60_000 });
         break;
       } catch { /* next */ }
     }
@@ -79,13 +80,13 @@ export async function installMysql(logLine = () => {}) {
   }
 
   logLine('info', 'Kein MySQL gefunden — MariaDB wird installiert (apt)…');
-  await exec('sudo', ['-n', 'apt-get', 'update', '-qq'], { timeout: 180_000 });
-  await exec('sudo', [
-    '-n', 'env', 'DEBIAN_FRONTEND=noninteractive',
+  await rootRun(['apt-get', 'update', '-qq'], { timeout: 180_000 });
+  await rootRun([
+    'env', 'DEBIAN_FRONTEND=noninteractive',
     'apt-get', 'install', '-y', '-qq', 'mariadb-server',
   ], { timeout: 600_000 });
-  await exec('sudo', ['-n', 'systemctl', 'enable', '--now', 'mariadb'], { timeout: 60_000 }).catch(async () => {
-    await exec('sudo', ['-n', 'systemctl', 'enable', '--now', 'mysql'], { timeout: 60_000 });
+  await rootRun(['systemctl', 'enable', '--now', 'mariadb'], { timeout: 60_000 }).catch(async () => {
+    await rootRun(['systemctl', 'enable', '--now', 'mysql'], { timeout: 60_000 });
   });
   const st = await detectMysqlService();
   if (!st.running) throw new Error('MariaDB installiert, Dienst läuft nicht.');
@@ -105,7 +106,7 @@ export function defaultDbName(serverName) {
 
 /**
  * Legt DB + App-User an.
- * Standard: sudo mysql (auth_socket / systemd) — kein root-Passwort nötig.
+ * Standard: mysql als root (auth_socket / systemd) — kein root-Passwort nötig.
  * Nur wenn ein root-Passwort gesetzt ist: TCP-Login als root.
  */
 export async function provisionMysqlDatabase(opts) {
@@ -141,12 +142,12 @@ export async function provisionMysqlDatabase(opts) {
     }
   } else {
     try {
-      await exec('sudo', ['-n', 'mysql', '-e', sql], { timeout: 30_000 });
+      await rootRun(['mysql', '-e', sql], { timeout: 30_000 });
     } catch (err) {
       const msg = String(err?.stderr || err?.message || err);
       throw new Error(
-        `MySQL per sudo fehlgeschlagen (${msg.slice(0, 180)}). `
-        + 'Root nutzt oft auth_socket — leer lassen reicht, wenn orbit sudo mysql darf. '
+        `MySQL fehlgeschlagen (${msg.slice(0, 180)}). `
+        + 'Root nutzt oft auth_socket — leer lassen reicht (Orbit läuft als root). '
         + 'Sonst root-Passwort eintragen.',
       );
     }

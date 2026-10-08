@@ -97,7 +97,7 @@ function noteAccess(target, issues, warnings, canElevate) {
   if (fs.existsSync(target)) {
     if (canWrite(target)) return;
     if (canElevate) {
-      warnings.push(`Schreibrechte für User orbit werden beim Abschluss eingerichtet (${target}).`);
+      warnings.push(`Schreibrechte werden beim Abschluss eingerichtet (${target}).`);
       return;
     }
     issues.push(`Keine Schreibrechte auf ${target}.`);
@@ -107,7 +107,7 @@ function noteAccess(target, issues, warnings, canElevate) {
   while (cur && cur !== '/' && !fs.existsSync(cur)) cur = path.dirname(cur);
   if (!cur || cur === '/') {
     if (canElevate) {
-      warnings.push('Ordner wird mit sudo angelegt.');
+      warnings.push('Ordner wird angelegt.');
       return;
     }
     issues.push(`Elternordner nicht erreichbar für ${target}.`);

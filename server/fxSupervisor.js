@@ -476,16 +476,16 @@ export async function killOrphanFxServers(logLine = () => {}, portHint = 0) {
     } catch { /* tot */ }
   }
 
-  // 2) sudo pkill (falls Rechte/User anders)
-  await tryExec('sudo', ['-n', 'pkill', '-f', 'cfx-server/FXServer']);
+  // 2) pkill (Panel läuft als root)
+  await tryExec('pkill', ['-f', 'cfx-server/FXServer']);
   await new Promise((r) => setTimeout(r, 400));
-  await tryExec('sudo', ['-n', 'pkill', '-9', '-f', 'cfx-server/FXServer']);
+  await tryExec('pkill', ['-9', '-f', 'cfx-server/FXServer']);
 
   // 3) Port freischießen
   const port = Number(portHint) || 30120;
   if (port > 0 && port < 65536) {
-    await tryExec('sudo', ['-n', 'fuser', '-k', `${port}/tcp`]);
-    await tryExec('sudo', ['-n', 'fuser', '-k', `${port}/udp`]);
+    await tryExec('fuser', ['-k', `${port}/tcp`]);
+    await tryExec('fuser', ['-k', `${port}/udp`]);
   }
   await new Promise((r) => setTimeout(r, 400));
 }
@@ -501,7 +501,7 @@ export async function forceFreeGamePort(settings, logLine = () => {}, port = 301
   const { promisify } = await import('node:util');
   const exec = promisify(execFile);
   try {
-    await exec('sudo', ['-n', 'fuser', '-k', `${Number(port) || 30120}/tcp`], { timeout: 10_000 });
+    await exec('fuser', ['-k', `${Number(port) || 30120}/tcp`], { timeout: 10_000 });
   } catch { /* */ }
   await new Promise((r) => setTimeout(r, 600));
 }

@@ -10,6 +10,7 @@ import { ensureEsxAddonColumns, patchMysql8CompatInResources } from './mysqlComp
 import { applyCfxBaseCfg, installCfxServerData } from './cfxDefaults.js';
 import { sanitizeCfgMetaComments } from './cfgSanitize.js';
 import { applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
+import { rootRunSync } from './rootExec.js';
 
 const exec = promisify(execFile);
 
@@ -21,7 +22,7 @@ function rmRfSafe(target) {
     fs.rmSync(target, { recursive: true, force: true });
   } catch {
     try {
-      execFileSync('sudo', ['-n', 'rm', '-rf', target], { timeout: 120_000 });
+      rootRunSync(['rm', '-rf', target], { timeout: 120_000 });
     } catch { /* ignore */ }
   }
 }
@@ -345,9 +346,7 @@ export async function runRecipeInstall(recipeId, dataPath, onLog = () => {}, opt
       }
     }
   } catch { /* */ }
-  try {
-    execFileSync('sudo', ['-n', 'chown', '-R', 'orbit:orbit', resources], { timeout: 60_000 });
-  } catch { /* */ }
+  // Panel läuft als root — kein chown auf Systemuser nötig
 
   syncOrbitBridgeToDataPath(dataPath, onLog);
 

@@ -805,7 +805,7 @@ export default function Setup({ onDone, userName = '' }) {
                         autoComplete="new-password"
                       />
                       <span className="field-hint">
-                        Leer lassen: Orbit legt DB/User per <code>sudo mysql</code> an (ohne root-Passwort).
+                        Leer lassen: Orbit legt DB/User per <code>mysql</code> als root an (ohne root-Passwort).
                         Nur ausfüllen, wenn root ein TCP-Passwort braucht.
                       </span>
                     </label>
