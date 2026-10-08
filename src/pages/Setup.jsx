@@ -123,7 +123,7 @@ export default function Setup({ onDone, userName = '' }) {
     if (deploy === 'existing' || deploy === 'custom') setUseCustomPath(true);
   }, [deploy]);
 
-  // Datenordner immer prüfen, sobald ein Pfad gesetzt ist (unabhängig von Deploy/Domain)
+  // Datenordner prüfen + server.cfg automatisch übernehmen (Port, Slots, DB, License, …)
   useEffect(() => {
     if (step !== 5) return undefined;
     const d = dataPath.trim();
@@ -133,11 +133,37 @@ export default function Setup({ onDone, userName = '' }) {
     }
     const t = setTimeout(() => {
       api('/api/setup/validate-path', { method: 'POST', body: { dataPath: d } })
-        .then(setPathStatus)
+        .then((report) => {
+          setPathStatus(report);
+          const cfg = report?.fromCfg;
+          if (!cfg || !report.ok) return;
+          if (cfg.hostname) setName(cfg.hostname);
+          if (cfg.port) setPort(cfg.port);
+          if (cfg.maxClients) setMaxClients(cfg.maxClients);
+          if (cfg.onesync === 'on' || cfg.onesync === 'legacy' || cfg.onesync === 'off') {
+            setOnesync(cfg.onesync);
+          }
+          if (cfg.locale) setLocale(cfg.locale);
+          if (cfg.tags) setTags(cfg.tags);
+          if (cfg.licenseKey) setLicenseKey(cfg.licenseKey);
+          if (cfg.mysqlDsn) {
+            setMysqlConnection(cfg.mysqlDsn);
+            setDbMode('reuse');
+            setCreateDatabase(false);
+            setDbReady(true);
+            setPreparedDsn(cfg.mysqlDsn);
+            setDbProgress(100);
+            setDbProgressLabel('Aus server.cfg übernommen');
+          } else if (deploy === 'existing') {
+            // Keine DB in CFG → nicht zwingend neu anlegen
+            setDbMode((m) => (m === 'create' ? 'skip' : m));
+            setCreateDatabase(false);
+          }
+        })
         .catch(() => setPathStatus({ ok: false, issues: ['Pfad konnte nicht geprüft werden.'] }));
     }, 400);
     return () => clearTimeout(t);
-  }, [step, dataPath]);
+  }, [step, dataPath, deploy]);
 
   const refreshPanelPreview = useCallback(() => {
     api('/api/setup/panel-access/preview', {
@@ -628,7 +654,37 @@ export default function Setup({ onDone, userName = '' }) {
               <>
                 <div className="setup-step-num">6</div>
                 <h1>Netzwerk & Datenordner</h1>
-                <p className="lede">Game-Port und Ordner für resources / server.cfg (unabhängig vom Panel-Domain).</p>
+                <p className="lede">
+                  {deploy === 'existing'
+                    ? 'Datenordner angeben — Port, Slots, OneSync, Tags, MySQL und License kommen automatisch aus der server.cfg.'
+                    : 'Game-Port und Ordner für resources / server.cfg (unabhängig vom Panel-Domain).'}
+                </p>
+                {deploy === 'existing' && (
+                  <label className="field" style={{ marginBottom: 12 }}>
+                    <span>Datenordner</span>
+                    <input
+                      className="mono"
+                      placeholder="/root/RoleplayServer oder /home/Roleplay"
+                      value={dataPath}
+                      onChange={(e) => setDataPath(e.target.value)}
+                      autoFocus
+                    />
+                  </label>
+                )}
+                {deploy === 'existing' && pathStatus?.fromCfg && pathStatus.ok && (
+                  <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
+                    <p className="setup-port-hint ok" style={{ marginBottom: 8 }}>
+                      Aus <code className="mono">server.cfg</code> übernommen — Felder unten kannst du noch anpassen.
+                    </p>
+                    <div className="res-line"><span>Hostname</span><b>{pathStatus.fromCfg.hostname || '—'}</b></div>
+                    <div className="res-line"><span>Port</span><b>{pathStatus.fromCfg.port || '—'}</b></div>
+                    <div className="res-line"><span>Slots</span><b>{pathStatus.fromCfg.maxClients || '—'}</b></div>
+                    <div className="res-line"><span>OneSync</span><b>{pathStatus.fromCfg.onesync || '—'}</b></div>
+                    <div className="res-line"><span>Tags</span><b>{pathStatus.fromCfg.tags || '—'}</b></div>
+                    <div className="res-line"><span>MySQL</span><b>{pathStatus.fromCfg.mysqlDsn ? 'gefunden' : 'nicht in CFG'}</b></div>
+                    <div className="res-line"><span>License</span><b>{pathStatus.fromCfg.licenseKey ? 'gefunden' : 'fehlt'}</b></div>
+                  </div>
+                )}
                 <div className="row">
                   <label className="field grow"><span>Game-Port</span><input value={port} onChange={(e) => setPort(e.target.value)} /></label>
                   <label className="field grow"><span>Slots</span><input value={maxClients} onChange={(e) => setMaxClients(e.target.value)} /></label>
@@ -671,54 +727,54 @@ export default function Setup({ onDone, userName = '' }) {
                 <label className="field"><span>Locale</span><input value={locale} onChange={(e) => setLocale(e.target.value)} /></label>
                 <label className="field"><span>Tags</span><input value={tags} onChange={(e) => setTags(e.target.value)} /></label>
 
-                <div className="panel" style={{ padding: 12, marginTop: 12 }}>
-                  <label className="row" style={{ marginBottom: 10 }}>
-                    <input
-                      type="checkbox"
-                      checked={useCustomPath || deploy === 'existing'}
-                      disabled={deploy === 'existing'}
-                      onChange={(e) => {
-                        setUseCustomPath(e.target.checked);
-                        if (!e.target.checked) {
-                          setDataPath('');
-                          setPathStatus(null);
-                        }
-                      }}
-                    />
-                    Eigenen Datenordner festlegen
-                  </label>
-                  <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-                    Hier liegen <code className="mono">server.cfg</code>, <code className="mono">resources/</code> usw.
-                    Standard ohne Haken: <code className="mono">{preflight?.defaultServersRoot || '/opt/orbit/servers'}/&lt;slug&gt;</code>
-                  </p>
-                  {(useCustomPath || deploy === 'existing' || dataPath) && (
-                    <>
-                      <label className="field">
-                        <span>Datenordner</span>
-                        <input
-                          className="mono"
-                          placeholder="/root/RoleplayServer oder /home/Roleplay"
-                          value={dataPath}
-                          onChange={(e) => setDataPath(e.target.value)}
-                          autoFocus={deploy === 'existing'}
-                        />
-                      </label>
-                      {pathStatus && (
-                        <div style={{ marginTop: 8, fontSize: 13 }}>
-                          {(pathStatus.issues || []).map((i) => (
-                            <p key={i} className="setup-port-hint bad">{i}</p>
-                          ))}
-                          {(pathStatus.warnings || []).map((w) => (
-                            <p key={w} className="setup-port-hint ok">{w}</p>
-                          ))}
-                          {pathStatus.ok && !(pathStatus.warnings || []).length && (
-                            <p className="setup-port-hint ok">Pfad ist nutzbar.</p>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
+                {deploy !== 'existing' && (
+                  <div className="panel" style={{ padding: 12, marginTop: 12 }}>
+                    <label className="row" style={{ marginBottom: 10 }}>
+                      <input
+                        type="checkbox"
+                        checked={useCustomPath}
+                        onChange={(e) => {
+                          setUseCustomPath(e.target.checked);
+                          if (!e.target.checked) {
+                            setDataPath('');
+                            setPathStatus(null);
+                          }
+                        }}
+                      />
+                      Eigenen Datenordner festlegen
+                    </label>
+                    <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                      Hier liegen <code className="mono">server.cfg</code>, <code className="mono">resources/</code> usw.
+                      Standard ohne Haken: <code className="mono">{preflight?.defaultServersRoot || '/opt/orbit/servers'}/&lt;slug&gt;</code>
+                    </p>
+                    {(useCustomPath || dataPath) && (
+                      <>
+                        <label className="field">
+                          <span>Datenordner</span>
+                          <input
+                            className="mono"
+                            placeholder="/root/RoleplayServer oder /home/Roleplay"
+                            value={dataPath}
+                            onChange={(e) => setDataPath(e.target.value)}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                )}
+                {pathStatus && (
+                  <div style={{ marginTop: 8, fontSize: 13 }}>
+                    {(pathStatus.issues || []).map((i) => (
+                      <p key={i} className="setup-port-hint bad">{i}</p>
+                    ))}
+                    {(pathStatus.warnings || []).map((w) => (
+                      <p key={w} className="setup-port-hint ok">{w}</p>
+                    ))}
+                    {pathStatus.ok && !(pathStatus.warnings || []).length && (
+                      <p className="setup-port-hint ok">Pfad ist nutzbar.</p>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
@@ -727,9 +783,15 @@ export default function Setup({ onDone, userName = '' }) {
                 <div className="setup-step-num">7</div>
                 <h1>Datenbank</h1>
                 <p className="lede">
-                  MySQL erkennen: läuft es schon, legt Orbit nur DB + User an.
-                  Fehlt MySQL komplett, kann es hier installiert werden — bestehende Dienste werden nicht angefasst.
+                  {deploy === 'existing' && mysqlConnection
+                    ? 'Connection aus server.cfg erkannt — wird so übernommen, kein Neuaufsetzen nötig.'
+                    : 'MySQL erkennen: läuft es schon, legt Orbit nur DB + User an. Fehlt MySQL komplett, kann es hier installiert werden.'}
                 </p>
+                {deploy === 'existing' && mysqlConnection && dbMode === 'reuse' && (
+                  <p className="setup-port-hint ok" style={{ marginBottom: 12 }}>
+                    mysql_connection_string aus CFG geladen.
+                  </p>
+                )}
                 {preflight?.mysql?.running ? (
                   <p className="setup-port-hint ok" style={{ marginBottom: 12 }}>
                     MySQL/MariaDB läuft ({preflight.mysql.service || 'ok'}) — nur DB/User werden angelegt.
@@ -858,6 +920,11 @@ export default function Setup({ onDone, userName = '' }) {
               <>
                 <div className="setup-step-num">8</div>
                 <h1>Keys & Start</h1>
+                {licenseKey && deploy === 'existing' && (
+                  <p className="setup-port-hint ok" style={{ marginBottom: 12 }}>
+                    License-Key aus server.cfg übernommen.
+                  </p>
+                )}
                 <label className="field"><span>sv_licenseKey</span>
                   <input type="password" value={licenseKey} onChange={(e) => setLicenseKey(e.target.value)} placeholder="cfxk_…" autoComplete="off" />
                 </label>
