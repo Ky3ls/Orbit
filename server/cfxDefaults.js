@@ -206,18 +206,48 @@ export function applyFrameworkAce(cfg, profile = '') {
   return String(cfg || '');
 }
 
+/** ensure/start hardcap entfernen — Slot-Cap läuft in Orbit. */
+export function stripHardcapEnsure(cfg) {
+  return String(cfg || '')
+    .replace(/^\s*ensure\s+hardcap\s*$/gmi, '')
+    .replace(/^\s*start\s+hardcap\s*$/gmi, '');
+}
+
+/**
+ * hardcap-Zeilen aus server.cfg entfernen (bestehende Installationen).
+ * @returns {{ changed: boolean }}
+ */
+export function stripHardcapEnsureFile(cfgFile, onLog = () => {}) {
+  if (!cfgFile || !fs.existsSync(cfgFile)) return { changed: false };
+  let raw;
+  try {
+    raw = fs.readFileSync(cfgFile, 'utf8');
+  } catch {
+    return { changed: false };
+  }
+  const next = stripHardcapEnsure(raw);
+  if (next === raw) return { changed: false };
+  // Leere Doppelzeilen nach Entfernen etwas glätten
+  const cleaned = next.replace(/\n{3,}/g, '\n\n');
+  try {
+    fs.writeFileSync(cfgFile, cleaned);
+    onLog('ensure hardcap aus server.cfg entfernt (Orbit Slot-Cap).');
+    return { changed: true };
+  } catch (err) {
+    onLog(`hardcap-cfg strip fail: ${err.message}`);
+    return { changed: false };
+  }
+}
+
 /**
  * Basis-Ensures + ACE in server.cfg schreiben.
  * @param {string} profile blank|esx|qb
  */
 export function applyCfxBaseCfg(cfg, profile = 'blank') {
-  let out = String(cfg || '');
+  let out = stripHardcapEnsure(cfg);
   // Alten / neuen Block ersetzen
   out = out.replace(/# --- Orbit CFX Defaults ---[\s\S]*?# --- Ende CFX Defaults ---\n?/m, '');
   out = out.replace(/^# Basis-Ressourcen\n(?:ensure [^\n]+\n)*/m, '');
-  // hardcap → Orbit Slot-Cap (nie ensure'n, auch Legacy-Zeilen entfernen)
-  out = out.replace(/^\s*ensure\s+hardcap\s*$/gmi, '');
-  out = out.replace(/^\s*start\s+hardcap\s*$/gmi, '');
   // Framework: mapmanager-ensure entfernen falls manuell gesetzt
   if (profile === 'esx' || profile === 'qb') {
     out = out.replace(/^\s*ensure\s+mapmanager\s*$/gmi, '');

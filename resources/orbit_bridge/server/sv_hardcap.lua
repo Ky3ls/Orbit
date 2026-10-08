@@ -3,6 +3,35 @@
 local playerCount = 0
 local activated = {}
 
+--- cfx hardcap parallel = Doppel-„Connecting:“ — stoppen sobald Orbit läuft
+local function stopLegacyHardcap()
+  local st = GetResourceState('hardcap')
+  if st ~= 'started' and st ~= 'starting' then return false end
+  print('^3[orbit] hardcap gestoppt (Slot-Cap + Connect-Log über Orbit).^7')
+  StopResource('hardcap')
+  return true
+end
+
+CreateThread(function()
+  Wait(0)
+  stopLegacyHardcap()
+  -- ensure hardcap kann nach Orbit in der cfg stehen → kurz nachziehen
+  for _ = 1, 30 do
+    Wait(1000)
+    if not stopLegacyHardcap() and GetResourceState('hardcap') == 'stopped' then
+      break
+    end
+  end
+end)
+
+AddEventHandler('onResourceStart', function(resName)
+  if resName ~= 'hardcap' then return end
+  CreateThread(function()
+    Wait(0)
+    stopLegacyHardcap()
+  end)
+end)
+
 local function maxClients()
   return GetConvarInt('sv_maxclients', 32)
 end
