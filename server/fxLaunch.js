@@ -47,11 +47,12 @@ export function resolveFxLaunch(settings, opts = {}) {
     fxArgs.push('+set', 'sv_licenseKey', license);
   }
 
-  fxArgs.push('+exec', 'server.cfg');
-
+  // Orbit wie System-Resource: vor server.cfg, nie in cfg / nie manuell in der Konsole.
   if (opts.db) {
     fxArgs.push(...orbitFxLaunchExtras(opts.db));
   }
+
+  fxArgs.push('+exec', 'server.cfg');
 
   const extra = String(settings.fxServerExtraArgs || '').trim();
   if (extra) {

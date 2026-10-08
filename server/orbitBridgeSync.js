@@ -116,7 +116,10 @@ export function syncOrbitSystemResource(fxServerRoot, dataPath, onLog = () => {}
   installDir(BRIDGE_SRC, sysDest);
   onLog(`orbit → system_resources (${sysDest})`);
 
-  if (dataPath) removeOrbitFromDataPath(dataPath, onLog);
+  if (dataPath) {
+    removeOrbitFromDataPath(dataPath, onLog);
+    silenceNodePackageWalk(dataPath, onLog);
+  }
 
   return { ok: true, systemPath: sysDest, dataPath: '' };
 }
@@ -125,7 +128,10 @@ export function syncOrbitBridgeToDataPath(dataPath, onLog = () => {}) {
   return syncOrbitSystemResource(FX_SERVER_ROOT, dataPath, onLog);
 }
 
-/** FX-Launch: Convars + ensure (ohne server.cfg). */
+/**
+ * FX-Boot: Orbit als System-Resource VOR +exec (nicht in server.cfg, kein Konsolen-Befehl).
+ * Aufrufer muss die Args vor `+exec server.cfg` einfügen.
+ */
 export function orbitFxLaunchExtras(db) {
   const token = ensureIngameToken(db);
   const panel = orbitPanelLocalUrl();
@@ -136,8 +142,77 @@ export function orbitFxLaunchExtras(db) {
   ];
 }
 
+/**
+ * Node-Ressourcen ohne eigene package.json wandern die Ordnerkette hoch und
+ * treffen die Panel-/opt/orbit/package.json → FX-Sandbox: "no device found".
+ * Sentinel + .yarn.installed stoppt den Walk in der Resource (ohne yarn-Build).
+ */
+export function silenceNodePackageWalk(dataPath, onLog = () => {}) {
+  if (!dataPath || !fs.existsSync(dataPath)) return { fixed: 0 };
+  const resourcesRoot = path.join(dataPath, 'resources');
+  if (!fs.existsSync(resourcesRoot)) return { fixed: 0 };
+
+  let fixed = 0;
+  const stack = [resourcesRoot];
+  while (stack.length) {
+    const dir = stack.pop();
+    let ents;
+    try {
+      ents = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    const manifest = ents.find((e) => e.isFile() && /^fxmanifest\.lua$/i.test(e.name));
+    if (manifest) {
+      let raw = '';
+      try {
+        raw = fs.readFileSync(path.join(dir, manifest.name), 'utf8');
+      } catch {
+        raw = '';
+      }
+      const isNode = /\bnode_version\b/i.test(raw)
+        || /server_script\s+['"][^'"]+\.js['"]/i.test(raw)
+        || /server_scripts\s*\{[^}]*\.js/i.test(raw);
+      if (isNode) {
+        const pj = path.join(dir, 'package.json');
+        const lock = path.join(dir, '.yarn.installed');
+        if (!fs.existsSync(pj)) {
+          const name = path.basename(dir).replace(/[^\w.-]+/g, '') || 'fx-node-resource';
+          fs.writeFileSync(
+            pj,
+            `${JSON.stringify({ name, private: true }, null, 2)}\n`,
+          );
+          fs.writeFileSync(lock, '');
+          const now = new Date();
+          try { fs.utimesSync(lock, now, now); } catch { /* */ }
+          fixed += 1;
+          onLog(`node package-sentinel: ${path.relative(dataPath, dir)}`);
+        } else if (!fs.existsSync(lock)) {
+          fs.writeFileSync(lock, '');
+          const now = new Date();
+          try {
+            const st = fs.statSync(pj);
+            const t = new Date(Math.max(st.mtimeMs, Date.now()));
+            fs.utimesSync(lock, t, t);
+          } catch {
+            try { fs.utimesSync(lock, now, now); } catch { /* */ }
+          }
+        }
+      }
+      continue;
+    }
+    for (const ent of ents) {
+      if (!ent.isDirectory()) continue;
+      if (ent.name === 'node_modules' || ent.name === '.git' || ent.name === 'cache') continue;
+      stack.push(path.join(dir, ent.name));
+    }
+  }
+  return { fixed };
+}
+
 export function hotDeployOrbit(db, sendCmd, fxRoot, dataPath, onLog = () => {}) {
   syncOrbitSystemResource(fxRoot || FX_SERVER_ROOT, dataPath, onLog);
+  if (dataPath) silenceNodePackageWalk(dataPath, onLog);
   const token = ensureIngameToken(db);
   const panel = orbitPanelLocalUrl();
   sendCmd(`set orbit_panelUrl "${panel}"`);
