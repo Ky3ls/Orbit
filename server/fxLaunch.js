@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CFG_PATH, FX_DATA_PATH, FX_SERVER_ROOT } from './config.js';
+import { findAnyInstalledArtifact } from './artifacts.js';
 import { orbitFxLaunchExtras } from './orbitBridgeSync.js';
 
 /**
@@ -9,11 +10,20 @@ import { orbitFxLaunchExtras } from './orbitBridgeSync.js';
  * @param {{ db?: import('node:sqlite').DatabaseSync }} [opts]
  */
 export function resolveFxLaunch(settings, opts = {}) {
-  const fxRoot = String(settings.fxServerRoot || FX_SERVER_ROOT).replace(/\/$/, '');
+  let fxRoot = String(settings.fxServerRoot || FX_SERVER_ROOT || '').replace(/\/$/, '');
   const dataPath = String(settings.fxDataPath || FX_DATA_PATH || path.dirname(CFG_PATH)).replace(/\/$/, '');
   const cfgFile = path.join(dataPath, 'server.cfg');
   if (!fs.existsSync(cfgFile)) {
     throw new Error(`server.cfg fehlt: ${cfgFile}`);
+  }
+
+  const binOk = (root) => root
+    && fs.existsSync(path.join(root, 'alpine/opt/cfx-server/FXServer'))
+    && fs.existsSync(path.join(root, 'alpine/opt/cfx-server/ld-musl-x86_64.so.1'));
+
+  if (!binOk(fxRoot)) {
+    const found = findAnyInstalledArtifact();
+    if (found?.path) fxRoot = found.path;
   }
 
   const loader = path.join(fxRoot, 'alpine/opt/cfx-server/ld-musl-x86_64.so.1');
@@ -25,8 +35,12 @@ export function resolveFxLaunch(settings, opts = {}) {
     path.join(fxRoot, 'alpine/usr/lib/'),
   ].join(':');
 
-  if (!fs.existsSync(loader) || !fs.existsSync(binary)) {
-    throw new Error(`FXServer nicht gefunden unter ${fxRoot} (alpine/opt/cfx-server/).`);
+  if (!binOk(fxRoot)) {
+    throw new Error(
+      fxRoot
+        ? `FXServer nicht gefunden unter ${fxRoot} (alpine/opt/cfx-server/).`
+        : 'FX-Artifact fehlt — unter Einstellungen → FX Builds installieren (oder Server erneut starten, Orbit lädt automatisch).',
+    );
   }
 
   // onesync + license VOR +exec (interne ConVars / früh gesetzt)

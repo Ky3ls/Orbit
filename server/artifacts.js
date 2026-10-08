@@ -8,71 +8,162 @@ const exec = promisify(execFile);
 
 const ARTIFACT_CHANNEL = 'https://runtime.fivem.net/artifacts/fivem/build_proot_linux/master/';
 const CHANGELOG_API = 'https://changelogs-live.fivem.net/api/changelog/versions/linux/server';
+/** Neue Quelle: docs.fivem.net (Index-Seite redirected seit 2026). */
+const DOCS_DOWNLOAD = 'https://docs.fivem.net/docs/server-download/?platform=legacy&os=linux';
 
-/** @type {{ recommended?: string, latest?: string, recommended_download?: string, latest_download?: string } | null} */
-let changelogCache = null;
-let changelogAt = 0;
+const LINUX_FX_RE = /https:\/\/runtime\.fivem\.net\/artifacts\/fivem\/build_proot_linux\/master\/(\d+)-([a-f0-9]+)\/fx\.tar\.xz/gi;
+
+/** @type {{ recommended?: string, latest?: string, recommended_download?: string, latest_download?: string, builds?: { build: string, url: string }[] } | null} */
+let catalogCache = null;
+let catalogAt = 0;
 
 export function artifactsRoot() {
   return ORBIT_ARTIFACTS_ROOT;
 }
 
-async function fetchChangelog() {
-  if (changelogCache && Date.now() - changelogAt < 60_000) return changelogCache;
-  const res = await fetch(CHANGELOG_API, { signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`Changelog-API nicht erreichbar (${res.status}).`);
-  changelogCache = await res.json();
-  changelogAt = Date.now();
-  return changelogCache;
+function parseLinuxLinks(html) {
+  const seen = new Set();
+  const builds = [];
+  LINUX_FX_RE.lastIndex = 0;
+  let m;
+  while ((m = LINUX_FX_RE.exec(html))) {
+    const build = m[1];
+    const url = m[0];
+    if (seen.has(build)) continue;
+    seen.add(build);
+    builds.push({ build, url, folder: `${build}-${m[2]}` });
+  }
+  return builds;
+}
+
+/**
+ * Katalog aus docs.fivem.net (__NEXT_DATA__ / HTML) + optional Changelog-API.
+ */
+async function fetchArtifactCatalog() {
+  if (catalogCache && Date.now() - catalogAt < 60_000) return catalogCache;
+
+  /** @type {{ recommended?: string, latest?: string, recommended_download?: string, latest_download?: string, builds: { build: string, url: string }[] }} */
+  const out = { builds: [] };
+
+  try {
+    const res = await fetch(DOCS_DOWNLOAD, {
+      signal: AbortSignal.timeout(25_000),
+      headers: { Accept: 'text/html', 'User-Agent': 'OrbitPanel/1.0' },
+      redirect: 'follow',
+    });
+    if (res.ok) {
+      const html = await res.text();
+      // __NEXT_DATA__: legacy.recommended / legacy.latest
+      const nd = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+      if (nd) {
+        try {
+          const data = JSON.parse(nd[1]);
+          const legacy = data?.props?.pageProps?.downloads?.legacy
+            || data?.props?.pageProps?.legacy
+            || findLegacyNode(data);
+          const recUrl = pickLinuxUrl(legacy?.recommended);
+          const latUrl = pickLinuxUrl(legacy?.latest);
+          if (recUrl) {
+            out.recommended_download = recUrl;
+            out.recommended = buildFromUrl(recUrl);
+          }
+          if (latUrl) {
+            out.latest_download = latUrl;
+            out.latest = buildFromUrl(latUrl);
+          }
+        } catch { /* HTML-Fallback */ }
+      }
+      out.builds = parseLinuxLinks(html);
+      if (!out.recommended && out.builds[0]) {
+        out.recommended = out.builds[0].build;
+        out.recommended_download = out.builds[0].url;
+      }
+      if (!out.latest) {
+        const newest = [...out.builds].sort((a, b) => Number(b.build) - Number(a.build))[0];
+        if (newest) {
+          out.latest = newest.build;
+          out.latest_download = newest.url;
+        }
+      }
+    }
+  } catch { /* changelog fallback */ }
+
+  // Changelog-API (oft null seit 2026 — trotzdem versuchen)
+  try {
+    const res = await fetch(CHANGELOG_API, { signal: AbortSignal.timeout(15_000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === 'object') {
+        if (data.recommended) out.recommended = String(data.recommended);
+        if (data.latest) out.latest = String(data.latest);
+        if (data.recommended_download) out.recommended_download = String(data.recommended_download);
+        if (data.latest_download) out.latest_download = String(data.latest_download);
+      }
+    }
+  } catch { /* ignore */ }
+
+  if (!out.builds.length && !out.recommended_download && !out.latest_download) {
+    throw new Error('Artifact-Katalog nicht erreichbar (docs.fivem.net / Changelog).');
+  }
+
+  catalogCache = out;
+  catalogAt = Date.now();
+  return out;
+}
+
+function findLegacyNode(obj, depth = 0) {
+  if (!obj || typeof obj !== 'object' || depth > 8) return null;
+  if (obj.recommended?.linux || obj.latest?.linux) return obj;
+  if (obj.legacy) return findLegacyNode(obj.legacy, depth + 1);
+  for (const v of Object.values(obj)) {
+    const found = findLegacyNode(v, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function pickLinuxUrl(block) {
+  if (!block) return '';
+  const list = Array.isArray(block.linux) ? block.linux : (Array.isArray(block) ? block : []);
+  for (const item of list) {
+    const url = String(item?.downloadURL || item?.url || '');
+    if (url.includes('build_proot_linux') && url.includes('fx.tar')) return url;
+  }
+  return '';
+}
+
+function buildFromUrl(url) {
+  const m = String(url).match(/\/(\d+)-[a-f0-9]+\/fx\.tar\.xz/i);
+  return m ? m[1] : '';
 }
 
 export async function fetchRecommendedBuild() {
-  try {
-    const data = await fetchChangelog();
-    const build = String(data.recommended || data.latest || '').trim();
-    if (build) return build;
-  } catch {
-    /* HTML-Fallback */
-  }
-  const { builds } = await listRecentBuildsFromIndex(1);
-  if (!builds.length) throw new Error('Artifact-Liste nicht erreichbar.');
-  return String(builds[0]);
-}
-
-async function listRecentBuildsFromIndex(limit = 12) {
-  const res = await fetch(ARTIFACT_CHANNEL, { signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) throw new Error('Artifact-Index nicht erreichbar.');
-  const html = await res.text();
-  // Neue Index-Seite: href="./35945-<hash>/" oder ".../fx.tar.xz"
-  const builds = [...html.matchAll(/href="\.?\/?(\d+)-[a-f0-9]+(?:\/(?:fx\.tar\.xz)?)?"/gi)]
-    .map((m) => m[1]);
-  const unique = [...new Set(builds)].map(Number).filter((n) => n > 0).sort((a, b) => b - a);
-  return { builds: unique.slice(0, limit), html };
+  const cat = await fetchArtifactCatalog();
+  const build = String(cat.recommended || cat.latest || cat.builds?.[0]?.build || '').trim();
+  if (!build) throw new Error('Kein empfohlener FX-Build gefunden.');
+  return build;
 }
 
 export async function listRecentBuilds(limit = 12) {
-  const { builds } = await listRecentBuildsFromIndex(limit);
-  let recommended = '';
-  try {
-    recommended = await fetchRecommendedBuild();
-  } catch { /* optional */ }
-  return { recommended, builds };
+  const cat = await fetchArtifactCatalog();
+  const builds = (cat.builds || [])
+    .map((b) => Number(b.build))
+    .filter((n) => n > 0);
+  const unique = [...new Set(builds)].sort((a, b) => b - a).slice(0, limit);
+  return { recommended: cat.recommended || '', builds: unique };
 }
 
 async function resolveArtifactUrl(buildNum) {
-  try {
-    const data = await fetchChangelog();
-    for (const key of ['recommended_download', 'latest_download', 'optional_download', 'critical_download']) {
-      const url = String(data[key] || '');
-      if (url.includes(`/${buildNum}-`) && url.includes('fx.tar')) return url;
-    }
-  } catch { /* index fallback */ }
-
-  const { html } = await listRecentBuildsFromIndex(50);
-  const folder = html.match(new RegExp(`(?:href="\\.?/?)(${buildNum}-[a-f0-9]+)(?:/|/)`, 'i'))?.[1]
-    || html.match(new RegExp(`(${buildNum}-[a-f0-9]+)/fx\\.tar\\.xz`, 'i'))?.[1];
-  if (!folder) throw new Error(`Build ${buildNum} nicht im Artifact-Index gefunden.`);
-  return `${ARTIFACT_CHANNEL}${folder}/fx.tar.xz`;
+  const cat = await fetchArtifactCatalog();
+  const want = String(buildNum);
+  for (const key of ['recommended_download', 'latest_download']) {
+    const url = String(cat[key] || '');
+    if (url.includes(`/${want}-`) && url.includes('fx.tar')) return url;
+  }
+  const hit = (cat.builds || []).find((b) => b.build === want);
+  if (hit?.url) return hit.url;
+  // Direkter Versuch (Hash unbekannt → nur wenn Katalog den Ordner hat)
+  throw new Error(`Build ${buildNum} nicht im Artifact-Katalog gefunden.`);
 }
 
 export function installedArtifacts() {
@@ -129,4 +220,10 @@ export function resolveInstalledArtifact(build) {
     throw new Error(`build-${buildNum} ist nicht installiert.`);
   }
   return { path: dest, build: buildNum };
+}
+
+/** Erstes fertiges Artifact unter /opt/orbit/artifacts (für Auto-Repair). */
+export function findAnyInstalledArtifact() {
+  const list = installedArtifacts().filter((a) => a.ready);
+  return list[0] || null;
 }

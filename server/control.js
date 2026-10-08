@@ -44,7 +44,7 @@ export async function controlFx(action, settings, logLine, opts = {}) {
     throw Object.assign(new Error('Ungültige Aktion.'), { status: 400 });
   }
   if (orbitControlMode(settings) === 'orbit') {
-    const instOpts = { instanceId: opts.instanceId };
+    const instOpts = { instanceId: opts.instanceId, db: opts.db };
     if (action === 'start') return startFxProcess(settings, logLine, instOpts);
     if (action === 'stop') return stopFxProcess(settings, logLine, instOpts);
     return restartFxProcess(settings, logLine, instOpts);
