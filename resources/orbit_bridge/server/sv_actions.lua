@@ -39,6 +39,18 @@ RegisterNetEvent('orbit:adminHealAll', function()
   TriggerEvent('orbit:events:playerHealed', { target = -1, author = (ADMINS[tostring(src)] or {}).name })
 end)
 
+RegisterNetEvent('orbit:adminArmor', function()
+  local src = source
+  if not OrbitCan(src, 'healSelf') then return end
+  TriggerClientEvent('orbit:armor', src)
+end)
+
+RegisterNetEvent('orbit:adminArmorAll', function()
+  local src = source
+  if not OrbitCan(src, 'healAll') then return end
+  TriggerClientEvent('orbit:armor', -1)
+end)
+
 RegisterNetEvent('orbit:healPlayer', function(targetId)
   local src = source
   if not OrbitCan(src, 'healSelf') then return end
@@ -57,10 +69,12 @@ RegisterNetEvent('orbit:adminAnnounce', function(msg)
   msg = tostring(msg or '')
   if msg == '' then return end
   local g = gameOpts(src)
+  local author = displayAuthor(src, (ADMINS[tostring(src)] or {}).name)
   panelAction(src, 'announce', { message = msg }, function()
     TriggerClientEvent('orbit:announce', -1, msg, {
       hide = g.hideAnnouncementNotif == true,
       hideAdmin = g.hideAdminInMessages == true,
+      author = author,
     })
   end)
 end)
