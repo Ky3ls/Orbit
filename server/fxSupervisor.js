@@ -4,7 +4,8 @@ import { orbitControlMode, resolveFxLaunch } from './fxLaunch.js';
 import { emitFxConsoleLine, markFxConsoleEof, resetFxConsoleLog } from './fxLogTail.js';
 import { clearConsole, logPanel } from './state.js';
 
-const MAX_BACKOFF_SEC = 120;
+/** Feste Pause nach Crash, bevor erneut gestartet wird (Konsole bleibt sichtbar). */
+const CRASH_RESTART_SEC = 10;
 /** Nach so vielen Sekunden stabil → Crash-Zähler zurücksetzen */
 const STABLE_MS = 90_000;
 
@@ -169,10 +170,15 @@ export async function startFxProcess(settings, logLine, opts = {}) {
 
   const launch = resolveFxLaunch(settings, { db: opts.db });
 
-  // Sofort leeren — Live-Konsole zeigt danach nur Start-/Stop-vor-Start-Logs
-  clearConsole();
-  resetFxConsoleLog(launch.dataPath);
-  markFxConsoleEof(launch.dataPath);
+  // Crash-Restart: Konsole NICHT leeren — Fehler müssen lesbar bleiben
+  const preserveConsole = opts.preserveConsole === true || opts.isCrashRestart === true;
+  if (preserveConsole) {
+    logPanel('warn', `[FX:${key}] ─── Neustart (Konsole behalten) ───`);
+  } else {
+    clearConsole();
+    resetFxConsoleLog(launch.dataPath);
+    markFxConsoleEof(launch.dataPath);
+  }
 
   // Wenn noch etwas läuft / Port belegt → zuerst stoppen (kein EADDRINUSE)
   const { unitActive, FX_UNIT } = await import('./control.js');
@@ -388,8 +394,10 @@ function scheduleCrashRestart(inst, key, logLine, reason) {
   }
 
   inst.restartAttempt += 1;
-  const delaySec = Math.min(MAX_BACKOFF_SEC, 3 * (2 ** Math.min(inst.restartAttempt - 1, 5)));
-  logPanel('info', `[FX:${key}] Crash-Restart #${inst.restartAttempt} in ${delaySec}s… (${reason})`);
+  logPanel(
+    'warn',
+    `[FX:${key}] Crash (#${inst.restartAttempt}) — Konsole bleibt stehen, Neustart in ${CRASH_RESTART_SEC}s… (${reason})`,
+  );
 
   if (inst.restartTimer) clearTimeout(inst.restartTimer);
   const snap = inst.lastSettings;
@@ -400,15 +408,18 @@ function scheduleCrashRestart(inst, key, logLine, reason) {
     const cur = getInst(snapKey);
     if (cur.manualStop || cur.phase === 'running' || cur.phase === 'starting') return;
     if (!snap) return;
-    startFxProcess(snap, logLine, { instanceId: snapKey }).then(() => {
-      // Erfolgreicher Spawn behält attempt bis STABLE_MS
+    startFxProcess(snap, logLine, {
+      instanceId: snapKey,
+      isCrashRestart: true,
+      preserveConsole: true,
+    }).then(() => {
       cur.restartAttempt = attempt;
     }).catch((err) => {
       logLine('bad', `[FX:${snapKey}] Auto-Restart fehlgeschlagen: ${err.message}`);
-      // Sofort erneut einplanen
+      // Erneut nach fester Pause — Konsole weiter behalten
       scheduleCrashRestart(cur, snapKey, logLine, err.message);
     });
-  }, delaySec * 1000);
+  }, CRASH_RESTART_SEC * 1000);
 }
 
 /**
