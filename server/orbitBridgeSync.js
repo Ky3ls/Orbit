@@ -212,7 +212,9 @@ export function silenceNodePackageWalk(dataPath, onLog = () => {}) {
       if (isNode) {
         const pj = path.join(dir, 'package.json');
         const lock = path.join(dir, '.yarn.installed');
+        const nm = path.join(dir, 'node_modules');
         if (!fs.existsSync(pj)) {
+          // Stub ohne Dependencies — Walk stoppen, yarn nicht nötig
           const name = path.basename(dir).replace(/[^\w.-]+/g, '') || 'fx-node-resource';
           fs.writeFileSync(
             pj,
@@ -223,15 +225,22 @@ export function silenceNodePackageWalk(dataPath, onLog = () => {}) {
           try { fs.utimesSync(lock, now, now); } catch { /* */ }
           fixed += 1;
           onLog(`node package-sentinel: ${path.relative(dataPath, dir)}`);
-        } else if (!fs.existsSync(lock)) {
-          fs.writeFileSync(lock, '');
-          const now = new Date();
+        } else {
+          // Echte package.json: .yarn.installed NUR wenn node_modules schon da —
+          // sonst blockiert der Marker yarn install (screenshot-basic etc.)
+          let hasDeps = false;
           try {
-            const st = fs.statSync(pj);
-            const t = new Date(Math.max(st.mtimeMs, Date.now()));
-            fs.utimesSync(lock, t, t);
-          } catch {
-            try { fs.utimesSync(lock, now, now); } catch { /* */ }
+            const pkg = JSON.parse(fs.readFileSync(pj, 'utf8'));
+            hasDeps = !!(pkg?.dependencies || pkg?.devDependencies);
+          } catch { /* */ }
+          if (hasDeps && fs.existsSync(lock) && !fs.existsSync(nm)) {
+            try {
+              fs.unlinkSync(lock);
+              fixed += 1;
+              onLog(`yarn.installed entfernt (kein node_modules): ${path.relative(dataPath, dir)}`);
+            } catch { /* */ }
+          } else if (!hasDeps && !fs.existsSync(lock)) {
+            fs.writeFileSync(lock, '');
           }
         }
       }

@@ -9,7 +9,7 @@ const CRASH_RESTART_SEC = 10;
 /** Nach so vielen Sekunden stabil → Crash-Zähler zurücksetzen */
 const STABLE_MS = 90_000;
 
-/** @typedef {{ child: import('node:child_process').ChildProcess | null, phase: 'idle'|'starting'|'running'|'stopping', lastSettings: Record<string, string> | null, restartAttempt: number, manualStop: boolean, startedAt: number, restartTimer: ReturnType<typeof setTimeout> | null }} Inst */
+/** @typedef {{ child: import('node:child_process').ChildProcess | null, phase: 'idle'|'starting'|'running'|'stopping', lastSettings: Record<string, string> | null, restartAttempt: number, manualStop: boolean, startedAt: number, restartTimer: ReturnType<typeof setTimeout> | null, bootTimer?: ReturnType<typeof setTimeout> | null, bootResourceFail?: boolean, buildBusyUntil?: number }} Inst */
 
 /** @type {Map<string, Inst>} */
 const instances = new Map();
@@ -112,12 +112,21 @@ function attachStreams(proc, logLine, key, dataPath, settings) {
   proc.stdout?.on('data', onData);
   proc.stderr?.on('data', onData);
 
-  // Boot-Monitor: „failed to start in time“ → Fail-Flag
+  // Boot-Monitor: harte Start-Fails; Yarn/Webpack → Deadline verlängern
   const onBootHint = (chunk) => {
     const t = String(chunk);
+    const inst = getInst(key);
+    if (/yarn install|Running build tasks|Building resource|started building|Fetching packages|Linking dependencies/i.test(t)) {
+      inst.buildBusyUntil = Date.now() + 180_000;
+    }
+    if (/Build tasks completed|Done in \d/i.test(t)) {
+      inst.buildBusyUntil = Math.max(inst.buildBusyUntil || 0, Date.now() + 30_000);
+    }
+    // Nur echte Resource-Timeouts — Webpack-Fehler killen den Server nicht
     if (/failed to start in time/i.test(t) || /Couldn't start resource/i.test(t)) {
-      const inst = getInst(key);
-      inst.bootResourceFail = true;
+      if (!(inst.buildBusyUntil && Date.now() < inst.buildBusyUntil)) {
+        inst.bootResourceFail = true;
+      }
     }
   };
   proc.stdout?.on('data', onBootHint);
@@ -333,26 +342,34 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     });
   });
 
-  // Resource Starting Tolerance — Boot-Monitor (Probe muss online werden)
-  const tolSec = Math.max(30, Number(settings.resourceStartingTolerance) || 90);
+  // Resource Starting Tolerance — länger warten (yarn/webpack braucht oft >90s)
+  const tolSec = Math.max(120, Number(settings.resourceStartingTolerance) || 300);
   scheduleBootMonitor(inst, key, logLine, settings, tolSec);
 
   return { ok: true, pid: proc.pid, instanceId: key };
 }
 
 /**
- * Wartet bis FiveM-HTTP online; bei Timeout oder Resource-Fail → Kill + Restart.
+ * Wartet bis FiveM-HTTP online. Während yarn/webpack baut → Timeout verlängern, kein Kill.
  */
 function scheduleBootMonitor(inst, key, logLine, settings, tolSec) {
   if (inst.bootTimer) clearTimeout(inst.bootTimer);
   const port = Number(settings.fivemPort) || 30120;
   const host = settings.fivemHost || '127.0.0.1';
-  const deadline = Date.now() + tolSec * 1000;
-  logPanel('info', `[FX:${key}] Boot-Monitor ${tolSec}s (Resource Starting Tolerance).`);
+  let deadline = Date.now() + tolSec * 1000;
+  logPanel('info', `[FX:${key}] Boot-Monitor ${tolSec}s (wartet auf Endpoint + Build-Tasks).`);
 
   const tick = async () => {
     const cur = getInst(key);
     if (cur.manualStop || !cur.child || cur.child.exitCode !== null) return;
+
+    // Yarn/Webpack aktiv → Deadline nach hinten schieben, nie killen
+    if (cur.buildBusyUntil && Date.now() < cur.buildBusyUntil) {
+      deadline = Math.max(deadline, cur.buildBusyUntil + 60_000);
+      cur.bootTimer = setTimeout(tick, 3000);
+      return;
+    }
+
     if (cur.bootResourceFail) {
       logLine('bad', `[FX:${key}] Resource startete nicht rechtzeitig — Neustart.`);
       cur.manualStop = false;
@@ -363,18 +380,14 @@ function scheduleBootMonitor(inst, key, logLine, settings, tolSec) {
       const { probeFiveM } = await import('./fivem.js');
       const probe = await probeFiveM(host, port);
       if (probe.online) {
-        logPanel('ok', `[FX:${key}] Boot OK (Endpunkt online, Toleranz ${tolSec}s).`);
+        logPanel('ok', `[FX:${key}] Boot OK (Endpunkt online).`);
         cur.bootTimer = null;
+        cur.buildBusyUntil = 0;
         return;
       }
     } catch { /* */ }
     if (Date.now() >= deadline) {
-      logLine('bad', `[FX:${key}] Boot-Timeout nach ${tolSec}s — Server wird neu gestartet.`);
-      cur.manualStop = false;
-      try {
-        if (cur.child && cur.child.exitCode === null) cur.child.kill('SIGTERM');
-      } catch { /* */ }
-      // exit-Handler triggert Crash-Restart
+      logLine('warn', `[FX:${key}] Boot-Timeout — Server läuft weiter (kein Kill). Endpoint noch offline.`);
       cur.bootTimer = null;
       return;
     }
