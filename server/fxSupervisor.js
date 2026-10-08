@@ -194,10 +194,13 @@ export async function startFxProcess(settings, logLine, opts = {}) {
       });
       if (synced.changed) logPanel('info', `[FX:${key}] Permissions in ${cfgName} aktualisiert (Dateiende).`);
     }
-    // Launch-Args mit Token nachreichen falls resolve ohne db lief
+    // Launch-Args mit Token nachreichen falls resolve ohne db lief — VOR +exec
     if (!opts.db) {
       const { orbitFxLaunchExtras } = await import('./orbitBridgeSync.js');
-      launch.args.push(...orbitFxLaunchExtras(database));
+      const extras = orbitFxLaunchExtras(database);
+      const execIdx = launch.args.findIndex((a, i) => a === '+exec' && launch.args[i + 1] === 'server.cfg');
+      if (execIdx >= 0) launch.args.splice(execIdx, 0, ...extras);
+      else launch.args.push(...extras);
     }
   } catch (err) {
     try {
