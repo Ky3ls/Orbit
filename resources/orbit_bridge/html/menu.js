@@ -61,6 +61,8 @@ const selectors = {
     options: [
       { id: 'self', label: 'Selbst', act: 'healSelf', perm: 'healSelf' },
       { id: 'all', label: 'Alle', act: 'healAll', perm: 'healAll' },
+      { id: 'armorSelf', label: 'Weste', act: 'armorSelf', perm: 'healSelf' },
+      { id: 'armorAll', label: 'Weste alle', act: 'armorAll', perm: 'healAll' },
     ],
   },
   veh: {
@@ -103,7 +105,7 @@ const MENU_I18N = {
   de: {
     mode: 'Modus', noclip: 'NoClip', god: 'Godmode', superjump: 'Superjump',
     tp: 'Teleport', wp: 'Wegpunkt', back: 'Zurück', coords: 'Koordinaten…',
-    heal: 'Heilung', self: 'Selbst', all: 'Alle',
+    heal: 'Heilung', self: 'Selbst', all: 'Alle', armorSelf: 'Weste', armorAll: 'Weste alle',
     veh: 'Fahrzeug', repair: 'Reparieren', boost: 'Boost', flip: 'Aufrichten', del: 'Löschen',
     announce: 'Ankündigung', area: 'Area bereinigen', ids: 'Spieler-IDs',
     drunk: 'Betrunken', fire: 'Feuer',
@@ -113,7 +115,7 @@ const MENU_I18N = {
   en: {
     mode: 'Mode', noclip: 'NoClip', god: 'Godmode', superjump: 'Superjump',
     tp: 'Teleport', wp: 'Waypoint', back: 'Back', coords: 'Coordinates…',
-    heal: 'Heal', self: 'Self', all: 'All',
+    heal: 'Heal', self: 'Self', all: 'All', armorSelf: 'Armor', armorAll: 'Armor all',
     veh: 'Vehicle', repair: 'Repair', boost: 'Boost', flip: 'Flip', del: 'Delete',
     announce: 'Announce', area: 'Clear area', ids: 'Player IDs',
     drunk: 'Drunk', fire: 'Fire',
@@ -140,6 +142,8 @@ function applyMenuLang(lang) {
   selectors.heal.label = mt('heal');
   selectors.heal.options[0].label = mt('self');
   selectors.heal.options[1].label = mt('all');
+  if (selectors.heal.options[2]) selectors.heal.options[2].label = mt('armorSelf');
+  if (selectors.heal.options[3]) selectors.heal.options[3].label = mt('armorAll');
   selectors.veh.label = mt('veh');
   selectors.veh.options[0].label = mt('repair');
   selectors.veh.options[1].label = mt('boost');
@@ -267,8 +271,67 @@ function buildMenus() {
 }
 
 function syncMenuCursor() {
-  const wantMouse = activeTabId() === 'players' || isModalOpen() || isPromptOpen();
-  post('setCursor', { enabled: wantMouse });
+  // Menü offen → Cursor immer sichtbar (auch Main), sonst unsichtbare Klicks
+  const menuOpen = app && !app.classList.contains('hidden');
+  post('setCursor', { enabled: !!(menuOpen || isModalOpen() || isPromptOpen()) });
+}
+
+function showOrbitToast(payload) {
+  const root = document.getElementById('orbitToasts');
+  if (!root || !payload) return;
+  const kind = payload.kind || 'info';
+  const el = document.createElement('div');
+  el.className = `orbit-toast kind-${kind}`;
+  const title = payload.title ? `<div class="ot-title">${escapeHtml(payload.title)}</div>` : '';
+  const body = `<div class="ot-body">${escapeHtml(String(payload.message || ''))}</div>`;
+  const meta = payload.meta ? `<div class="ot-meta">${escapeHtml(String(payload.meta))}</div>` : '';
+  el.innerHTML = `${title}${body}${meta}`;
+  root.appendChild(el);
+  const ms = Number(payload.duration) > 0 ? Number(payload.duration) : (kind === 'announce' ? 7000 : 4500);
+  requestAnimationFrame(() => el.classList.add('in'));
+  setTimeout(() => {
+    el.classList.remove('in');
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 320);
+  }, ms);
+}
+
+function showOrbitAnnounce(payload) {
+  const root = document.getElementById('orbitAnnounce');
+  if (!root) return;
+  root.innerHTML = '';
+  root.classList.remove('hidden', 'out');
+  const card = document.createElement('div');
+  card.className = 'orbit-announce-card';
+  const who = payload && payload.author
+    ? `<div class="oa-meta">${escapeHtml(String(payload.author))}</div>`
+    : '';
+  card.innerHTML = `
+    <div class="oa-brand">ORBIT</div>
+    <div class="oa-title">Ankündigung</div>
+    <div class="oa-msg">${escapeHtml(String((payload && payload.message) || ''))}</div>
+    ${who}
+  `;
+  root.appendChild(card);
+  requestAnimationFrame(() => root.classList.add('in'));
+  const ms = Number(payload && payload.duration) > 0 ? Number(payload.duration) : 8000;
+  clearTimeout(showOrbitAnnounce._t);
+  showOrbitAnnounce._t = setTimeout(() => {
+    root.classList.remove('in');
+    root.classList.add('out');
+    setTimeout(() => {
+      root.classList.add('hidden');
+      root.innerHTML = '';
+    }, 360);
+  }, ms);
+}
+
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function paintAllSelectors() {
@@ -647,6 +710,8 @@ window.addEventListener('message', (e) => {
     toggles = { ...toggles, ...d.toggles };
     paintAllSelectors();
   }
+  if (d.action === 'toast') showOrbitToast(d);
+  if (d.action === 'announceUi') showOrbitAnnounce(d);
 });
 
 document.addEventListener('keydown', (e) => {

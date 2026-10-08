@@ -14,12 +14,70 @@ local function chat(msg)
   TriggerEvent('chat:addMessage', { color = { 255, 122, 26 }, args = { 'Orbit', msg } })
 end
 
+local function toast(kind, title, message, duration)
+  SendNUIMessage({
+    action = 'toast',
+    kind = kind or 'info',
+    title = title or 'Orbit',
+    message = tostring(message or ''),
+    duration = duration,
+  })
+end
+
 local function closeMenu()
   menuOpen = false
   menuCursor = false
   SetNuiFocusKeepInput(false)
   SetNuiFocus(false, false)
   SendNUIMessage({ action = 'close' })
+end
+
+local function rotationToDir(rot)
+  local z = math.rad(rot.z)
+  local x = math.rad(rot.x)
+  local num = math.abs(math.cos(x))
+  return vector3(-math.sin(z) * num, math.cos(z) * num, math.sin(x))
+end
+
+--- Fahrzeug: Sitz ODER Blickrichtung / Raycast (nicht nur im Fahrzeug)
+local function getTargetVehicle(maxDist)
+  maxDist = tonumber(maxDist) or 10.0
+  local ped = PlayerPedId()
+  local seated = GetVehiclePedIsIn(ped, false)
+  if seated ~= 0 then return seated end
+
+  local cam = GetGameplayCamCoord()
+  local dir = rotationToDir(GetGameplayCamRot(2))
+  local dest = cam + (dir * maxDist)
+  local ray = StartShapeTestRay(cam.x, cam.y, cam.z, dest.x, dest.y, dest.z, 10, ped, 0)
+  local _, hit, _, _, ent = GetShapeTestResult(ray)
+  if hit == 1 and ent and ent ~= 0 and IsEntityAVehicle(ent) then
+    return ent
+  end
+
+  local aiming, aimEnt = GetEntityPlayerIsFreeAimingAt(PlayerId())
+  if aiming and aimEnt and aimEnt ~= 0 and IsEntityAVehicle(aimEnt) then
+    return aimEnt
+  end
+
+  local my = GetEntityCoords(ped)
+  local best, bestDist = 0, maxDist
+  for _, veh in ipairs(GetGamePool('CVehicle')) do
+    local vc = GetEntityCoords(veh)
+    local dist = #(vc - my)
+    if dist < bestDist then
+      local to = vc - cam
+      local len = #to
+      if len > 0.05 then
+        local dot = (to.x * dir.x + to.y * dir.y + to.z * dir.z) / len
+        if dot > 0.55 then
+          best = veh
+          bestDist = dist
+        end
+      end
+    end
+  end
+  return best
 end
 
 -- Für „Zurück“-Teleport: Noclip speichert Startcoords wie txAdmin lastTpCoords
@@ -66,13 +124,13 @@ local function setGod(state)
   end
   SetEntityInvincible(PlayerPedId(), god or (OrbitIsNoclip and OrbitIsNoclip()))
   notifyToggles()
-  chat(god and 'Godmode an' or 'Godmode aus')
+  toast('ok', 'Modus', god and 'Godmode an' or 'Godmode aus')
 end
 
 local function setSuperjump(state)
   superjump = state and true or false
   notifyToggles()
-  chat(superjump and 'Superjump an' or 'Superjump aus')
+  toast('ok', 'Modus', superjump and 'Superjump an' or 'Superjump aus')
 end
 
 local function setNoclip(state)
@@ -87,7 +145,7 @@ local function setNoclip(state)
     SetEntityInvincible(PlayerPedId(), god)
   end
   notifyToggles()
-  chat(on and 'NoClip an' or 'NoClip aus')
+  toast('ok', 'Modus', on and 'NoClip an' or 'NoClip aus')
 end
 
 CreateThread(function()
@@ -145,21 +203,21 @@ local function stopSpectate()
     -- stay near last pos
   end
   spectateTarget = nil
-  chat('Spectate beendet')
+  toast('info', 'Spectate', 'Beendet')
 end
 
 local function startSpectate(serverId)
   local target = GetPlayerFromServerId(tonumber(serverId))
-  if target == -1 then chat('Spieler nicht gefunden') return end
+  if target == -1 then toast('warn', 'Spectate', 'Spieler nicht gefunden') return end
   local tped = GetPlayerPed(target)
-  if tped == 0 then chat('Ped fehlt') return end
+  if tped == 0 then toast('warn', 'Spectate', 'Ped fehlt') return end
   spectating = true
   spectateTarget = serverId
   local me = PlayerPedId()
   SetEntityVisible(me, false, false)
   SetEntityCollision(me, false, false)
   NetworkSetInSpectatorMode(true, tped)
-  chat('Spectate · Esc im Menü / erneut Spectate zum Beenden')
+  toast('info', 'Spectate', 'Esc im Menü / erneut Spectate zum Beenden')
 end
 
 -- —— Events ——
@@ -170,11 +228,11 @@ end)
 RegisterNetEvent('orbit:openMenu', function(payload)
   if menuOpen then return end
   menuOpen = true
-  menuCursor = false
+  menuCursor = true
   local game = payload and payload.game or {}
-  -- Main: kein Cursor, Kamera/Bewegung per Maus+WASD; Spieler-Tab schaltet Cursor separat
-  SetNuiFocus(true, false)
-  SetNuiFocusKeepInput(true)
+  -- Cursor immer an, damit Klicks sichtbar sind
+  SetNuiFocus(true, true)
+  SetNuiFocusKeepInput(false)
   SendNUIMessage({
     action = 'open',
     name = payload and payload.name or '',
@@ -193,12 +251,15 @@ end)
 
 RegisterNetEvent('orbit:announce', function(msg, meta)
   local hide = type(meta) == 'table' and meta.hide
-  if not hide then
-    chat(msg or '')
-    BeginTextCommandThefeedPost('STRING')
-    AddTextComponentSubstringPlayerName(('~o~Orbit~s~\n%s'):format(tostring(msg or '')))
-    EndTextCommandThefeedPostTicker(false, true)
-  end
+  if hide then return end
+  local author = type(meta) == 'table' and meta.author or nil
+  if type(meta) == 'table' and meta.hideAdmin then author = nil end
+  SendNUIMessage({
+    action = 'announceUi',
+    message = tostring(msg or ''),
+    author = author and tostring(author) or nil,
+    duration = 8000,
+  })
 end)
 
 RegisterNetEvent('orbit:dm', function(author, message, meta)
@@ -206,7 +267,14 @@ RegisterNetEvent('orbit:dm', function(author, message, meta)
   local hideNotif = type(meta) == 'table' and meta.hide
   if hideNotif then return end
   local who = hideName and 'Admin' or tostring(author or 'Admin')
-  chat(('DM von %s: %s'):format(who, tostring(message or '')))
+  SendNUIMessage({
+    action = 'toast',
+    kind = 'dm',
+    title = 'DM',
+    message = tostring(message or ''),
+    meta = ('von %s'):format(who),
+    duration = 6000,
+  })
 end)
 
 RegisterNetEvent('orbit:showWarning', function(payload)
@@ -216,7 +284,14 @@ RegisterNetEvent('orbit:showWarning', function(payload)
   local hideNotif = type(payload) == 'table' and payload.hide
   if hideNotif then return end
   local who = hideName and 'Admin' or tostring(author)
-  chat(('WARNUNG von %s: %s'):format(who, tostring(reason)))
+  SendNUIMessage({
+    action = 'toast',
+    kind = 'warn',
+    title = 'Verwarnung',
+    message = tostring(reason),
+    meta = ('von %s'):format(who),
+    duration = 7000,
+  })
 end)
 
 RegisterNetEvent('orbit:heal', function()
@@ -224,7 +299,12 @@ RegisterNetEvent('orbit:heal', function()
   SetEntityHealth(ped, GetEntityMaxHealth(ped))
   SetPedArmour(ped, 100)
   ClearPedBloodDamage(ped)
-  chat('Geheilt.')
+  toast('ok', 'Heilung', 'HP & Weste voll')
+end)
+
+RegisterNetEvent('orbit:armor', function()
+  SetPedArmour(PlayerPedId(), 100)
+  toast('ok', 'Weste', 'Rüstung voll')
 end)
 
 RegisterNetEvent('orbit:tpCoords', function(x, y, z)
@@ -233,7 +313,7 @@ end)
 
 RegisterNetEvent('orbit:freeze', function(state)
   FreezeEntityPosition(PlayerPedId(), state and true or false)
-  chat(state and 'Eingefroren' or 'Aufgetaut')
+  toast('info', 'Freeze', state and 'Eingefroren' or 'Aufgetaut')
 end)
 
 RegisterNetEvent('orbit:drunk', function()
@@ -258,7 +338,7 @@ RegisterNetEvent('orbit:clearArea', function(radius)
   ClearAreaOfVehicles(c.x, c.y, c.z, radius, false, false, false, false, false)
   ClearAreaOfPeds(c.x, c.y, c.z, radius, 1)
   ClearAreaOfObjects(c.x, c.y, c.z, radius, 0)
-  chat(('Area gecleared (%.0fm)'):format(radius))
+  toast('ok', 'Area', ('Bereinigt (%.0fm)'):format(radius))
 end)
 
 -- —— NUI ——
@@ -272,14 +352,15 @@ RegisterNUICallback('setCursor', function(data, cb)
   if not menuOpen then cb(0) return end
   local want = data and data.enabled and true or false
   menuCursor = want
-  -- Players/Modal: Cursor fürs Menü. Main: keine Maus-UI, Kamera frei drehen.
   SetNuiFocus(true, want)
-  SetNuiFocusKeepInput(not want)
+  SetNuiFocusKeepInput(false)
   cb(1)
 end)
 
 RegisterNUICallback('healSelf', function(_, cb) TriggerServerEvent('orbit:adminHeal') cb(1) end)
 RegisterNUICallback('healAll', function(_, cb) TriggerServerEvent('orbit:adminHealAll') cb(1) end)
+RegisterNUICallback('armorSelf', function(_, cb) TriggerServerEvent('orbit:adminArmor') cb(1) end)
+RegisterNUICallback('armorAll', function(_, cb) TriggerServerEvent('orbit:adminArmorAll') cb(1) end)
 RegisterNUICallback('announce', function(data, cb)
   TriggerServerEvent('orbit:adminAnnounce', data and data.message or '')
   cb(1)
@@ -298,13 +379,13 @@ RegisterNUICallback('toggleIds', function(data, cb)
 end)
 RegisterNUICallback('tpWaypoint', function(_, cb)
   local blip = GetFirstBlipInfoId(8)
-  if not DoesBlipExist(blip) then chat('Kein Wegpunkt') cb(1) return end
+  if not DoesBlipExist(blip) then toast('warn', 'Teleport', 'Kein Wegpunkt') cb(1) return end
   local c = GetBlipInfoIdCoord(blip)
   teleportTo(c.x, c.y, 0.0)
   cb(1)
 end)
 RegisterNUICallback('tpBack', function(_, cb)
-  if not lastTp then chat('Kein Rücksprung') cb(1) return end
+  if not lastTp then toast('warn', 'Teleport', 'Kein Rücksprung') cb(1) return end
   teleportTo(lastTp.x, lastTp.y, lastTp.z)
   cb(1)
 end)
@@ -312,7 +393,7 @@ RegisterNUICallback('tpCoords', function(data, cb)
   local raw = tostring(data and data.coords or '')
   local x, y, z = raw:match('([^,%s]+)%s*,%s*([^,%s]+)%s*,%s*([^,%s]+)')
   x, y, z = tonumber(x), tonumber(y), tonumber(z)
-  if not x or not y then chat('Coords ungültig') cb(1) return end
+  if not x or not y then toast('warn', 'Teleport', 'Coords ungültig') cb(1) return end
   teleportTo(x, y, z or 0.0)
   cb(1)
 end)
@@ -327,34 +408,36 @@ RegisterNUICallback('clearArea', function(_, cb)
 end)
 
 RegisterNUICallback('vehRepair', function(_, cb)
-  local veh = GetVehiclePedIsIn(PlayerPedId(), false)
-  if veh == 0 then chat('Kein Fahrzeug') cb(1) return end
+  local veh = getTargetVehicle(12.0)
+  if veh == 0 then toast('warn', 'Fahrzeug', 'Kein Fahrzeug im Blick / Sitz') cb(1) return end
   SetVehicleFixed(veh)
   SetVehicleDirtLevel(veh, 0.0)
-  chat('Fahrzeug repariert')
+  SetVehicleEngineOn(veh, true, true, false)
+  toast('ok', 'Fahrzeug', 'Repariert')
   cb(1)
 end)
 RegisterNUICallback('vehBoost', function(_, cb)
-  local veh = GetVehiclePedIsIn(PlayerPedId(), false)
-  if veh == 0 then chat('Kein Fahrzeug') cb(1) return end
+  local veh = getTargetVehicle(12.0)
+  if veh == 0 then toast('warn', 'Fahrzeug', 'Kein Fahrzeug im Blick / Sitz') cb(1) return end
   SetVehicleEnginePowerMultiplier(veh, 25.0)
-  chat('Boost aktiv')
+  toast('ok', 'Fahrzeug', 'Boost aktiv')
   cb(1)
 end)
 RegisterNUICallback('vehFlip', function(_, cb)
-  local veh = GetVehiclePedIsIn(PlayerPedId(), false)
-  if veh == 0 then chat('Kein Fahrzeug') cb(1) return end
+  local veh = getTargetVehicle(12.0)
+  if veh == 0 then toast('warn', 'Fahrzeug', 'Kein Fahrzeug im Blick / Sitz') cb(1) return end
   local c = GetEntityCoords(veh)
   SetEntityRotation(veh, 0.0, 0.0, GetEntityHeading(veh), 2, true)
   SetEntityCoords(veh, c.x, c.y, c.z + 0.5, false, false, false, false)
+  toast('ok', 'Fahrzeug', 'Aufgerichtet')
   cb(1)
 end)
 RegisterNUICallback('vehDelete', function(_, cb)
-  local veh = GetVehiclePedIsIn(PlayerPedId(), false)
-  if veh == 0 then chat('Kein Fahrzeug') cb(1) return end
+  local veh = getTargetVehicle(12.0)
+  if veh == 0 then toast('warn', 'Fahrzeug', 'Kein Fahrzeug im Blick / Sitz') cb(1) return end
   SetEntityAsMissionEntity(veh, true, true)
   DeleteVehicle(veh)
-  chat('Fahrzeug gelöscht')
+  toast('ok', 'Fahrzeug', 'Gelöscht')
   cb(1)
 end)
 
@@ -414,15 +497,12 @@ end, false)
 RegisterKeyMapping('orbit', 'Orbit Admin-Menü', 'keyboard', '')
 RegisterKeyMapping('orbitnoclip', 'Orbit NoClip umschalten', 'keyboard', '')
 
--- Menü offen: Main → Kamera/Bewegen; Players → Cursor, Blick blocken
+-- Menü offen: Cursor → Kamera blocken, NUI bedienen
 CreateThread(function()
   while true do
     if menuOpen then
-      if menuCursor then
-        -- Spieler-Tab: Maus bedient NUI, nicht die Kamera
-        DisableControlAction(0, 1, true)   -- Look LR
-        DisableControlAction(0, 2, true)   -- Look UD
-      end
+      DisableControlAction(0, 1, true)   -- Look LR
+      DisableControlAction(0, 2, true)   -- Look UD
       DisableControlAction(0, 24, true)  -- Attack
       DisableControlAction(0, 25, true)  -- Aim
       DisableControlAction(0, 37, true)  -- Weapon wheel
@@ -439,14 +519,13 @@ CreateThread(function()
       DisableControlAction(0, 257, true) -- Attack2
       DisableControlAction(0, 263, true)
       DisableControlAction(0, 264, true)
-      -- Pfeiltasten dem NUI; Leertaste = Springen
       DisableControlAction(0, 23, true)  -- Enter vehicle
       DisableControlAction(0, 75, true)  -- Exit vehicle
       DisableControlAction(0, 172, true)
       DisableControlAction(0, 173, true)
       DisableControlAction(0, 174, true)
       DisableControlAction(0, 175, true)
-      DisableControlAction(0, 27, true) -- Phone up (arrow-ish)
+      DisableControlAction(0, 27, true)
       Wait(0)
     else
       Wait(200)
