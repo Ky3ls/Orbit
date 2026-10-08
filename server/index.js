@@ -524,12 +524,7 @@ async function loop() {
         runtime.onlineSince = null;
         db.prepare("UPDATE resources SET actual = 'unknown'").run();
         logLine('warn', 'FiveM-Endpunkt nicht erreichbar.');
-        // Offline: Live-Konsole leeren — nie während Start/Boot/Stop
-        if (!fxConsoleLive()) clearConsole();
-      }
-      // Prozess weg + Endpoint offline → Konsole leer halten (nicht während Boot)
-      if (!fxConsoleLive() && runtime.console.length) {
-        clearConsole();
+        // Konsole bei Offline/Crash NICHT leeren — Fehler müssen lesbar bleiben
       }
       if (probe.online && !runtime.onlineSince) runtime.onlineSince = Date.now();
       if (!probe.online) runtime.onlineSince = null;
