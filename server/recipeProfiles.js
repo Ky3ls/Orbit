@@ -47,7 +47,7 @@ export const RECIPE_PACKS = {
 # ESX Legacy
 setr esx:locale "de"
 setr inventory:framework "esx"
-setr sv_stateBagStrictMode true
+setr sv_stateBagStrictMode false
 `,
   },
   qb: {
@@ -64,7 +64,7 @@ setr sv_stateBagStrictMode true
     cfgBlock: `
 # QBCore
 setr qb_locale "de"
-setr sv_stateBagStrictMode true
+setr sv_stateBagStrictMode false
 `,
   },
 };
