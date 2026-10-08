@@ -229,12 +229,14 @@ export async function startFxProcess(settings, logLine, opts = {}) {
       ensureIngameToken,
       ensureFxNodePackageSentinel,
       silenceNodePackageWalk,
+      throttleBuilderBusyLogs,
     } = await import('./orbitBridgeSync.js');
     const { syncChatFromArtifact } = await import('./cfxDefaults.js');
     const { syncOrbitPermissionsFile, loadMasterIdentity } = await import('./cfgPermissions.js');
     const database = opts.db || getDb();
     ensureIngameToken(database);
     ensureFxNodePackageSentinel(launch.fxRoot, (t) => logPanel('info', `[FX:${key}] ${t}`));
+    throttleBuilderBusyLogs(launch.fxRoot, launch.dataPath, (t) => logPanel('info', `[FX:${key}] ${t}`));
     syncOrbitSystemResource(launch.fxRoot, launch.dataPath, auditLogger(database, 'orbit.sync'));
     if (launch.dataPath) {
       silenceNodePackageWalk(launch.dataPath, (t) => logPanel('info', `[FX:${key}] ${t}`));
