@@ -28,18 +28,85 @@ export function parseCfgIntegrations(text) {
   for (const line of String(text || '').split('\n')) {
     const t = line.trim();
     if (!t || t.startsWith('#') || t.startsWith('//')) continue;
-    const rcon = t.match(/^rcon_password\s+["']([^"']+)["']/i);
-    if (rcon) rconPassword = rcon[1];
-    const mysql = t.match(/^set\s+mysql_connection_string\s+"([^"]+)"/i);
+    const rcon = t.match(/^(?:set\s+)?rcon_password\s+("?)([^"'\s]+)\1/i)
+      || t.match(/^(?:set\s+)?rcon_password\s+["']([^"']+)["']/i);
+    if (rcon) rconPassword = rcon[2] || rcon[1];
+    const mysql = t.match(/^(?:set\s+)?mysql_connection_string\s+"([^"]+)"/i)
+      || t.match(/^(?:set\s+)?mysql_connection_string\s+'([^']+)'/i)
+      || t.match(/^(?:set\s+)?mysql_connection_string\s+(\S+)/i);
     if (mysql) mysqlDsn = mysql[1];
   }
   return { rconPassword, mysqlDsn };
 }
 
+/**
+ * Port aus endpoint_add_tcp/udp "0.0.0.0:30120" (erste gültige Zahl).
+ */
+export function parsePortFromCfg(text) {
+  for (const line of String(text || '').split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#') || t.startsWith('//')) continue;
+    const m = t.match(/^endpoint_add_(?:tcp|udp)\s+["'][^"']*:(\d{1,5})["']/i)
+      || t.match(/^endpoint_add_(?:tcp|udp)\s+\S*:(\d{1,5})\b/i);
+    if (m) {
+      const p = Number(m[1]);
+      if (Number.isInteger(p) && p >= 1 && p <= 65535) return p;
+    }
+  }
+  return 0;
+}
+
+export function parseLicenseKeyFromCfg(text) {
+  for (const line of String(text || '').split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#') || t.startsWith('//')) continue;
+    const m = t.match(/^(?:setr?\s+)?sv_licenseKey\s+"([^"]+)"/i)
+      || t.match(/^(?:setr?\s+)?sv_licenseKey\s+'([^']+)'/i)
+      || t.match(/^(?:setr?\s+)?sv_licenseKey\s+(\S+)/i);
+    if (m && m[1] && m[1].length > 8) return m[1];
+  }
+  return '';
+}
+
+/**
+ * Alles was Setup aus einer vorhandenen server.cfg übernehmen kann.
+ */
+export function extractCfgSetupValues(text) {
+  const parsed = parseServerCfg(text);
+  const integr = parseCfgIntegrations(text);
+  const port = parsePortFromCfg(text);
+  const licenseKey = parseLicenseKeyFromCfg(text);
+  return {
+    hostname: parsed.pub.hostname || '',
+    project: parsed.pub.project || '',
+    port: port || null,
+    maxClients: parsed.pub.maxClients || null,
+    onesync: parsed.pub.onesync || 'on',
+    locale: parsed.pub.locale || '',
+    tags: parsed.pub.tags || '',
+    gameBuild: parsed.pub.gameBuild || '',
+    licenseKey,
+    mysqlDsn: integr.mysqlDsn || '',
+    rconPassword: integr.rconPassword || '',
+    resourceCount: (parsed.resources || []).length,
+    hasCfg: Boolean(String(text || '').trim()),
+  };
+}
+
 export function parseServerCfg(text) {
   const resources = [];
-  const pub = { hostname: '', maxClients: 48, project: '', tags: '', locale: 'de-DE', onesync: 'on', gameBuild: '' };
-  for (const line of text.split('\n')) {
+  const pub = {
+    hostname: '',
+    maxClients: 48,
+    project: '',
+    tags: '',
+    locale: 'de-DE',
+    onesync: 'on',
+    gameBuild: '',
+    port: 0,
+    licenseKey: '',
+  };
+  for (const line of String(text || '').split('\n')) {
     const t = line.trim();
     if (!t || t.startsWith('#') || t.startsWith('//')) continue;
     const ensured = t.match(/^(?:ensure|start)\s+("?)([^"\s]+)\1/i);
@@ -47,9 +114,10 @@ export function parseServerCfg(text) {
       resources.push(ensured[2]);
       continue;
     }
-    const host = t.match(/^sv_hostname\s+"([^"]+)"/i);
+    const host = t.match(/^(?:set\s+)?sv_hostname\s+"([^"]+)"/i)
+      || t.match(/^(?:set\s+)?sv_hostname\s+'([^']+)'/i);
     if (host) pub.hostname = host[1];
-    const max = t.match(/^sv_maxclients\s+(\d+)/i);
+    const max = t.match(/^(?:set\s+)?sv_maxclients\s+(\d+)/i);
     if (max) pub.maxClients = Number(max[1]);
     const project = t.match(/^sets\s+sv_projectName\s+"([^"]+)"/i);
     if (project) pub.project = project[1];
@@ -64,6 +132,8 @@ export function parseServerCfg(text) {
   }
   pub.onesync = parseOnesyncFromCfg(text);
   if (!pub.gameBuild) pub.gameBuild = parseGameBuildFromCfg(text);
+  pub.port = parsePortFromCfg(text);
+  pub.licenseKey = parseLicenseKeyFromCfg(text);
   return { resources, pub };
 }
 

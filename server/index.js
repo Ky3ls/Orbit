@@ -45,6 +45,7 @@ import { patchCfgServerOpts } from './cfgPatch.js';
 import {
   createCfgFile,
   defaultNewCfgContent,
+  extractCfgSetupValues,
   listCfgFiles,
   mergeCfgSecrets,
   parseCfgIntegrations,
@@ -1268,33 +1269,49 @@ async function handleApi(req, res, url) {
     }
     const migratingTxAdmin = body.migrateFromTxAdmin === true && me.role === 'owner';
     const dataPathHint = str(body.dataPath, 512);
+    // Existing: Port/License früh aus CFG lesen (vor Port-Check)
+    let earlyCfg = null;
+    if (deploy === 'existing' && dataPathHint) {
+      try {
+        const earlyPath = resolveCustomDataPath(dataPathHint);
+        const earlyCfgFile = path.join(earlyPath, 'server.cfg');
+        if (fs.existsSync(earlyCfgFile)) {
+          earlyCfg = extractCfgSetupValues(fs.readFileSync(earlyCfgFile, 'utf8'));
+        }
+      } catch { /* validate later */ }
+    }
+    let setupPort = (earlyCfg?.port && Number(earlyCfg.port)) || port;
+    let licenseKey = str(body.licenseKey, 128) || (earlyCfg?.licenseKey || '');
+    if (earlyCfg?.mysqlDsn && !str(body.mysqlConnection, 280)) {
+      // body.mysql später; early nur merken
+    }
     // Vor Port-Check: laufenden FX stoppen (sonst „Port belegt“ nach Reset)
     if (!migratingTxAdmin && me.role === 'owner') {
       try {
-        await forceFreeGamePort(settingMap(db), logLine, port);
+        await forceFreeGamePort(settingMap(db), logLine, setupPort);
       } catch (err) {
         logLine('warn', `Setup: FX stop vor Port-Check — ${err.message}`);
       }
       for (let i = 0; i < 8; i += 1) {
-        const probe = await checkPortInUse(port, '127.0.0.1');
+        const probe = await checkPortInUse(setupPort, '127.0.0.1');
         if (!probe.inUse) break;
         await new Promise((r) => setTimeout(r, 400));
       }
     }
-    const portProbe = migratingTxAdmin ? { inUse: false, available: true } : await checkPortInUse(port, '127.0.0.1');
+    const portProbe = migratingTxAdmin ? { inUse: false, available: true } : await checkPortInUse(setupPort, '127.0.0.1');
     const portConflict = migratingTxAdmin
       ? null
-      : orbitPortConflict(db, port, { ignoreInactive: true, exceptDataPath: dataPathHint });
+      : orbitPortConflict(db, setupPort, { ignoreInactive: true, exceptDataPath: dataPathHint });
     if (!migratingTxAdmin && portProbe.inUse) {
       return json(res, 400, {
-        error: `Port ${port} ist noch belegt. FX stoppen oder anderen Port wählen.`,
+        error: `Port ${setupPort} ist noch belegt. FX stoppen oder anderen Port wählen.`,
       });
     }
     if (!migratingTxAdmin && portConflict) {
-      return json(res, 400, { error: `Port ${port} ist bereits für „${portConflict.name}“ aktiv.` });
+      return json(res, 400, { error: `Port ${setupPort} ist bereits für „${portConflict.name}“ aktiv.` });
     }
-    const licenseKey = str(body.licenseKey, 128);
     let mysqlDsn = str(body.mysqlConnection, 280);
+    if (!mysqlDsn && earlyCfg?.mysqlDsn) mysqlDsn = earlyCfg.mysqlDsn;
     const sqlAlreadyReady = settingMap(db).setupSqlReady === '1'
       || body.skipSqlImport === true;
     if (body.createDatabase && !mysqlDsn) {
@@ -1355,6 +1372,14 @@ async function handleApi(req, res, url) {
       }
     }
 
+    // Aus CFG übernommen (existing) — Port/Slots/Tags/License/MySQL …
+    let cfgPort = 0;
+    let cfgOnesync = '';
+    let cfgLocale = '';
+    let cfgTags = '';
+    let cfgLicense = '';
+    let cfgProject = '';
+
     if (deploy === 'existing') {
       try {
         const customData = str(body.dataPath, 512);
@@ -1370,6 +1395,26 @@ async function handleApi(req, res, url) {
         if (!dataPath) {
           return json(res, 400, { error: 'Datenordner für vorhandenen Server fehlt.' });
         }
+        const cfgFilePath = path.join(dataPath, 'server.cfg');
+        if (!fs.existsSync(cfgFilePath)) {
+          return json(res, 400, { error: `Keine server.cfg in ${dataPath}.` });
+        }
+        const cfgRaw = fs.readFileSync(cfgFilePath, 'utf8');
+        const fromCfg = extractCfgSetupValues(cfgRaw);
+        // CFG hat Vorrang — Wizard-Felder sind nur Fallback / Anzeige
+        if (fromCfg.hostname) hostname = fromCfg.hostname;
+        if (fromCfg.project) cfgProject = fromCfg.project;
+        if (fromCfg.maxClients) slots = fromCfg.maxClients;
+        if (fromCfg.port) cfgPort = fromCfg.port;
+        if (fromCfg.onesync) cfgOnesync = fromCfg.onesync;
+        if (fromCfg.locale) cfgLocale = fromCfg.locale;
+        if (fromCfg.tags) cfgTags = fromCfg.tags;
+        if (fromCfg.licenseKey) cfgLicense = fromCfg.licenseKey;
+        if (fromCfg.mysqlDsn) {
+          mysqlDsn = fromCfg.mysqlDsn;
+          setSetting(db, 'mysqlDsn', fromCfg.mysqlDsn);
+        }
+        const effectivePort = cfgPort || setupPort || port;
         // Vorhandenen Orbit-Server wieder aktivieren oder neu eintragen
         let row = db.prepare('SELECT * FROM orbit_servers WHERE data_path = ?').get(dataPath);
         if (!row) {
@@ -1382,28 +1427,24 @@ async function handleApi(req, res, url) {
             hostname,
             dataPath,
             settingsBefore.fxServerRoot || '',
-            port,
+            effectivePort,
             slots,
             Date.now(),
           );
           row = db.prepare('SELECT * FROM orbit_servers WHERE id = ?').get(info.lastInsertRowid);
+        } else {
+          db.prepare('UPDATE orbit_servers SET name = ?, port = ?, max_clients = ? WHERE id = ?')
+            .run(hostname, effectivePort, slots, row.id);
         }
         activateOrbitServer(db, row.id);
+        syncActiveCfgPath(settingMap(db));
         const parsed = readCfg();
         const now = Date.now();
         const insert = db.prepare('INSERT OR IGNORE INTO resources (name, actual, updated) VALUES (?, ?, ?)');
         for (const resource of parsed.resources) insert.run(resource, 'unknown', now);
         imported = parsed.resources.length;
-        if (parsed.pub.hostname) hostname = parsed.pub.hostname;
-        if (parsed.pub.maxClients) slots = parsed.pub.maxClients;
-        try {
-          const integr = parseCfgIntegrations(parsed.raw || fs.readFileSync(path.join(dataPath, 'server.cfg'), 'utf8'));
-          if (integr.mysqlDsn) {
-            mysqlDsn = integr.mysqlDsn;
-            setSetting(db, 'mysqlDsn', integr.mysqlDsn);
-          }
-        } catch { /* */ }
-        logLine('ok', `Vorhandener Server aktiviert: ${dataPath}`);
+        const hasLic = Boolean(cfgLicense || licenseKey);
+        logLine('ok', `Vorhandener Server aktiviert: ${dataPath} (CFG: Port ${effectivePort || '—'}, ${slots} Slots, MySQL ${mysqlDsn ? 'ja' : 'nein'}, License ${hasLic ? 'ja' : 'nein'})`);
       } catch (err) {
         return json(res, 500, { error: err.message || 'Die vorhandene server.cfg konnte nicht gelesen werden.' });
       }
@@ -1511,27 +1552,35 @@ async function handleApi(req, res, url) {
       }
     }
 
+    // Finalwerte: bei existing CFG-Werte bevorzugen
+    const finalPort = (deploy === 'existing' && cfgPort) ? cfgPort : setupPort;
+    const finalOnesync = (deploy === 'existing' && cfgOnesync) ? cfgOnesync : onesync;
+    const finalLocale = (deploy === 'existing' && cfgLocale) ? cfgLocale : locale;
+    const finalTags = (deploy === 'existing' && cfgTags !== '') ? cfgTags : tags;
+    const finalProject = (deploy === 'existing' && cfgProject) ? cfgProject : (project || hostname);
+    const finalLicense = licenseKey || cfgLicense || '';
+
     setSetting(db, 'hostname', hostname);
-    setSetting(db, 'project', project || hostname);
+    setSetting(db, 'project', finalProject);
     setSetting(db, 'fivemHost', '127.0.0.1');
-    setSetting(db, 'fivemPort', port);
+    setSetting(db, 'fivemPort', finalPort);
     setSetting(db, 'maxClients', slots);
-    setSetting(db, 'locale', locale);
-    setSetting(db, 'tags', tags);
-    setSetting(db, 'onesync', onesync);
+    setSetting(db, 'locale', finalLocale);
+    setSetting(db, 'tags', finalTags);
+    setSetting(db, 'onesync', finalOnesync);
     setSetting(db, 'profileMode', deploy);
     setSetting(db, 'profileRecipe', recipe);
     if (recipeUrl) setSetting(db, 'recipeUrl', recipeUrl);
-    if (dataPath && (licenseKey || mysqlDsn)) {
+    if (dataPath && (finalLicense || mysqlDsn)) {
       try {
         const cfgFile = path.join(dataPath, 'server.cfg');
         if (!fs.existsSync(cfgFile) && mysqlDsn) {
-          // minimale cfg, damit Connection nicht verloren geht
           fs.writeFileSync(cfgFile, `# Lizenz und MySQL:\nset mysql_connection_string "${mysqlDsn.replace(/"/g, '')}"\n`, 'utf8');
         }
+        // Nur schreiben, was fehlt/neu ist — bestehende CFG-Werte nicht leer überschreiben
         applyProdSecretsToCfg(cfgFile, {
-          licenseKey,
-          mysqlConnection: mysqlDsn,
+          licenseKey: finalLicense || undefined,
+          mysqlConnection: mysqlDsn || undefined,
         });
         if (mysqlDsn) setSetting(db, 'mysqlDsn', mysqlDsn);
         syncActiveCfgPath(settingMap(db));
@@ -1591,10 +1640,11 @@ async function handleApi(req, res, url) {
     if (!mysqlReady(settingsAfter)) {
       nextSteps.push('mysql_connection_string in server.cfg setzen');
     }
-    if (licenseKey) setSetting(db, 'svLicenseKey', licenseKey);
+    if (finalLicense) setSetting(db, 'svLicenseKey', finalLicense);
 
     const wantAutostart = body.startServer !== false
-      && (migratingTxAdmin || (licenseKey && mysqlReady(settingsAfter)));
+      && (migratingTxAdmin || (finalLicense && mysqlReady(settingsAfter))
+        || (deploy === 'existing' && finalLicense && mysqlReady(settingsAfter)));
 
     let panelUrl = ORIGIN;
     let panelRestart = false;

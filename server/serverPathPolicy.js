@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { extractCfgSetupValues } from './fivem.js';
 
 /** Gesperrte Pfade (case-insensitive, inkl. Unterordner). */
 const BLOCKED_PREFIXES = [
@@ -59,13 +60,31 @@ export function probeServerPath({ serversRoot = '', dataPath = '', defaultRoot =
   const warnings = [];
   let resolvedRoot = '';
   let resolvedData = '';
+  /** @type {ReturnType<typeof extractCfgSetupValues> | null} */
+  let fromCfg = null;
 
   try {
     if (dataPath) {
       resolvedData = resolveCustomDataPath(dataPath);
       const cfg = path.join(resolvedData, 'server.cfg');
       if (fs.existsSync(cfg)) {
-        warnings.push('server.cfg vorhanden — Ordner wird übernommen (kein Neu-Anlegen).');
+        try {
+          fromCfg = extractCfgSetupValues(fs.readFileSync(cfg, 'utf8'));
+          const bits = [];
+          if (fromCfg.port) bits.push(`Port ${fromCfg.port}`);
+          if (fromCfg.maxClients) bits.push(`${fromCfg.maxClients} Slots`);
+          if (fromCfg.onesync) bits.push(`OneSync ${fromCfg.onesync}`);
+          if (fromCfg.mysqlDsn) bits.push('MySQL');
+          if (fromCfg.licenseKey) bits.push('License');
+          if (fromCfg.tags) bits.push('Tags');
+          warnings.push(
+            bits.length
+              ? `server.cfg gefunden — übernommen: ${bits.join(', ')}.`
+              : 'server.cfg vorhanden — Ordner wird übernommen.',
+          );
+        } catch {
+          warnings.push('server.cfg vorhanden — Ordner wird übernommen (kein Neu-Anlegen).');
+        }
       } else if (fs.existsSync(resolvedData)) {
         warnings.push('Ordner existiert — wird mit server.cfg und resources ergänzt.');
       } else {
@@ -89,6 +108,7 @@ export function probeServerPath({ serversRoot = '', dataPath = '', defaultRoot =
     warnings,
     serversRoot: resolvedRoot,
     dataPath: resolvedData,
+    fromCfg,
   };
 }
 
