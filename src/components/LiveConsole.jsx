@@ -204,12 +204,10 @@ export default function LiveConsole({
       wasLiveRef.current = true;
       return;
     }
-    // Wirklich idle offline — Boot-Gate zu
+    // Offline/Crash: Konsole NICHT leeren — Build-/Crash-Logs müssen bleiben
     if (bootOpen) setBootGate(false);
     wasLiveRef.current = false;
-    suppressLogsRef.current = true;
-    wipeConsole();
-    enableAutoScroll();
+    suppressLogsRef.current = false;
   }, [fx.ready, fx.online, fx.processActive, fx.unitActive, fx.status, fx.controlPhase, fx.supervisorPhase, sseFx, bootOpen]);
 
   useEffect(() => {
