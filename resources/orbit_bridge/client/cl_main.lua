@@ -10,10 +10,7 @@ local showIds = false
 local spectating = false
 local spectateTarget = nil
 
-local function chat(msg)
-  TriggerEvent('chat:addMessage', { color = { 255, 122, 26 }, args = { 'Orbit', msg } })
-end
-
+-- Nie chat:addMessage — spamt Chat + bricht esx_rpchat (GetPlayerName null).
 local function toast(kind, title, message, duration)
   SendNUIMessage({
     action = 'toast',
@@ -23,6 +20,10 @@ local function toast(kind, title, message, duration)
     duration = duration,
   })
 end
+
+RegisterNetEvent('orbit:toast', function(kind, title, message, duration)
+  toast(kind, title, message, duration)
+end)
 
 local function closeMenu()
   menuOpen = false

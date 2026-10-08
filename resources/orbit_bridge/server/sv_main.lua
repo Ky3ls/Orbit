@@ -194,7 +194,7 @@ RegisterNetEvent('orbit:requestMenu', function()
   local src = source
   OrbitAuth(src, function(ok, info, perms, game)
     if not ok then
-      TriggerClientEvent('chat:addMessage', src, { args = { 'Orbit', tostring(info) } })
+      TriggerClientEvent('orbit:toast', src, 'warn', 'Orbit', tostring(info or 'Kein Zugriff'))
       return
     end
     TriggerClientEvent('orbit:openMenu', src, {
