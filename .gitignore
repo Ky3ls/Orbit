@@ -9,4 +9,5 @@ servers
 .env.*
 *.log
 .npm
+.npm-cache
 
