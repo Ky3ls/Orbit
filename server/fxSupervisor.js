@@ -245,6 +245,10 @@ export async function startFxProcess(settings, logLine, opts = {}) {
       syncChatFromArtifact(launch.dataPath, launch.fxRoot, (m) => logPanel('info', `[FX:${key}] ${m}`));
       const cfgName = String(settings.fxCfgPath || 'server.cfg').replace(/^\/+/, '') || 'server.cfg';
       const cfgFile = path.join(launch.dataPath, cfgName);
+      try {
+        const { stripHardcapEnsureFile } = await import('./cfxDefaults.js');
+        stripHardcapEnsureFile(cfgFile, (m) => logPanel('info', `[FX:${key}] ${m}`));
+      } catch { /* */ }
       const synced = syncOrbitPermissionsFile(cfgFile, {
         db: database,
         master: loadMasterIdentity(database),
