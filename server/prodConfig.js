@@ -13,8 +13,8 @@ export function applyProdSecretsToCfg(cfgPath, { licenseKey = '', mysqlConnectio
   if (mysqlConnection) {
     cfg = upsertCfgSet(cfg, 'mysql_connection_string', mysqlConnection);
   }
-  // ox_lib Security: Strict Mode immer setzen (sonst Warnung beim Start)
-  cfg = upsertCfgSetr(cfg, 'sv_stateBagStrictMode', 'true');
+  // false: ox_inventory/ox_lib brauchen Client-StateBags (strict = Inventar kaputt)
+  cfg = upsertCfgSetr(cfg, 'sv_stateBagStrictMode', 'false');
   // Leere Platzhalter entfernen
   cfg = cfg.replace(/^\s*(?:set\s+)?sv_licenseKey\s+""\s*$/gmi, '');
   cfg = cfg.replace(/^\s*set\s+mysql_connection_string\s+""\s*$/gmi, '');
