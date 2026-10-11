@@ -271,15 +271,30 @@ function buildMenus() {
 }
 
 function syncMenuCursor() {
-  // Main: nur Tasten. Maus nur Spieler-Tab / Modal / Prompt.
+  // Main: nur Tasten (keine Maus/Hover). Spieler-Tab / Modal / Prompt → Maus.
   const menuOpen = app && !app.classList.contains('hidden');
   if (!menuOpen) {
+    app?.classList.remove('kb-nav', 'mouse-nav');
     post('setCursor', { enabled: false });
     return;
   }
-  const wantMouse = activeTabId() === 'players' || isModalOpen() || isPromptOpen();
+  const onPlayers = activeTabId() === 'players';
+  const wantMouse = onPlayers || isModalOpen() || isPromptOpen();
+  app.classList.toggle('kb-nav', !onPlayers && !isModalOpen());
+  app.classList.toggle('mouse-nav', onPlayers || isModalOpen());
   post('setCursor', { enabled: wantMouse });
 }
+
+/** Main-Tab: Mausklicks/Hover komplett ignorieren */
+function blockMainMouse(e) {
+  if (!app || !app.classList.contains('kb-nav')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+}
+['click', 'mousedown', 'mouseup', 'auxclick', 'contextmenu', 'dblclick', 'pointerdown', 'pointerup'].forEach((type) => {
+  app?.addEventListener(type, blockMainMouse, true);
+});
 
 function showOrbitToast(payload) {
   const root = document.getElementById('orbitToasts');
