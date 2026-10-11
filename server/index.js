@@ -981,6 +981,36 @@ async function handleApi(req, res, url) {
   if (method === 'PUT' && pathname === '/api/prefs') {
     const body = await readBody(req);
     const prefs = setUserPrefs(db, me.id, body && typeof body === 'object' ? body : {});
+    // Akzentfarbe sofort ins Ingame-Menü/ESP des Admins pushen
+    if (body && typeof body === 'object' && body.accent !== undefined) {
+      try {
+        const { ACCENT_PRESETS } = await import('../src/prefsShared.js');
+        const a = ACCENT_PRESETS[prefs.accent] || ACCENT_PRESETS.orange;
+        const settings = settingMap(db);
+        if (fxConsoleReady(settings)) {
+          const row = db.prepare('SELECT ingame_license, cfx_id FROM users WHERE id = ?').get(me.id);
+          let target = null;
+          const lic = String(row?.ingame_license || '').trim();
+          if (lic) target = lic;
+          else if (row?.cfx_id) {
+            const live = (runtime.players || []).find((p) =>
+              (p.identifiers || []).some((id) => id === `fivem:${row.cfx_id}`));
+            if (live?.id != null) target = `id:${live.id}`;
+          }
+          if (target) {
+            const rgb = String(a.rgb).replace(/,\s*/g, '_');
+            const hex = String(a.hex || '').replace(/^#/, '');
+            const hex2 = String(a.hex2 || '').replace(/^#/, '');
+            sendSupervisorCommand(
+              settings,
+              `orbit_setAccent ${target} ${a.id} ${hex} ${hex2} ${rgb} ${rgb}`,
+            );
+          }
+        }
+      } catch (e) {
+        logLine('warn', `Accent push: ${e.message}`);
+      }
+    }
     return json(res, 200, { prefs });
   }
 

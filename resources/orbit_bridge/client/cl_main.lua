@@ -12,6 +12,38 @@ local spectateTarget = nil
 
 local NOTIFY_OK = { ['top-left'] = true, ['top-right'] = true, ['bottom-left'] = true, ['bottom-right'] = true }
 local notifyPos = 'top-left'
+-- Panel-Akzent (ESP + NUI) — Default Orange
+local accentR, accentG, accentB = 255, 122, 26
+local accentR2, accentG2, accentB2 = 255, 154, 77
+
+local function parseAccentRgb(rgb)
+  if type(rgb) ~= 'string' then return nil end
+  local r, g, b = rgb:match('(%d+)%s*,%s*(%d+)%s*,%s*(%d+)')
+  r, g, b = tonumber(r), tonumber(g), tonumber(b)
+  if not r or not g or not b then return nil end
+  return r, g, b
+end
+
+local function applyAccent(data)
+  if type(data) ~= 'table' then return end
+  local r, g, b = parseAccentRgb(data.accentRgb or data.rgb)
+  if r then accentR, accentG, accentB = r, g, b end
+  local r2, g2, b2 = parseAccentRgb(data.accentRgb2 or data.rgb2)
+  if r2 then
+    accentR2, accentG2, accentB2 = r2, g2, b2
+  else
+    accentR2 = math.min(255, math.floor(accentR + (255 - accentR) * 0.35))
+    accentG2 = math.min(255, math.floor(accentG + (255 - accentG) * 0.35))
+    accentB2 = math.min(255, math.floor(accentB + (255 - accentB) * 0.35))
+  end
+  SendNUIMessage({
+    action = 'accent',
+    accent = data.accent or data.id or 'orange',
+    hex = data.accentHex or data.hex,
+    hex2 = data.accentHex2 or data.hex2,
+    rgb = ('%d, %d, %d'):format(accentR, accentG, accentB),
+  })
+end
 
 local function applyNotifyPos(pos)
   if type(pos) ~= 'string' or not NOTIFY_OK[pos] then return end
@@ -38,6 +70,10 @@ end)
 
 RegisterNetEvent('orbit:notifyPos', function(pos)
   applyNotifyPos(pos)
+end)
+
+RegisterNetEvent('orbit:accent', function(data)
+  applyAccent(data)
 end)
 
 CreateThread(function()
@@ -267,14 +303,16 @@ local function boneScreen(ped, bone)
   return x, y, c
 end
 
---- 2D-Linie (Screen) — sichtbar durch Wände
+--- 2D-Linie (Screen) — durch Wände; überlappende Rects = durchgehende Striche (keine Punkte)
 local function drawScreenLine(x1, y1, x2, y2, r, g, b, a)
   local dx, dy = x2 - x1, y2 - y1
   local len = math.sqrt(dx * dx + dy * dy)
-  if len < 0.0005 then return end
-  local steps = math.min(48, math.max(4, math.floor(len * 420)))
-  local w = 0.00115
-  local h = 0.0019
+  if len < 0.0002 then return end
+  local thickness = 0.00235
+  local step = thickness * 0.32
+  local steps = math.min(180, math.max(3, math.floor(len / step + 0.5)))
+  local w = thickness
+  local h = thickness * 1.55
   for i = 0, steps do
     local t = i / steps
     DrawRect(x1 + dx * t, y1 + dy * t, w, h, r, g, b, a)
@@ -390,7 +428,7 @@ CreateThread(function()
           if dist < ESP_DIST then
             local sid = GetPlayerServerId(pid)
             local label = ('[%s] %s'):format(sid, GetPlayerName(pid) or '')
-            drawEspEntity(ped, myPed, dist, label, 255, 122, 26, 255, 140, 40, textScale, barW, barGap)
+            drawEspEntity(ped, myPed, dist, label, accentR, accentG, accentB, accentR2, accentG2, accentB2, textScale, barW, barGap)
           end
         end
       end
@@ -458,6 +496,7 @@ RegisterNetEvent('orbit:openMenu', function(payload)
   menuCursor = false
   local game = payload and payload.game or {}
   if type(game.notifyPos) == 'string' then applyNotifyPos(game.notifyPos) end
+  if game.accent or game.accentRgb or game.accentHex then applyAccent(game) end
   -- Main: Tastatur-Menü + laufen/umschauen (KeepInput)
   SetNuiFocus(true, false)
   SetNuiFocusKeepInput(true)
