@@ -177,7 +177,14 @@ import { drainCommandQueue } from './queueWorker.js';
 import { refreshInstanceMonitors } from './instanceMonitor.js';
 import { resolveConsoleSettings } from './consoleSettings.js';
 import { fxCommandReady } from './rcon.js';
-import { sendSupervisorCommand, stopFxProcess, forceFreeGamePort, supervisorPhase, supervisorConsoleReady } from './fxSupervisor.js';
+import {
+  adoptSurvivingFxServers,
+  sendSupervisorCommand,
+  stopFxProcess,
+  forceFreeGamePort,
+  supervisorPhase,
+  supervisorConsoleReady,
+} from './fxSupervisor.js';
 import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail.js';
 import { syncOrbitPermissionsFile, applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
 import {
@@ -3777,6 +3784,13 @@ const boot = (async () => {
   try {
     ensureIngameToken(db);
     const s = settingMap(db);
+    // Panel-Restart: FX ggf. noch live → übernehmen (kein Kick, kein Neustart)
+    try {
+      const n = adoptSurvivingFxServers(logLine);
+      if (n > 0) auditSystem(db, 'fx.adopt', `${n} Instanz(en)`);
+    } catch (err) {
+      auditSystem(db, 'fx.adopt.fail', err.message);
+    }
     if (s.fxDataPath) backfillFxConsole(s.fxDataPath, logLine, 100);
     syncOrbitSystemResource(s.fxServerRoot || FX_SERVER_ROOT, s.fxDataPath || '', auditLogger(db, 'orbit.sync'));
     if (supervisorConsoleReady(s)) {

@@ -1,5 +1,7 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
+import { DATA_DIR } from './config.js';
 import { orbitControlMode, resolveFxLaunch } from './fxLaunch.js';
 import { emitFxConsoleLine, markFxConsoleEof, resetFxConsoleLog } from './fxLogTail.js';
 import { clearConsole, logPanel } from './state.js';
@@ -9,7 +11,9 @@ const CRASH_RESTART_SEC = 10;
 /** Nach so vielen Sekunden stabil → Crash-Zähler zurücksetzen */
 const STABLE_MS = 90_000;
 
-/** @typedef {{ child: import('node:child_process').ChildProcess | null, phase: 'idle'|'starting'|'running'|'stopping', lastSettings: Record<string, string> | null, restartAttempt: number, manualStop: boolean, startedAt: number, restartTimer: ReturnType<typeof setTimeout> | null, bootTimer?: ReturnType<typeof setTimeout> | null, bootResourceFail?: boolean, buildBusyUntil?: number }} Inst */
+const PID_STATE_FILE = () => path.join(DATA_DIR, 'fx-supervisor.json');
+
+/** @typedef {{ child: import('node:child_process').ChildProcess | null, adoptedPid?: number|null, phase: 'idle'|'starting'|'running'|'stopping', lastSettings: Record<string, string> | null, restartAttempt: number, manualStop: boolean, startedAt: number, restartTimer: ReturnType<typeof setTimeout> | null, bootTimer?: ReturnType<typeof setTimeout> | null, bootResourceFail?: boolean, buildBusyUntil?: number }} Inst */
 
 /** @type {Map<string, Inst>} */
 const instances = new Map();
@@ -17,6 +21,7 @@ const instances = new Map();
 function emptyInst() {
   return {
     child: null,
+    adoptedPid: null,
     phase: 'idle',
     lastSettings: null,
     restartAttempt: 0,
@@ -26,6 +31,50 @@ function emptyInst() {
     bootTimer: null,
     bootResourceFail: false,
   };
+}
+
+function pidAlive(pid) {
+  const n = Number(pid);
+  if (!Number.isInteger(n) || n <= 1) return false;
+  try {
+    process.kill(n, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function portListening(port) {
+  try {
+    const out = execFileSync('ss', ['-tlnH', `sport = :${Number(port) || 30120}`], {
+      encoding: 'utf8',
+      timeout: 2000,
+    });
+    return !!String(out || '').trim();
+  } catch {
+    return false;
+  }
+}
+
+function persistPidState() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const map = {};
+    for (const [id, inst] of instances) {
+      const pid = inst.child?.pid || inst.adoptedPid;
+      if (!pid || (inst.phase !== 'running' && inst.phase !== 'starting')) continue;
+      map[id] = {
+        pid,
+        port: Number(inst.lastSettings?.fivemPort) || 30120,
+        dataPath: inst.lastSettings?.fxDataPath || '',
+      };
+    }
+    fs.writeFileSync(PID_STATE_FILE(), JSON.stringify({ v: 1, at: Date.now(), instances: map }), 'utf8');
+  } catch { /* */ }
+}
+
+function fxPid(inst) {
+  return inst?.child?.pid || inst?.adoptedPid || null;
 }
 
 function getInst(key) {
@@ -47,11 +96,69 @@ export function listSupervisorInstances() {
     out.push({
       id,
       phase: inst.phase,
-      pid: inst.child?.pid ?? null,
+      pid: fxPid(inst),
       dataPath: inst.lastSettings?.fxDataPath || '',
+      adopted: !inst.child && !!inst.adoptedPid,
     });
   }
   return out;
+}
+
+/**
+ * Nach Panel-Restart: überlebende FX-Prozesse wieder einhängen (KillMode=process).
+ * Kein Kick, kein Neustart — Spieler bleiben online.
+ */
+export function adoptSurvivingFxServers(logLine = () => {}) {
+  let adopted = 0;
+  try {
+    const raw = fs.existsSync(PID_STATE_FILE())
+      ? JSON.parse(fs.readFileSync(PID_STATE_FILE(), 'utf8') || '{}')
+      : { instances: {} };
+    const saved = raw.instances && typeof raw.instances === 'object' ? raw.instances : {};
+    for (const [id, meta] of Object.entries(saved)) {
+      const pid = Number(meta?.pid);
+      const port = Number(meta?.port) || 30120;
+      if (!pidAlive(pid) || !portListening(port)) continue;
+      const inst = getInst(id);
+      if (inst.child && inst.child.exitCode === null) continue;
+      inst.child = null;
+      inst.adoptedPid = pid;
+      inst.phase = 'running';
+      inst.startedAt = Date.now();
+      inst.manualStop = false;
+      inst.lastSettings = {
+        ...(inst.lastSettings || {}),
+        fivemPort: String(port),
+        fxDataPath: meta?.dataPath || inst.lastSettings?.fxDataPath || '',
+      };
+      adopted += 1;
+      logLine('ok', `[FX:${id}] Überlebender Prozess übernommen (pid=${pid}, Port ${port})`);
+    }
+  } catch (err) {
+    logLine('warn', `FX adopt: ${err.message}`);
+  }
+  // Fallback: FX läuft, aber keine State-Datei (alter Spawn)
+  if (adopted === 0) {
+    try {
+      const out = execFileSync('pgrep', ['-f', 'cfx-server/FXServer'], { encoding: 'utf8', timeout: 5000 });
+      const pids = String(out || '').trim().split(/\s+/).map(Number).filter((n) => n > 1);
+      for (const pid of pids) {
+        if (!pidAlive(pid)) continue;
+        const key = 'default';
+        const inst = getInst(key);
+        if (inst.phase === 'running') break;
+        inst.child = null;
+        inst.adoptedPid = pid;
+        inst.phase = 'running';
+        inst.startedAt = Date.now();
+        adopted += 1;
+        logLine('ok', `[FX:${key}] FXServer pid=${pid} übernommen (ohne State-Datei)`);
+        break;
+      }
+    } catch { /* keine FX */ }
+  }
+  if (adopted) persistPidState();
+  return adopted;
 }
 
 export function supervisorPhase(instanceKey) {
@@ -83,6 +190,21 @@ export function supervisorConsoleReady(settings) {
   // Fallback: irgendeine laufende Instanz (verhindert „Konsole offline“ bei Key-Mismatch)
   for (const [key] of instances) {
     if (tryKey(key)) return true;
+  }
+  return false;
+}
+
+/** FX läuft (Pipe oder adoptierter PID) — für Status, auch ohne stdin */
+export function supervisorFxAlive(settings) {
+  const key = settings ? resolveInstanceKey(settings) : null;
+  const check = (inst) => {
+    if (inst.phase !== 'running' && inst.phase !== 'starting') return false;
+    if (inst.child && inst.child.exitCode === null) return true;
+    return pidAlive(inst.adoptedPid);
+  };
+  if (key) return check(getInst(key));
+  for (const inst of instances.values()) {
+    if (check(inst)) return true;
   }
   return false;
 }
@@ -145,6 +267,28 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   const key = resolveInstanceKey(settings, opts.instanceId);
   const inst = getInst(key);
   const port = Number(settings?.fivemPort) || 30120;
+
+  // Panel-Restart: FX läuft noch → übernehmen, nicht killen
+  if (!opts.forceNew && !opts.isCrashRestart) {
+    const living = fxPid(inst);
+    if (living && pidAlive(living) && portListening(port)) {
+      inst.phase = 'running';
+      inst.lastSettings = { ...settings };
+      if (!inst.child) inst.adoptedPid = living;
+      persistPidState();
+      logLine('ok', `[FX:${key}] Bereits online — übernommen (pid=${living})`);
+      return { ok: true, pid: living, instanceId: key, adopted: true };
+    }
+    if (portListening(port)) {
+      adoptSurvivingFxServers(logLine);
+      if (supervisorFxAlive(settings) || getInst(key).phase === 'running') {
+        inst.lastSettings = { ...settings };
+        persistPidState();
+        logLine('ok', `[FX:${key}] Port ${port} belegt — laufenden FX belassen`);
+        return { ok: true, pid: fxPid(inst), instanceId: key, adopted: true };
+      }
+    }
+  }
 
   // FX-Artifact nachziehen, falls Setup ohne Download durchlief (API-Wechsel)
   try {
@@ -291,14 +435,17 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     logPanel('info', `[FX:${key}] Quiet Mode — FX-Ausgabe nur in Live-Konsole, nicht im Terminal.`);
   }
 
+  // detached: Panel-Restart (KillMode=process) lässt FX weiterlaufen
   const proc = spawn(launch.command, launch.args, {
     cwd: launch.dataPath,
     env: { ...process.env, TZ: process.env.TZ || 'Europe/Berlin' },
     stdio: ['pipe', 'pipe', 'pipe'],
-    detached: false,
+    detached: true,
   });
   inst.child = proc;
+  inst.adoptedPid = null;
   attachStreams(proc, logLine, key, launch.dataPath, settings);
+  try { proc.unref(); } catch { /* */ }
 
   proc.on('error', (err) => {
     logLine('bad', `[FX:${key}] ${err.message}`);
@@ -360,6 +507,7 @@ export async function startFxProcess(settings, logLine, opts = {}) {
   // Resource Starting Tolerance — länger warten (yarn/webpack braucht oft >90s)
   const tolSec = Math.max(120, Number(settings.resourceStartingTolerance) || 300);
   scheduleBootMonitor(inst, key, logLine, settings, tolSec);
+  persistPidState();
 
   return { ok: true, pid: proc.pid, instanceId: key };
 }
@@ -476,13 +624,26 @@ export async function kickAllPlayersOnAllServers(logLine = () => {}, message = '
   for (const [key, inst] of instances) {
     if (inst.phase !== 'running' && inst.phase !== 'starting') continue;
     const stdin = inst.child?.stdin;
-    if (!stdin || stdin.destroyed) continue;
-    try {
-      stdin.write(`${cmd}\n`);
-      n += 1;
-      logLine('info', `[FX:${key}] Spieler gekickt (vor Shutdown)`);
-    } catch (err) {
-      logLine('warn', `[FX:${key}] Kick vor Shutdown: ${err.message}`);
+    if (stdin && !stdin.destroyed) {
+      try {
+        stdin.write(`${cmd}\n`);
+        n += 1;
+        logLine('info', `[FX:${key}] Spieler gekickt (vor Shutdown)`);
+        continue;
+      } catch (err) {
+        logLine('warn', `[FX:${key}] Kick stdin: ${err.message}`);
+      }
+    }
+    // Adoptiert / ohne Pipe → RCON
+    if (inst.lastSettings) {
+      try {
+        const { dispatchFxCommand } = await import('./fxCommand.js');
+        await dispatchFxCommand(inst.lastSettings, cmd);
+        n += 1;
+        logLine('info', `[FX:${key}] Spieler gekickt via RCON`);
+      } catch (err) {
+        logLine('warn', `[FX:${key}] Kick RCON: ${err.message}`);
+      }
     }
   }
   if (n > 0) await new Promise((r) => setTimeout(r, 1200));
@@ -507,10 +668,15 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
   }
   const key = resolveInstanceKey(settings, opts.instanceId);
   const inst = getInst(key);
-  if (!inst.child || inst.child.exitCode !== null) {
+  const pid = fxPid(inst);
+  const hasChild = !!(inst.child && inst.child.exitCode === null);
+  if (!hasChild && !pidAlive(inst.adoptedPid)) {
     inst.child = null;
+    inst.adoptedPid = null;
     inst.phase = 'idle';
-    if (opts.killOrphans !== false) await killOrphanFxServers(logLine);
+    persistPidState();
+    // Orphans nur explizit (sonst killt Stop eines Keys alle FX)
+    if (opts.killOrphans === true) await killOrphanFxServers(logLine);
     return { ok: true, instanceId: key };
   }
   inst.phase = 'stopping';
@@ -526,26 +692,41 @@ export async function stopFxProcess(settings, logLine, opts = {}) {
     inst.bootTimer = null;
   }
   logPanel('info', `[FX:${key}] Stop…`);
-  const proc = inst.child;
-  const done = new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      try { proc.kill('SIGKILL'); } catch { /* */ }
-      resolve();
-    }, 12_000);
-    proc.once('exit', () => {
-      clearTimeout(timer);
-      resolve();
+  if (hasChild) {
+    const proc = inst.child;
+    const done = new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        try { proc.kill('SIGKILL'); } catch { /* */ }
+        resolve();
+      }, 12_000);
+      proc.once('exit', () => {
+        clearTimeout(timer);
+        resolve();
+      });
     });
-  });
-  try {
-    proc.kill('SIGTERM');
-  } catch (err) {
-    logLine('warn', `[FX:${key}] Stop: ${err.message}`);
+    try {
+      proc.kill('SIGTERM');
+    } catch (err) {
+      logLine('warn', `[FX:${key}] Stop: ${err.message}`);
+    }
+    await done;
+  } else if (pidAlive(inst.adoptedPid)) {
+    try {
+      process.kill(inst.adoptedPid, 'SIGTERM');
+      logLine('info', `[FX:${key}] SIGTERM pid=${inst.adoptedPid}`);
+    } catch (err) {
+      logLine('warn', `[FX:${key}] Stop adopt: ${err.message}`);
+    }
+    await new Promise((r) => setTimeout(r, 800));
+    if (pidAlive(inst.adoptedPid)) {
+      try { process.kill(inst.adoptedPid, 'SIGKILL'); } catch { /* */ }
+    }
   }
-  await done;
   inst.child = null;
+  inst.adoptedPid = null;
   inst.phase = 'idle';
-  if (opts.killOrphans !== false) await killOrphanFxServers(logLine);
+  persistPidState();
+  if (opts.killOrphans === true) await killOrphanFxServers(logLine);
   return { ok: true, instanceId: key };
 }
 
