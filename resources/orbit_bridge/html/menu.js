@@ -586,18 +586,94 @@ function setPmTab(name) {
   if (pane) pane.classList.remove('hidden');
 }
 
+const ID_LABELS = {
+  license: 'License',
+  license2: 'License 2',
+  discord: 'Discord',
+  steam: 'Steam',
+  fivem: 'Cfx.re',
+  xbl: 'Xbox',
+  live: 'Microsoft',
+  ip: 'IP',
+  hardware: 'HWID',
+};
+const ID_ORDER = ['license', 'license2', 'discord', 'steam', 'fivem', 'xbl', 'live', 'ip', 'hardware'];
+
+function idKind(raw) {
+  const s = String(raw || '');
+  const i = s.indexOf(':');
+  return i > 0 ? s.slice(0, i) : 'id';
+}
+
+function idValue(raw) {
+  const s = String(raw || '');
+  const i = s.indexOf(':');
+  return i > 0 ? s.slice(i + 1) : s;
+}
+
+function groupPlayerIds(ids) {
+  const map = new Map();
+  for (const raw of ids || []) {
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    const kind = idKind(s);
+    const value = idValue(s) || s;
+    if (!map.has(kind)) map.set(kind, []);
+    const list = map.get(kind);
+    if (!list.includes(value)) list.push(value);
+  }
+  return [...map.keys()]
+    .sort((a, b) => {
+      const ia = ID_ORDER.indexOf(a);
+      const ib = ID_ORDER.indexOf(b);
+      return (ia < 0 ? 1000 : ia) - (ib < 0 ? 1000 : ib) || a.localeCompare(b);
+    })
+    .map((kind) => ({
+      kind,
+      label: ID_LABELS[kind] || kind,
+      values: map.get(kind),
+    }));
+}
+
+function shortIdHint(p) {
+  const groups = groupPlayerIds(p.identifiers || []);
+  const lic = groups.find((g) => g.kind === 'license' || g.kind === 'license2');
+  if (lic && lic.values[0]) {
+    const v = lic.values[0];
+    return v.length > 12 ? `${v.slice(0, 8)}…` : v;
+  }
+  const disc = groups.find((g) => g.kind === 'discord');
+  if (disc && disc.values[0]) return `dc:${disc.values[0]}`;
+  return '';
+}
+
+function playerMatchesQuery(p, q) {
+  if (!q) return true;
+  if (String(p.id).includes(q)) return true;
+  if (String(p.name || '').toLowerCase().includes(q)) return true;
+  if (String(p.endpoint || '').toLowerCase().includes(q)) return true;
+  for (const id of p.identifiers || []) {
+    if (String(id).toLowerCase().includes(q)) return true;
+  }
+  return false;
+}
+
 function renderPlayers(list) {
   players = list || [];
   const q = (playerFilter.value || '').trim().toLowerCase();
   plist.innerHTML = '';
   players
-    .filter((p) => !q || String(p.name || '').toLowerCase().includes(q) || String(p.id).includes(q))
+    .filter((p) => playerMatchesQuery(p, q))
     .forEach((p) => {
       const li = document.createElement('li');
       li.dataset.pid = String(p.id);
       li.setAttribute('role', 'button');
       li.tabIndex = -1;
-      li.innerHTML = `<div><div class="name">#${p.id} ${p.name || ''}</div><div class="meta">${p.ping ?? 0} ms</div></div>`;
+      const hint = shortIdHint(p);
+      const meta = hint
+        ? `${p.ping ?? 0} ms · ${escapeHtml(hint)}`
+        : `${p.ping ?? 0} ms`;
+      li.innerHTML = `<div><div class="name">#${p.id} ${escapeHtml(p.name || '')}</div><div class="meta">${meta}</div></div>`;
       li.onclick = () => openPlayer(p);
       plist.appendChild(li);
     });
@@ -613,11 +689,21 @@ function openPlayer(p) {
   selectedPlayer = p;
   pmName.textContent = p.name || `Spieler #${p.id}`;
   pmIdBadge.textContent = `[${p.id}]`;
-  pmInfo.innerHTML = `
-    <dt>ID</dt><dd>${p.id}</dd>
-    <dt>Name</dt><dd>${p.name || '—'}</dd>
-    <dt>Ping</dt><dd>${p.ping ?? 0} ms</dd>
-  `;
+  const rows = [
+    ['Server-ID', String(p.id)],
+    ['Name', p.name || '—'],
+    ['Ping', `${p.ping ?? 0} ms`],
+  ];
+  if (p.endpoint) rows.push(['Endpoint', p.endpoint]);
+  for (const g of groupPlayerIds(p.identifiers || [])) {
+    rows.push([g.label, g.values.join('\n')]);
+  }
+  if (rows.length <= 3) {
+    rows.push(['IDs', 'Keine Identifier']);
+  }
+  pmInfo.innerHTML = rows.map(([k, v]) => (
+    `<dt>${escapeHtml(k)}</dt><dd class="pm-id">${escapeHtml(v)}</dd>`
+  )).join('');
   setPmTab('actions');
   playerModal.classList.remove('hidden');
   playerModal.setAttribute('aria-hidden', 'false');
