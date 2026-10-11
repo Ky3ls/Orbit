@@ -161,7 +161,47 @@ CreateThread(function()
   end
 end)
 
--- —— Player IDs + HP/Armor-Balken (Balken RECHTS neben der ID) ——
+-- —— Player IDs + vertikale HP/Weste (Körper) + Skelett-ESP (durch Wände) ——
+local BONE_HEAD = 31086
+local BONE_NECK = 39317
+local BONE_SPINE = 24818
+local BONE_PELVIS = 11816
+local BONE_L_CLAV = 64729
+local BONE_L_UPARM = 45509
+local BONE_L_FORE = 61163
+local BONE_L_HAND = 18905
+local BONE_R_CLAV = 10706
+local BONE_R_UPARM = 40269
+local BONE_R_FORE = 28252
+local BONE_R_HAND = 57005
+local BONE_L_THIGH = 58271
+local BONE_L_CALF = 63931
+local BONE_L_FOOT = 14201
+local BONE_R_THIGH = 51826
+local BONE_R_CALF = 36864
+local BONE_R_FOOT = 52301
+
+--- Knochen-Paare fürs Skelett
+local SKELETON = {
+  { BONE_HEAD, BONE_NECK },
+  { BONE_NECK, BONE_SPINE },
+  { BONE_SPINE, BONE_PELVIS },
+  { BONE_NECK, BONE_L_CLAV },
+  { BONE_L_CLAV, BONE_L_UPARM },
+  { BONE_L_UPARM, BONE_L_FORE },
+  { BONE_L_FORE, BONE_L_HAND },
+  { BONE_NECK, BONE_R_CLAV },
+  { BONE_R_CLAV, BONE_R_UPARM },
+  { BONE_R_UPARM, BONE_R_FORE },
+  { BONE_R_FORE, BONE_R_HAND },
+  { BONE_PELVIS, BONE_L_THIGH },
+  { BONE_L_THIGH, BONE_L_CALF },
+  { BONE_L_CALF, BONE_L_FOOT },
+  { BONE_PELVIS, BONE_R_THIGH },
+  { BONE_R_THIGH, BONE_R_CALF },
+  { BONE_R_CALF, BONE_R_FOOT },
+}
+
 local function pedHealthPct(ped)
   local hp = GetEntityHealth(ped)
   local maxHp = GetEntityMaxHealth(ped)
@@ -179,49 +219,82 @@ local function pedArmorPct(ped)
   return a + 0.0
 end
 
-local function measureTextWidth(label, scale)
-  SetTextScale(scale, scale)
-  SetTextFont(4)
-  local ok, w = pcall(function()
-    BeginTextCommandGetWidth('STRING')
-    AddTextComponentSubstringPlayerName(label)
-    return EndTextCommandGetWidth(true)
-  end)
-  if ok and type(w) == 'number' and w > 0.001 then return w end
-  -- Fallback: grobe Breite aus Zeichenlänge
-  return math.min(0.22, (#tostring(label)) * 0.0048 * (scale / 0.35))
+local function boneScreen(ped, bone)
+  local c = GetPedBoneCoords(ped, bone, 0.0, 0.0, 0.0)
+  local ok, x, y = World3dToScreen2d(c.x, c.y, c.z)
+  if not ok then return nil end
+  return x, y, c
 end
 
---- Screen-Balken (0–1), Zentrum bei (cx, cy)
-local function drawStatBar(cx, cy, pct, r, g, b, barW, barH)
+--- 2D-Linie (Screen) — sichtbar durch Wände
+local function drawScreenLine(x1, y1, x2, y2, r, g, b, a)
+  local dx, dy = x2 - x1, y2 - y1
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 0.0005 then return end
+  local steps = math.min(48, math.max(4, math.floor(len * 420)))
+  local w = 0.00135
+  local h = 0.0022
+  for i = 0, steps do
+    local t = i / steps
+    DrawRect(x1 + dx * t, y1 + dy * t, w, h, r, g, b, a)
+  end
+end
+
+--- Vertikaler Balken rechts am Körper (Fuß → Kopf), Füllung von unten
+local function drawVerticalBar(barX, topY, botY, pct, r, g, b, barW)
+  local height = botY - topY
+  if height < 0.015 then height = 0.015 end
+  local midY = topY + height * 0.5
+  DrawRect(barX, midY, barW + 0.0016, height + 0.002, 0, 0, 0, 150)
+  DrawRect(barX, midY, barW, height, 18, 18, 22, 180)
   local fill = math.max(0.0, math.min(1.0, pct / 100.0))
-  DrawRect(cx, cy, barW + 0.0018, barH + 0.0018, 0, 0, 0, 140)
-  DrawRect(cx, cy, barW, barH, 20, 20, 24, 170)
-  if fill > 0.001 then
-    local fillW = barW * fill
-    local fillX = cx - (barW * 0.5) + (fillW * 0.5)
-    DrawRect(fillX, cy, fillW, barH * 0.7, r, g, b, 235)
+  if fill > 0.01 then
+    local fillH = height * fill
+    local fillCy = botY - fillH * 0.5
+    DrawRect(barX, fillCy, barW * 0.62, fillH, r, g, b, 235)
+  end
+end
+
+local function drawPedSkeleton(ped, r, g, b, a)
+  local cache = {}
+  local function scr(bone)
+    if cache[bone] ~= nil then return cache[bone][1], cache[bone][2] end
+    local x, y = boneScreen(ped, bone)
+    if x then cache[bone] = { x, y } else cache[bone] = false end
+    if cache[bone] then return cache[bone][1], cache[bone][2] end
+    return nil
+  end
+  for i = 1, #SKELETON do
+    local pair = SKELETON[i]
+    local x1, y1 = scr(pair[1])
+    local x2, y2 = scr(pair[2])
+    if x1 and x2 then
+      drawScreenLine(x1, y1, x2, y2, r, g, b, a)
+    end
   end
 end
 
 CreateThread(function()
-  local textScale = 0.35
-  local barW, barH = 0.038, 0.0052
-  local barGapY = 0.0072
-  local padX = 0.008
+  local textScale = 0.32
+  local barW = 0.0036
+  local barGap = 0.0055
+  local ESP_DIST = 220.0
   while true do
     if showIds then
-      local myCoords = GetEntityCoords(PlayerPedId())
+      local myPed = PlayerPedId()
+      local myCoords = GetEntityCoords(myPed)
       for _, pid in ipairs(GetActivePlayers()) do
         local ped = GetPlayerPed(pid)
         if ped ~= 0 then
           local coords = GetEntityCoords(ped)
-          if #(coords - myCoords) < 150.0 then
+          local dist = #(coords - myCoords)
+          if dist < ESP_DIST then
             local sid = GetPlayerServerId(pid)
             local label = ('[%s] %s'):format(sid, GetPlayerName(pid) or '')
-            local onScreen, sx, sy = World3dToScreen2d(coords.x, coords.y, coords.z + 1.15)
-            if onScreen then
-              local textW = measureTextWidth(label, textScale)
+
+            -- ID über dem Kopf
+            local hx, hy = boneScreen(ped, BONE_HEAD)
+            if hx then
               SetTextScale(textScale, textScale)
               SetTextFont(4)
               SetTextCentre(true)
@@ -229,29 +302,54 @@ CreateThread(function()
               SetTextOutline()
               BeginTextCommandDisplayText('STRING')
               AddTextComponentSubstringPlayerName(label)
-              EndTextCommandDisplayText(sx, sy)
+              EndTextCommandDisplayText(hx, hy - 0.028)
+            end
 
-              -- Balken rechts neben der ID (gleiche Höhe, kein Overlap)
-              local barX = sx + (textW * 0.5) + padX + (barW * 0.5)
-              -- Text-Y ist oben; Balken-Zentrum ≈ Textmitte
-              local midY = sy + 0.012
+            -- Skelett-ESP (Screen → durch Wände), inkl. sich selbst optional auslassen
+            if ped ~= myPed then
+              local alpha = dist < 40.0 and 220 or (dist < 100.0 and 170 or 120)
+              drawPedSkeleton(ped, 255, 140, 40, alpha)
+            end
+
+            -- Vertikale Bars rechts am Körper (Fuß → Kopf)
+            local headX, headY = boneScreen(ped, BONE_HEAD)
+            local lFootX, lFootY = boneScreen(ped, BONE_L_FOOT)
+            local rFootX, rFootY = boneScreen(ped, BONE_R_FOOT)
+            local lx = select(1, boneScreen(ped, BONE_L_UPARM))
+            local rx = select(1, boneScreen(ped, BONE_R_UPARM))
+            if headX and headY and (lFootY or rFootY) then
+              local footY = lFootY or rFootY
+              if lFootY and rFootY then footY = math.max(lFootY, rFootY) end
+              local topY = math.min(headY, footY)
+              local botY = math.max(headY, footY)
+              -- rechter Körperrand (Schulter/Kopf) → Bars daneben
+              local rightEdge = headX
+              if lx then rightEdge = math.max(rightEdge, lx) end
+              if rx then rightEdge = math.max(rightEdge, rx) end
+              if lFootX then rightEdge = math.max(rightEdge, lFootX) end
+              if rFootX then rightEdge = math.max(rightEdge, rFootX) end
+              local barX = rightEdge + 0.010
+              if barX > 0.985 then
+                local leftEdge = headX
+                if lx then leftEdge = math.min(leftEdge, lx) end
+                if rx then leftEdge = math.min(leftEdge, rx) end
+                barX = leftEdge - 0.010 - barGap
+              end
+
               local hp = pedHealthPct(ped)
               local armor = pedArmorPct(ped)
               local hr, hg, hb = 80, 200, 90
-              if hp < 35.0 then
-                hr, hg, hb = 230, 70, 70
-              elseif hp < 65.0 then
-                hr, hg, hb = 230, 180, 60
-              end
-              drawStatBar(barX, midY - (barGapY * 0.5), hp, hr, hg, hb, barW, barH)
-              drawStatBar(barX, midY + (barGapY * 0.5), armor, 70, 140, 230, barW, barH)
+              if hp < 35.0 then hr, hg, hb = 230, 70, 70
+              elseif hp < 65.0 then hr, hg, hb = 230, 180, 60 end
+              drawVerticalBar(barX, topY, botY, hp, hr, hg, hb, barW)
+              drawVerticalBar(barX + barGap, topY, botY, armor, 70, 140, 230, barW)
             end
           end
         end
       end
       Wait(0)
     else
-      Wait(500)
+      Wait(400)
     end
   end
 end)
