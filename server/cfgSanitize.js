@@ -46,5 +46,18 @@ export function sanitizeCfgMetaComments(text) {
     '# Lizenz und MySQL:',
   );
 
+  // Doppelte OneSync-Kommentare → eine Zeile
+  let seenOs = false;
+  out = out
+    .split('\n')
+    .filter((line) => {
+      if (/^\s*#\s*OneSync:\s*\w+/i.test(line)) {
+        if (seenOs) return false;
+        seenOs = true;
+      }
+      return true;
+    })
+    .join('\n');
+
   return out.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '');
 }
