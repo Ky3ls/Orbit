@@ -296,11 +296,19 @@ local function pedArmorPct(ped)
   return a + 0.0
 end
 
+local function pedBoneXYZ(ped, bone)
+  local a, b, d = GetPedBoneCoords(ped, bone, 0.0, 0.0, 0.0)
+  if type(a) == 'number' and b then return a, b, d end
+  if a then return a.x, a.y, a.z end
+  return nil
+end
+
 local function boneScreen(ped, bone)
-  local c = GetPedBoneCoords(ped, bone, 0.0, 0.0, 0.0)
-  local ok, x, y = World3dToScreen2d(c.x, c.y, c.z)
+  local bx, by, bz = pedBoneXYZ(ped, bone)
+  if not bx then return nil end
+  local ok, x, y = World3dToScreen2d(bx, by, bz)
   if not ok then return nil end
-  return x, y, c
+  return x, y
 end
 
 --- Vertikaler Balken rechts am Körper (Fuß → Kopf), Füllung von unten
@@ -317,27 +325,45 @@ local function drawVerticalBar(barX, topY, botY, pct, r, g, b, barW)
   end
 end
 
---- Skelett: 1× DrawLine pro Segment (kein DrawRect-Spam → kein Draw-Limit-Abbruch)
+--- 2D-Linie: 1× DrawSprite (rotiert) — durch Wände, kein Draw-Limit
+local LINE_TXD, LINE_TEX = 'commonmenu', 'gradient_bgd'
+local lineTxdOk = false
+
+local function drawScreenLine(x1, y1, x2, y2, r, g, b, a)
+  local dx, dy = x2 - x1, y2 - y1
+  local len = math.sqrt(dx * dx + dy * dy)
+  if len < 0.0004 then return end
+  if lineTxdOk then
+    DrawSprite(LINE_TXD, LINE_TEX, (x1 + x2) * 0.5, (y1 + y2) * 0.5, len, 0.0026, math.deg(math.atan(dy, dx)), r, g, b, a)
+    return
+  end
+  local steps = math.min(10, math.max(2, math.floor(len * 90.0 + 0.5)))
+  for i = 0, steps do
+    local t = i / steps
+    DrawRect(x1 + dx * t, y1 + dy * t, 0.0022, 0.0032, r, g, b, a)
+  end
+end
+
 local function drawPedSkeleton(ped, r, g, b, a)
   local cache = {}
-  local function bonePos(bone)
+  local function scr(bone)
     local hit = cache[bone]
     if hit == false then return nil end
-    if hit then return hit end
-    local c = GetPedBoneCoords(ped, bone, 0.0, 0.0, 0.0)
-    if c and c.x then
-      cache[bone] = c
-      return c
+    if hit then return hit[1], hit[2] end
+    local x, y = boneScreen(ped, bone)
+    if x then
+      cache[bone] = { x, y }
+      return x, y
     end
     cache[bone] = false
     return nil
   end
   for i = 1, #SKELETON do
     local pair = SKELETON[i]
-    local c1 = bonePos(pair[1])
-    local c2 = bonePos(pair[2])
-    if c1 and c2 then
-      DrawLine(c1.x, c1.y, c1.z, c2.x, c2.y, c2.z, r, g, b, a)
+    local x1, y1 = scr(pair[1])
+    local x2, y2 = scr(pair[2])
+    if x1 and x2 then
+      drawScreenLine(x1, y1, x2, y2, r, g, b, a)
     end
   end
 end
@@ -376,8 +402,8 @@ local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB,
     acc(BONE_R_UPARM)
     local gotFoot = acc(BONE_L_FOOT) or acc(BONE_R_FOOT)
     if not gotFoot then
-      local c = GetEntityCoords(ped)
-      local ok, x, y = World3dToScreen2d(c.x, c.y, c.z - 0.95)
+      local ec = GetEntityCoords(ped)
+      local ok, x, y = World3dToScreen2d(ec.x, ec.y, ec.z - 0.95)
       if ok then
         if x < leftX then leftX = x end
         if x > rightX then rightX = x end
@@ -408,7 +434,7 @@ local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB,
 
   if withSkeleton ~= false then
     local alpha = ped == myPed and 220 or (dist < 40.0 and 230 or (dist < 100.0 and 180 or 130))
-    drawPedSkeleton(ped, skR, skG, skB, alpha)
+    pcall(drawPedSkeleton, ped, skR, skG, skB, alpha)
   end
 end
 
@@ -452,50 +478,58 @@ local function collectNpcPeds(myPed, myCoords, maxDist, maxCount)
 end
 
 CreateThread(function()
+  RequestStreamedTextureDict(LINE_TXD, true)
   local textScale = 0.32
   local barW = 0.0036
   local barGap = 0.0055
   local ESP_DIST = 220.0
   local ESP_NPC_DIST = 80.0
-  local ESP_NPC_MAX = 20
-  local ESP_NPC_SKELETON_MAX = 14
+  local ESP_NPC_MAX = 12
+  local ESP_NPC_SKELETON_MAX = 8
   while true do
     if showIds then
-      local myPed = PlayerPedId()
-      local myCoords = GetEntityCoords(myPed)
-      local seen = {}
-      for _, pid in ipairs(GetActivePlayers()) do
-        local ped = GetPlayerPed(pid)
-        if ped ~= 0 then
-          seen[ped] = true
-          local coords = GetEntityCoords(ped)
-          local dist = #(coords - myCoords)
-          if dist < ESP_DIST then
-            local sid = GetPlayerServerId(pid)
-            local label = ('[%s] %s'):format(sid, GetPlayerName(pid) or '')
-            drawEspEntity(ped, myPed, dist, label, accentR, accentG, accentB, accentR2, accentG2, accentB2, textScale, barW, barGap, true)
+      if not lineTxdOk and HasStreamedTextureDictLoaded(LINE_TXD) then
+        lineTxdOk = true
+      elseif not lineTxdOk then
+        RequestStreamedTextureDict(LINE_TXD, true)
+      end
+      -- pcall: ein Lua-Fehler darf den ESP-Thread nicht totlegen
+      pcall(function()
+        local myPed = PlayerPedId()
+        local myCoords = GetEntityCoords(myPed)
+        local seen = {}
+        for _, pid in ipairs(GetActivePlayers()) do
+          local ped = GetPlayerPed(pid)
+          if ped ~= 0 then
+            seen[ped] = true
+            local coords = GetEntityCoords(ped)
+            local dist = #(coords - myCoords)
+            if dist < ESP_DIST then
+              local sid = GetPlayerServerId(pid)
+              local label = ('[%s] %s'):format(sid, GetPlayerName(pid) or '')
+              drawEspEntity(ped, myPed, dist, label, accentR, accentG, accentB, accentR2, accentG2, accentB2, textScale, barW, barGap, true)
+            end
           end
         end
-      end
-      -- TEMP: NPC-ESP (nächste zuerst; Skeleton nur für die nächsten N)
-      if ESP_NPC_TEMP then
-        local npcs = collectNpcPeds(myPed, myCoords, ESP_NPC_DIST, ESP_NPC_MAX)
-        local nr = math.floor(accentR * 0.55 + 100)
-        local ng = math.floor(accentG * 0.55 + 100)
-        local nb = math.floor(accentB * 0.55 + 100)
-        local sr = math.floor(accentR2 * 0.5 + 90)
-        local sg = math.floor(accentG2 * 0.5 + 90)
-        local sb = math.floor(accentB2 * 0.5 + 90)
-        local skCount = 0
-        for i = 1, #npcs do
-          local e = npcs[i]
-          if not seen[e.ped] then
-            skCount = skCount + 1
-            local full = skCount <= ESP_NPC_SKELETON_MAX
-            drawEspEntity(e.ped, myPed, e.dist, '[NPC]', nr, ng, nb, sr, sg, sb, textScale, barW, barGap, full)
+        if ESP_NPC_TEMP then
+          local npcs = collectNpcPeds(myPed, myCoords, ESP_NPC_DIST, ESP_NPC_MAX)
+          local nr = math.floor(accentR * 0.55 + 100)
+          local ng = math.floor(accentG * 0.55 + 100)
+          local nb = math.floor(accentB * 0.55 + 100)
+          local sr = math.floor(accentR2 * 0.5 + 90)
+          local sg = math.floor(accentG2 * 0.5 + 90)
+          local sb = math.floor(accentB2 * 0.5 + 90)
+          local skCount = 0
+          for i = 1, #npcs do
+            local e = npcs[i]
+            if not seen[e.ped] then
+              skCount = skCount + 1
+              local full = skCount <= ESP_NPC_SKELETON_MAX
+              drawEspEntity(e.ped, myPed, e.dist, '[NPC]', nr, ng, nb, sr, sg, sb, textScale, barW, barGap, full)
+            end
           end
         end
-      end
+      end)
       Wait(0)
     else
       Wait(400)
