@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtFull } from '../format.js';
@@ -144,6 +144,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
   const [cleanOpts, setCleanOpts] = useState(null);
   const [cleanForm, setCleanForm] = useState({ players: '60d', bans: 'revoked', warns: '30d', hwids: 'none' });
   const [sysBusy, setSysBusy] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
   const hostTab = HOST_TABS.has(params.get('tab')) ? params.get('tab') : 'servers';
   const [prefs, setAppearance] = useAppearance();
 
@@ -266,10 +267,13 @@ export default function Settings({ user, onUser, onSetupReset }) {
     setTplBusy(false);
   }
 
-  async function save(e) {
-    e.preventDefault();
+  const canSaveSection = Boolean(SECTION_FIELDS[section]);
+
+  const saveSettings = useCallback(async () => {
+    if (!form || !SECTION_FIELDS[section] || saveBusy) return;
     setErr('');
     setMsg('');
+    setSaveBusy(true);
     try {
       const base = pickSectionPayload(form, section);
       const payload = section === 'general'
@@ -285,8 +289,27 @@ export default function Settings({ user, onUser, onSetupReset }) {
       load();
     } catch (error) {
       setErr(error.message);
+    } finally {
+      setSaveBusy(false);
     }
+  }, [form, section, saveBusy, setLanguage, t]);
+
+  function save(e) {
+    e?.preventDefault?.();
+    saveSettings();
   }
+
+  useEffect(() => {
+    if (!canSaveSection) return undefined;
+    function onKey(e) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key !== 's' && e.key !== 'S') return;
+      e.preventDefault();
+      saveSettings();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canSaveSection, saveSettings]);
 
   async function password(e) {
     e.preventDefault();
@@ -310,6 +333,22 @@ export default function Settings({ user, onUser, onSetupReset }) {
   const modes = (form.allowlistModes?.length
     ? form.allowlistModes.map((m) => ({ ...m, label: t(ALLOWLIST_MODE_KEYS[m.value] || m.label) }))
     : ALLOWLIST_MODE_VALUES.map((value) => ({ value, label: t(ALLOWLIST_MODE_KEYS[value]) })));
+
+  function SaveBar({ extra }) {
+    return (
+      <div className="st-foot st-wide st-savebar">
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={saveBusy}
+        >
+          {saveBusy ? '…' : t('common.save')}
+        </button>
+        <kbd className="st-save-kbd">Ctrl+S</kbd>
+        {extra}
+      </div>
+    );
+  }
 
   const aside = (
     <nav className="st-nav" aria-label={t('settings.navAria')}>
@@ -347,7 +386,6 @@ export default function Settings({ user, onUser, onSetupReset }) {
               wide
               title={t('settings.general.title')}
               lead={t('settings.general.lead')}
-              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <FieldRow>
                 <label className="field">
@@ -391,9 +429,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 <label className="field"><span>{t('settings.port')}</span><input value={form.fivemPort} onChange={(e) => set({ fivemPort: e.target.value })} /></label>
               </FieldRow>
             </ModuleCard>
-            <div className="st-foot st-wide">
-              <button className="btn btn-primary" type="submit">{t('settings.saveGeneral')}</button>
-            </div>
+            <SaveBar />
           </form>
         )}
 
@@ -403,7 +439,6 @@ export default function Settings({ user, onUser, onSetupReset }) {
               wide
               title={t('settings.fx.title')}
               lead={t('settings.fx.lead')}
-              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <label className="field">
                 <span>Steuerungsmodus</span>
@@ -462,21 +497,23 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 <label className="field"><span>Passwort</span><input type="password" value={form.rconPassword || ''} onChange={(e) => set({ rconPassword: e.target.value })} placeholder={form.rconConfigured ? 'leer lassen' : 'eintragen'} autoComplete="new-password" /></label>
               </div>
             </ModuleCard>
-            <div className="st-foot st-wide">
-              <button className="btn btn-primary" type="submit">{t('settings.fx.save')}</button>
-              <button className="btn" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || t('settings.rconOk'))).catch((e) => setErr(e.message))}>{t('settings.fx.rconTest')}</button>
-            </div>
+            <SaveBar
+              extra={(
+                <button className="btn" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || t('settings.rconOk'))).catch((e) => setErr(e.message))}>{t('settings.fx.rconTest')}</button>
+              )}
+            />
           </form>
         )}
 
         {section === 'moderation' && isAdmin && (
+          <>
+          <form className="st-stack" onSubmit={save}>
           <div className="st-mod-split">
             <div className="st-mod-split-pane">
-              <form className="st-mod-split-stack" onSubmit={save}>
+              <div className="st-mod-split-stack">
                 <ModuleCard
                   title={t('settings.allowlist.title')}
                   lead={t('settings.allowlist.lead')}
-                  actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
                 >
                   <AllowlistPanel
                     mode={form.allowlistMode}
@@ -488,15 +525,13 @@ export default function Settings({ user, onUser, onSetupReset }) {
                     onChange={set}
                   />
                 </ModuleCard>
-              </form>
+              </div>
             </div>
             <div className="st-mod-split-pane">
               <div className="st-mod-split-stack">
-                <form onSubmit={save}>
                   <ModuleCard
                     title={t('settings.bans.title')}
                     lead={t('settings.bans.lead')}
-                    actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
                   >
                     <Toggle checked={form.banChecking !== false} onChange={(v) => set({ banChecking: v })} onLabel={t('settings.bans.checkOnShort')} offLabel={t('settings.bans.checkOffShort')} />
                     <label className="field">
@@ -516,107 +551,111 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       </select>
                     </label>
                   </ModuleCard>
-                </form>
-                <ModuleCard title={t('settings.bans.templates')} lead={t('settings.bans.templatesLead')}>
-                  <form className="st-fields st-fields-1" onSubmit={addTemplate}>
-                    <label className="field">
-                      <span>{t('settings.bans.tplTitle')}</span>
-                      <input
-                        value={tplTitle}
-                        onChange={(e) => setTplTitle(e.target.value)}
-                        placeholder={t('settings.bans.tplTitlePh')}
-                        required
-                        minLength={1}
-                        maxLength={48}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>{t('settings.bans.reason')}</span>
-                      <input
-                        value={tplReason}
-                        onChange={(e) => setTplReason(e.target.value)}
-                        placeholder={t('settings.bans.reasonPh')}
-                        required
-                        minLength={3}
-                        maxLength={280}
-                      />
-                    </label>
-                    <OrbitSelect
-                      label={t('settings.bans.duration')}
-                      value={tplDuration}
-                      onChange={setTplDuration}
-                      options={[
-                        ...BAN_DURATION_PRESETS.map((p) => ({
-                          value: p.id,
-                          label: banDurationLabel(p.id, t),
-                        })),
-                        { value: 'custom', label: t('ban.custom') },
-                      ]}
-                    />
-                    {tplDuration === 'custom' && (
-                      <div className="st-custom-dur">
-                        <label className="field">
-                          <span>{t('common.days')}</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={9999}
-                            inputMode="numeric"
-                            placeholder={t('ban.daysPh')}
-                            value={tplDays}
-                            onChange={(e) => setTplDays(e.target.value)}
-                          />
-                        </label>
-                        <label className="field">
-                          <span>{t('ban.hhmm')}</span>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder={t('ban.hhmmPh')}
-                            value={tplHhmm}
-                            onChange={(e) => setTplHhmm(e.target.value)}
-                            maxLength={5}
-                            autoComplete="off"
-                          />
-                        </label>
-                      </div>
-                    )}
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={
-                        tplBusy
-                        || !tplTitle.trim()
-                        || tplReason.trim().length < 3
-                        || (tplDuration === 'custom' && !customDurationToId(tplDays, tplHhmm).ok)
-                      }
-                    >
-                      {tplBusy ? '…' : t('settings.tplAdd')}
-                    </button>
-                  </form>
-                  {templates.length === 0 ? (
-                    <p className="muted st-tpl-empty">{t('settings.bans.noTpl')}</p>
-                  ) : (
-                    <ul className="st-tpl-list">
-                      {templates.map((tpl) => (
-                        <li key={tpl.id}>
-                          <div>
-                            <strong>{tpl.title || tpl.reason}</strong>
-                            <span className="muted">
-                              {tpl.reason}
-                              {tpl.reason ? ' · ' : ''}
-                              {banDurationLabel(tpl.duration_id, t)}
-                            </span>
-                          </div>
-                          <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(tpl.id)}>{t('common.delete')}</button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </ModuleCard>
               </div>
             </div>
           </div>
+          <SaveBar />
+          </form>
+          <div className="st-stack" style={{ marginTop: 12 }}>
+            <ModuleCard title={t('settings.bans.templates')} lead={t('settings.bans.templatesLead')}>
+              <form className="st-fields st-fields-1" onSubmit={addTemplate}>
+                <label className="field">
+                  <span>{t('settings.bans.tplTitle')}</span>
+                  <input
+                    value={tplTitle}
+                    onChange={(e) => setTplTitle(e.target.value)}
+                    placeholder={t('settings.bans.tplTitlePh')}
+                    required
+                    minLength={1}
+                    maxLength={48}
+                  />
+                </label>
+                <label className="field">
+                  <span>{t('settings.bans.reason')}</span>
+                  <input
+                    value={tplReason}
+                    onChange={(e) => setTplReason(e.target.value)}
+                    placeholder={t('settings.bans.reasonPh')}
+                    required
+                    minLength={3}
+                    maxLength={280}
+                  />
+                </label>
+                <OrbitSelect
+                  label={t('settings.bans.duration')}
+                  value={tplDuration}
+                  onChange={setTplDuration}
+                  options={[
+                    ...BAN_DURATION_PRESETS.map((p) => ({
+                      value: p.id,
+                      label: banDurationLabel(p.id, t),
+                    })),
+                    { value: 'custom', label: t('ban.custom') },
+                  ]}
+                />
+                {tplDuration === 'custom' && (
+                  <div className="st-custom-dur">
+                    <label className="field">
+                      <span>{t('common.days')}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={9999}
+                        inputMode="numeric"
+                        placeholder={t('ban.daysPh')}
+                        value={tplDays}
+                        onChange={(e) => setTplDays(e.target.value)}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>{t('ban.hhmm')}</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder={t('ban.hhmmPh')}
+                        value={tplHhmm}
+                        onChange={(e) => setTplHhmm(e.target.value)}
+                        maxLength={5}
+                        autoComplete="off"
+                      />
+                    </label>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={
+                    tplBusy
+                    || !tplTitle.trim()
+                    || tplReason.trim().length < 3
+                    || (tplDuration === 'custom' && !customDurationToId(tplDays, tplHhmm).ok)
+                  }
+                >
+                  {tplBusy ? '…' : t('settings.tplAdd')}
+                </button>
+              </form>
+              {templates.length === 0 ? (
+                <p className="muted st-tpl-empty">{t('settings.bans.noTpl')}</p>
+              ) : (
+                <ul className="st-tpl-list">
+                  {templates.map((tpl) => (
+                    <li key={tpl.id}>
+                      <div>
+                        <strong>{tpl.title || tpl.reason}</strong>
+                        <span className="muted">
+                          {tpl.reason}
+                          {tpl.reason ? ' · ' : ''}
+                          {banDurationLabel(tpl.duration_id, t)}
+                        </span>
+                      </div>
+                      <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(tpl.id)}>{t('common.delete')}</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </ModuleCard>
+          </div>
+          </>
         )}
 
         {section === 'discord' && isOwner && (
@@ -624,7 +663,6 @@ export default function Settings({ user, onUser, onSetupReset }) {
             <ModuleCard
               title="Webhook"
               lead="Start/Stop und optional Player-Drops."
-              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <div className="st-chips">
                 <Toggle checked={!!form.discordEnabled} onChange={(v) => set({ discordEnabled: v })} onLabel="Webhook an" offLabel="Webhook aus" />
@@ -668,10 +706,11 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 spellCheck={false}
               />
             </ModuleCard>
-            <div className="st-foot st-wide">
-              <button className="btn btn-primary" type="submit">Discord speichern</button>
-              <button type="button" className="btn" onClick={() => api('/api/platform/discord-test', { method: 'POST', body: {} }).then(() => setMsg('Discord-Test gesendet.')).catch((e) => setErr(e.message))}>Webhook testen</button>
-            </div>
+            <SaveBar
+              extra={(
+                <button type="button" className="btn" onClick={() => api('/api/platform/discord-test', { method: 'POST', body: {} }).then(() => setMsg('Discord-Test gesendet.')).catch((e) => setErr(e.message))}>Webhook testen</button>
+              )}
+            />
           </form>
         )}
 
@@ -680,7 +719,6 @@ export default function Settings({ user, onUser, onSetupReset }) {
             <ModuleCard
               title={t('settings.game.menuTitle')}
               lead={t('settings.game.menuLead')}
-              actions={<button className="btn btn-primary btn-sm" type="submit">{t('common.save')}</button>}
             >
               <div className="st-chips">
                 <Toggle checked={form.gameMenuEnabled !== false} onChange={(v) => set({ gameMenuEnabled: v })} onLabel={t('settings.game.menuOn')} offLabel={t('settings.game.menuOff')} />
@@ -692,6 +730,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                   value={form.gameMenuPageKey || 'Tab'}
                   onChange={(e) => set({ gameMenuPageKey: e.target.value })}
                   onKeyDown={(e) => {
+                    if (e.ctrlKey || e.metaKey || e.altKey) return;
                     if (e.key === 'Escape' || e.key === 'Backspace') return;
                     if (e.key.length === 1 || ['Tab', 'Enter', 'Shift', 'Control', 'Alt'].includes(e.key)) {
                       e.preventDefault();
@@ -723,9 +762,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 <Toggle checked={!!form.hideRestartWarnNotif} onChange={(v) => set({ hideRestartWarnNotif: v })} onLabel="Restart-Warn aus" offLabel="Restart-Warn an" />
               </div>
             </ModuleCard>
-            <div className="st-foot st-wide">
-              <button className="btn btn-primary" type="submit">Spiel speichern</button>
-            </div>
+            <SaveBar />
           </form>
         )}
 
