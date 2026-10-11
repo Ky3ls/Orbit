@@ -269,7 +269,6 @@ local function drawVerticalBar(barX, topY, botY, pct, r, g, b, barW)
   local height = botY - topY
   if height < 0.015 then height = 0.015 end
   local midY = topY + height * 0.5
-  DrawRect(barX, midY, barW + 0.0016, height + 0.002, 0, 0, 0, 150)
   DrawRect(barX, midY, barW, height, 18, 18, 22, 180)
   local fill = math.max(0.0, math.min(1.0, pct / 100.0))
   if fill > 0.01 then
@@ -326,7 +325,7 @@ CreateThread(function()
               SetTextOutline()
               BeginTextCommandDisplayText('STRING')
               AddTextComponentSubstringPlayerName(label)
-              EndTextCommandDisplayText(hx, hy - 0.028)
+              EndTextCommandDisplayText(hx, hy - 0.048)
             end
 
             -- Skelett-ESP (Screen → durch Wände), inkl. sich selbst optional auslassen
@@ -346,18 +345,19 @@ CreateThread(function()
               if lFootY and rFootY then footY = math.max(lFootY, rFootY) end
               local topY = math.min(headY, footY)
               local botY = math.max(headY, footY)
-              -- rechter Körperrand (Schulter/Kopf) → Bars daneben
+              -- rechter Körperrand (Schulter/Kopf) → Bars mit Abstand
+              local barPad = 0.022
               local rightEdge = headX
               if lx then rightEdge = math.max(rightEdge, lx) end
               if rx then rightEdge = math.max(rightEdge, rx) end
               if lFootX then rightEdge = math.max(rightEdge, lFootX) end
               if rFootX then rightEdge = math.max(rightEdge, rFootX) end
-              local barX = rightEdge + 0.010
+              local barX = rightEdge + barPad
               if barX > 0.985 then
                 local leftEdge = headX
                 if lx then leftEdge = math.min(leftEdge, lx) end
                 if rx then leftEdge = math.min(leftEdge, rx) end
-                barX = leftEdge - 0.010 - barGap
+                barX = leftEdge - barPad - barGap
               end
 
               local hp = pedHealthPct(ped)
