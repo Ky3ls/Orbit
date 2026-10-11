@@ -161,12 +161,11 @@ CreateThread(function()
   end
 end)
 
--- —— Player IDs + HP/Armor-Balken ——
+-- —— Player IDs + HP/Armor-Balken (Balken RECHTS neben der ID) ——
 local function pedHealthPct(ped)
   local hp = GetEntityHealth(ped)
   local maxHp = GetEntityMaxHealth(ped)
   if maxHp <= 100 then maxHp = 200 end
-  -- GTA: ~100 = tot/floor, max ~200 → Prozent 0–100
   local pct = ((hp - 100) / (maxHp - 100)) * 100.0
   if pct < 0.0 then pct = 0.0 end
   if pct > 100.0 then pct = 100.0 end
@@ -180,23 +179,36 @@ local function pedArmorPct(ped)
   return a + 0.0
 end
 
---- Screen-Balken (0–1 Koordinaten), zentriert unter (sx, sy)
-local function drawStatBar(sx, sy, pct, r, g, b, barW, barH)
-  local bgA = 160
+local function measureTextWidth(label, scale)
+  SetTextScale(scale, scale)
+  SetTextFont(4)
+  local ok, w = pcall(function()
+    BeginTextCommandGetWidth('STRING')
+    AddTextComponentSubstringPlayerName(label)
+    return EndTextCommandGetWidth(true)
+  end)
+  if ok and type(w) == 'number' and w > 0.001 then return w end
+  -- Fallback: grobe Breite aus Zeichenlänge
+  return math.min(0.22, (#tostring(label)) * 0.0048 * (scale / 0.35))
+end
+
+--- Screen-Balken (0–1), Zentrum bei (cx, cy)
+local function drawStatBar(cx, cy, pct, r, g, b, barW, barH)
   local fill = math.max(0.0, math.min(1.0, pct / 100.0))
-  -- Hintergrund
-  DrawRect(sx, sy, barW, barH, 20, 20, 24, bgA)
-  -- Rahmen leicht
-  DrawRect(sx, sy, barW + 0.0015, barH + 0.0015, 0, 0, 0, 120)
+  DrawRect(cx, cy, barW + 0.0018, barH + 0.0018, 0, 0, 0, 140)
+  DrawRect(cx, cy, barW, barH, 20, 20, 24, 170)
   if fill > 0.001 then
     local fillW = barW * fill
-    local fillX = sx - (barW * 0.5) + (fillW * 0.5)
-    DrawRect(fillX, sy, fillW, barH * 0.72, r, g, b, 230)
+    local fillX = cx - (barW * 0.5) + (fillW * 0.5)
+    DrawRect(fillX, cy, fillW, barH * 0.7, r, g, b, 235)
   end
 end
 
 CreateThread(function()
-  local barW, barH, gap = 0.045, 0.0065, 0.0085
+  local textScale = 0.35
+  local barW, barH = 0.038, 0.0052
+  local barGapY = 0.0072
+  local padX = 0.008
   while true do
     if showIds then
       local myCoords = GetEntityCoords(PlayerPedId())
@@ -206,29 +218,33 @@ CreateThread(function()
           local coords = GetEntityCoords(ped)
           if #(coords - myCoords) < 150.0 then
             local sid = GetPlayerServerId(pid)
+            local label = ('[%s] %s'):format(sid, GetPlayerName(pid) or '')
             local onScreen, sx, sy = World3dToScreen2d(coords.x, coords.y, coords.z + 1.15)
             if onScreen then
-              SetTextScale(0.35, 0.35)
+              local textW = measureTextWidth(label, textScale)
+              SetTextScale(textScale, textScale)
               SetTextFont(4)
               SetTextCentre(true)
               SetTextColour(255, 122, 26, 220)
               SetTextOutline()
               BeginTextCommandDisplayText('STRING')
-              AddTextComponentSubstringPlayerName(('[%s] %s'):format(sid, GetPlayerName(pid) or ''))
+              AddTextComponentSubstringPlayerName(label)
               EndTextCommandDisplayText(sx, sy)
 
+              -- Balken rechts neben der ID (gleiche Höhe, kein Overlap)
+              local barX = sx + (textW * 0.5) + padX + (barW * 0.5)
+              -- Text-Y ist oben; Balken-Zentrum ≈ Textmitte
+              local midY = sy + 0.012
               local hp = pedHealthPct(ped)
               local armor = pedArmorPct(ped)
-              -- HP: grün → gelb → rot
               local hr, hg, hb = 80, 200, 90
               if hp < 35.0 then
                 hr, hg, hb = 230, 70, 70
               elseif hp < 65.0 then
                 hr, hg, hb = 230, 180, 60
               end
-              drawStatBar(sx, sy + gap, hp, hr, hg, hb, barW, barH)
-              -- Weste (blau), auch bei 0 als leerer Balken sichtbar
-              drawStatBar(sx, sy + gap * 2.05, armor, 70, 140, 230, barW, barH)
+              drawStatBar(barX, midY - (barGapY * 0.5), hp, hr, hg, hb, barW, barH)
+              drawStatBar(barX, midY + (barGapY * 0.5), armor, 70, 140, 230, barW, barH)
             end
           end
         end
@@ -277,10 +293,10 @@ end)
 RegisterNetEvent('orbit:openMenu', function(payload)
   if menuOpen then return end
   menuOpen = true
-  menuCursor = true
+  menuCursor = false
   local game = payload and payload.game or {}
-  -- Cursor immer an, damit Klicks sichtbar sind
-  SetNuiFocus(true, true)
+  -- Main: nur Tastatur; Maus erst auf Spieler-Tab (NUI setCursor)
+  SetNuiFocus(true, false)
   SetNuiFocusKeepInput(false)
   SendNUIMessage({
     action = 'open',

@@ -271,9 +271,14 @@ function buildMenus() {
 }
 
 function syncMenuCursor() {
-  // Menü offen → Cursor immer sichtbar (auch Main), sonst unsichtbare Klicks
+  // Main: nur Tasten. Maus nur Spieler-Tab / Modal / Prompt.
   const menuOpen = app && !app.classList.contains('hidden');
-  post('setCursor', { enabled: !!(menuOpen || isModalOpen() || isPromptOpen()) });
+  if (!menuOpen) {
+    post('setCursor', { enabled: false });
+    return;
+  }
+  const wantMouse = activeTabId() === 'players' || isModalOpen() || isPromptOpen();
+  post('setCursor', { enabled: wantMouse });
 }
 
 function showOrbitToast(payload) {
@@ -727,7 +732,7 @@ document.querySelectorAll('.tabs button').forEach((btn) => {
     const pane = document.getElementById(`tab-${btn.dataset.tab}`);
     if (pane) pane.classList.remove('hidden');
     if (btn.dataset.tab !== 'players') closePlayer();
-    else syncMenuCursor();
+    syncMenuCursor();
     requestAnimationFrame(() => {
       const items = focusables();
       setKbFocus(0, { domFocus: false });
