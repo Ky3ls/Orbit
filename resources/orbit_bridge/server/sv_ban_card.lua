@@ -31,14 +31,14 @@ local function infoCell(label, value, color)
     type = 'Column',
     width = 'stretch',
     items = {
-      tb(label, { size = 'Small', isSubtle = true, weight = 'Bolder', spacing = 'None' }),
+      tb(label, { size = 'Small', weight = 'Bolder', color = 'Accent', spacing = 'None' }),
       tb(value, { size = 'Medium', weight = 'Bolder', color = color or 'Default', spacing = 'Small' }),
     },
   }
 end
 
---- Adaptive Card 1.2 — nur Elemente, die der FiveM-Renderer sicher kann
---- (Container/ColumnSet/FactSet/TextBlock, Submit/OpenUrl; kein Image/$schema)
+--- Adaptive Card 1.2 — FiveM rendert Container-Styles (attention/emphasis) nicht farbig,
+--- daher nur TextBlock/ColumnSet mit Farben + Separatoren (kein Image/$schema).
 function OrbitBuildBanCard(payload)
   payload = type(payload) == 'table' and payload or {}
   local serverName = truncate(trim(payload.serverName), 48)
@@ -55,80 +55,55 @@ function OrbitBuildBanCard(payload)
   local invite = trim(payload.discordInvite)
   if invite ~= '' and not invite:match('^https?://') then invite = '' end
 
-  local body = {}
+  local header = 'ORBIT'
+  if serverName ~= '' then header = header .. '  ·  ' .. serverName end
 
-  body[#body + 1] = {
-    type = 'ColumnSet',
-    columns = {
-      {
-        type = 'Column',
-        width = 'stretch',
-        verticalContentAlignment = 'Center',
-        items = {
-          tb('ORBIT', { size = 'Small', weight = 'Bolder', color = 'Accent', spacing = 'None' }),
-          tb(serverName ~= '' and serverName or 'Server', { size = 'Small', isSubtle = true, spacing = 'None' }),
-        },
-      },
-      {
-        type = 'Column',
-        width = 'auto',
-        verticalContentAlignment = 'Center',
-        items = {
-          tb(banId, { size = 'Small', isSubtle = true, horizontalAlignment = 'Right', spacing = 'None' }),
-        },
-      },
-    },
-  }
-
-  body[#body + 1] = {
-    type = 'Container',
-    style = 'attention',
-    bleed = true,
-    spacing = 'Medium',
-    items = {
-      tb('ZUGANG GESPERRT', { size = 'Small', weight = 'Bolder', color = 'Attention', spacing = 'None' }),
-      tb(permanent and 'Du bist permanent gebannt' or 'Du bist vorübergehend gebannt',
-        { size = 'ExtraLarge', weight = 'Bolder', spacing = 'Small' }),
-    },
-  }
-
-  body[#body + 1] = {
-    type = 'Container',
-    spacing = 'Medium',
-    items = {
-      tb('GRUND', { size = 'Small', isSubtle = true, weight = 'Bolder', spacing = 'None' }),
-      tb(reason, { size = 'Medium', spacing = 'Small' }),
-    },
-  }
-
-  body[#body + 1] = {
-    type = 'ColumnSet',
-    spacing = 'Medium',
-    separator = true,
-    columns = {
-      infoCell('GÜLTIG BIS', untilLabel, permanent and 'Attention' or 'Default'),
-      infoCell('VERBLEIBEND', permanent and '∞' or (remaining ~= '' and remaining or '—'), permanent and 'Attention' or 'Warning'),
-    },
-  }
-
-  local facts = {}
-  if created ~= '' then facts[#facts + 1] = { title = 'Gebannt am', value = created } end
-  if author ~= '' then facts[#facts + 1] = { title = 'Von', value = author } end
-  if #facts > 0 then
-    body[#body + 1] = { type = 'FactSet', spacing = 'Medium', facts = facts }
+  local status
+  if permanent then
+    status = 'Permanenter Ban'
+  elseif remaining ~= '' then
+    status = 'Läuft noch ' .. remaining
+  else
+    status = 'Vorübergehender Ban'
   end
 
-  local hint = appeal ~= '' and appeal
-    or (invite ~= '' and 'Du hältst den Ban für falsch? Öffne ein Ticket auf unserem Discord und nenne deine Ban-ID.'
-      or 'Du hältst den Ban für falsch? Melde dich beim Server-Team und nenne deine Ban-ID.')
-  body[#body + 1] = {
-    type = 'Container',
-    style = 'emphasis',
-    spacing = 'Medium',
-    items = {
-      tb(hint, { size = 'Small', isSubtle = true, spacing = 'None' }),
+  local body = {
+    tb(header, { size = 'Small', weight = 'Bolder', color = 'Accent', spacing = 'None' }),
+    tb('Du bist gebannt', { size = 'ExtraLarge', weight = 'Bolder', color = 'Attention', spacing = 'Medium' }),
+    tb(status, { size = 'Medium', weight = 'Bolder', color = permanent and 'Attention' or 'Warning', spacing = 'Small' }),
+
+    {
+      type = 'Container',
+      separator = true,
+      spacing = 'Large',
+      items = {
+        tb('GRUND', { size = 'Small', weight = 'Bolder', color = 'Accent', spacing = 'None' }),
+        tb(reason, { size = 'Large', weight = 'Bolder', spacing = 'Small' }),
+      },
+    },
+
+    {
+      type = 'ColumnSet',
+      spacing = 'Large',
+      columns = {
+        infoCell('GÜLTIG BIS', untilLabel, permanent and 'Attention' or 'Default'),
+        infoCell('GEBANNT AM', created ~= '' and created or '—'),
+      },
+    },
+    {
+      type = 'ColumnSet',
+      spacing = 'Medium',
+      columns = {
+        infoCell('VON', author ~= '' and author or '—'),
+        infoCell('BAN-ID', banId),
+      },
     },
   }
+
+  local hint = appeal ~= '' and appeal
+    or (invite ~= '' and 'Ban ungerechtfertigt? Öffne ein Ticket auf unserem Discord und nenne deine Ban-ID ' .. banId .. '.'
+      or 'Ban ungerechtfertigt? Melde dich beim Server-Team und nenne deine Ban-ID ' .. banId .. '.')
+  body[#body + 1] = tb(hint, { size = 'Default', separator = true, spacing = 'Large' })
 
   local actions = {}
   if invite ~= '' then
