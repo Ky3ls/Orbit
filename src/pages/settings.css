@@ -347,6 +347,30 @@
 .st-foot.st-wide {
   grid-column: 1 / -1;
 }
+.st-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.18);
+}
+.st-savebar .btn-primary {
+  min-width: 7.5rem;
+}
+.st-save-kbd {
+  font: 600 11px/1 var(--font-mono, ui-monospace, monospace);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 7px;
+  background: rgba(255, 255, 255, 0.03);
+}
 
 .st-inline {
   display: flex;
