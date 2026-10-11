@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { markFxConsoleEof, resetFxConsoleLog } from './fxLogTail.js';
 import { orbitControlMode } from './fxLaunch.js';
 import {
+  kickAllPlayersOnAllServers,
   restartFxProcess,
   resolveInstanceKey,
   startFxProcess,
@@ -34,6 +35,19 @@ export async function fxProcessActive(settings) {
   return unitActive();
 }
 
+async function kickBeforeSystemdStop(settings, logLine, message) {
+  try {
+    const n = await kickAllPlayersOnAllServers(logLine, message);
+    if (n > 0) return;
+    const { dispatchFxCommand } = await import('./fxCommand.js');
+    const { orbitEventCommand } = await import('./orbitEvents.js');
+    await dispatchFxCommand(settings, orbitEventCommand('serverShuttingDown', { message }));
+    await new Promise((r) => setTimeout(r, 1200));
+  } catch (err) {
+    logLine('warn', `Kick vor ${message}: ${err.message}`);
+  }
+}
+
 /**
  * @param {'start'|'stop'|'restart'} action
  * @param {Record<string, string>} settings
@@ -48,6 +62,14 @@ export async function controlFx(action, settings, logLine, opts = {}) {
     if (action === 'start') return startFxProcess(settings, logLine, instOpts);
     if (action === 'stop') return stopFxProcess(settings, logLine, instOpts);
     return restartFxProcess(settings, logLine, instOpts);
+  }
+  // systemd: vor Stop/Restart Spieler kicken (kein Ghost-Timeout)
+  if (action === 'stop' || action === 'restart') {
+    await kickBeforeSystemdStop(
+      settings,
+      logLine,
+      action === 'restart' ? 'Server wird neu gestartet…' : 'Server wird gestoppt…',
+    );
   }
   // systemd: Konsole bei Start/Restart leeren (Orbit-Pfad macht das in startFxProcess)
   if (action === 'start' || action === 'restart') {
