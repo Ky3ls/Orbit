@@ -302,74 +302,94 @@ local function drawPedSkeleton(ped, r, g, b, a)
   end
 end
 
+-- TEMP: auch NPCs (einfach wieder auf false setzen)
+local ESP_NPC_TEMP = true
+
+local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB, textScale, barW, barGap)
+  local hx, hy = boneScreen(ped, BONE_HEAD)
+  if hx then
+    SetTextScale(textScale, textScale)
+    SetTextFont(4)
+    SetTextCentre(true)
+    SetTextColour(tr, tg, tb, 220)
+    SetTextOutline()
+    BeginTextCommandDisplayText('STRING')
+    AddTextComponentSubstringPlayerName(label)
+    EndTextCommandDisplayText(hx, hy - 0.048)
+  end
+
+  local alpha = ped == myPed and 200 or (dist < 40.0 and 230 or (dist < 100.0 and 180 or 130))
+  drawPedSkeleton(ped, skR, skG, skB, alpha)
+
+  local headX, headY = boneScreen(ped, BONE_HEAD)
+  local lFootX, lFootY = boneScreen(ped, BONE_L_FOOT)
+  local rFootX, rFootY = boneScreen(ped, BONE_R_FOOT)
+  local lx = select(1, boneScreen(ped, BONE_L_UPARM))
+  local rx = select(1, boneScreen(ped, BONE_R_UPARM))
+  if not (headX and headY and (lFootY or rFootY)) then return end
+  local footY = lFootY or rFootY
+  if lFootY and rFootY then footY = math.max(lFootY, rFootY) end
+  local topY = math.min(headY, footY)
+  local botY = math.max(headY, footY)
+  local barPad = 0.022
+  local rightEdge = headX
+  if lx then rightEdge = math.max(rightEdge, lx) end
+  if rx then rightEdge = math.max(rightEdge, rx) end
+  if lFootX then rightEdge = math.max(rightEdge, lFootX) end
+  if rFootX then rightEdge = math.max(rightEdge, rFootX) end
+  local barX = rightEdge + barPad
+  if barX > 0.985 then
+    local leftEdge = headX
+    if lx then leftEdge = math.min(leftEdge, lx) end
+    if rx then leftEdge = math.min(leftEdge, rx) end
+    barX = leftEdge - barPad - barGap
+  end
+  local hp = pedHealthPct(ped)
+  local armor = pedArmorPct(ped)
+  local hr, hg, hb = 80, 200, 90
+  if hp < 35.0 then hr, hg, hb = 230, 70, 70
+  elseif hp < 65.0 then hr, hg, hb = 230, 180, 60 end
+  drawVerticalBar(barX, topY, botY, hp, hr, hg, hb, barW)
+  drawVerticalBar(barX + barGap, topY, botY, armor, 70, 140, 230, barW)
+end
+
 CreateThread(function()
   local textScale = 0.32
   local barW = 0.0036
   local barGap = 0.0055
   local ESP_DIST = 220.0
+  local ESP_NPC_DIST = 80.0
   while true do
     if showIds then
       local myPed = PlayerPedId()
       local myCoords = GetEntityCoords(myPed)
+      local seen = {}
       for _, pid in ipairs(GetActivePlayers()) do
         local ped = GetPlayerPed(pid)
         if ped ~= 0 then
+          seen[ped] = true
           local coords = GetEntityCoords(ped)
           local dist = #(coords - myCoords)
           if dist < ESP_DIST then
             local sid = GetPlayerServerId(pid)
             local label = ('[%s] %s'):format(sid, GetPlayerName(pid) or '')
-
-            -- ID über dem Kopf
-            local hx, hy = boneScreen(ped, BONE_HEAD)
-            if hx then
-              SetTextScale(textScale, textScale)
-              SetTextFont(4)
-              SetTextCentre(true)
-              SetTextColour(255, 122, 26, 220)
-              SetTextOutline()
-              BeginTextCommandDisplayText('STRING')
-              AddTextComponentSubstringPlayerName(label)
-              EndTextCommandDisplayText(hx, hy - 0.048)
-            end
-
-            -- Skelett-ESP (Screen → durch Wände), auch eigene Ped sichtbar
-            local alpha = ped == myPed and 200 or (dist < 40.0 and 230 or (dist < 100.0 and 180 or 130))
-            drawPedSkeleton(ped, 255, 140, 40, alpha)
-
-            -- Vertikale Bars rechts am Körper (Fuß → Kopf)
-            local headX, headY = boneScreen(ped, BONE_HEAD)
-            local lFootX, lFootY = boneScreen(ped, BONE_L_FOOT)
-            local rFootX, rFootY = boneScreen(ped, BONE_R_FOOT)
-            local lx = select(1, boneScreen(ped, BONE_L_UPARM))
-            local rx = select(1, boneScreen(ped, BONE_R_UPARM))
-            if headX and headY and (lFootY or rFootY) then
-              local footY = lFootY or rFootY
-              if lFootY and rFootY then footY = math.max(lFootY, rFootY) end
-              local topY = math.min(headY, footY)
-              local botY = math.max(headY, footY)
-              -- rechter Körperrand (Schulter/Kopf) → Bars mit Abstand
-              local barPad = 0.022
-              local rightEdge = headX
-              if lx then rightEdge = math.max(rightEdge, lx) end
-              if rx then rightEdge = math.max(rightEdge, rx) end
-              if lFootX then rightEdge = math.max(rightEdge, lFootX) end
-              if rFootX then rightEdge = math.max(rightEdge, rFootX) end
-              local barX = rightEdge + barPad
-              if barX > 0.985 then
-                local leftEdge = headX
-                if lx then leftEdge = math.min(leftEdge, lx) end
-                if rx then leftEdge = math.min(leftEdge, rx) end
-                barX = leftEdge - barPad - barGap
-              end
-
-              local hp = pedHealthPct(ped)
-              local armor = pedArmorPct(ped)
-              local hr, hg, hb = 80, 200, 90
-              if hp < 35.0 then hr, hg, hb = 230, 70, 70
-              elseif hp < 65.0 then hr, hg, hb = 230, 180, 60 end
-              drawVerticalBar(barX, topY, botY, hp, hr, hg, hb, barW)
-              drawVerticalBar(barX + barGap, topY, botY, armor, 70, 140, 230, barW)
+            drawEspEntity(ped, myPed, dist, label, 255, 122, 26, 255, 140, 40, textScale, barW, barGap)
+          end
+        end
+      end
+      -- TEMP: NPC-ESP
+      if ESP_NPC_TEMP then
+        local pool = GetGamePool('CPed') or {}
+        local n = 0
+        for i = 1, #pool do
+          local ped = pool[i]
+          if ped ~= 0 and not seen[ped] and DoesEntityExist(ped) and not IsPedDeadOrDying(ped, true) then
+            local coords = GetEntityCoords(ped)
+            local dist = #(coords - myCoords)
+            if dist < ESP_NPC_DIST then
+              n = n + 1
+              if n > 40 then break end
+              drawEspEntity(ped, myPed, dist, '[NPC]', 160, 170, 190, 120, 180, 220, textScale, barW, barGap)
             end
           end
         end
