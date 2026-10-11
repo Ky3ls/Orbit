@@ -290,14 +290,16 @@ function showOrbitToast(payload) {
   const title = payload.title ? `<div class="ot-title">${escapeHtml(payload.title)}</div>` : '';
   const body = `<div class="ot-body">${escapeHtml(String(payload.message || ''))}</div>`;
   const meta = payload.meta ? `<div class="ot-meta">${escapeHtml(String(payload.meta))}</div>` : '';
-  el.innerHTML = `${title}${body}${meta}`;
+  el.innerHTML = `<div class="ot-bar" aria-hidden="true"></div><div class="ot-content">${title}${body}${meta}</div>`;
+  // Max. 4 Toasts — älteste entfernen
+  while (root.children.length >= 4) root.firstElementChild?.remove();
   root.appendChild(el);
-  const ms = Number(payload.duration) > 0 ? Number(payload.duration) : (kind === 'announce' ? 7000 : 4500);
+  const ms = Number(payload.duration) > 0 ? Number(payload.duration) : (kind === 'announce' ? 6000 : 3800);
   requestAnimationFrame(() => el.classList.add('in'));
   setTimeout(() => {
     el.classList.remove('in');
     el.classList.add('out');
-    setTimeout(() => el.remove(), 320);
+    setTimeout(() => el.remove(), 240);
   }, ms);
 }
 
@@ -312,10 +314,12 @@ function showOrbitAnnounce(payload) {
     ? `<div class="oa-meta">${escapeHtml(String(payload.author))}</div>`
     : '';
   card.innerHTML = `
-    <div class="oa-brand">ORBIT</div>
-    <div class="oa-title">Ankündigung</div>
-    <div class="oa-msg">${escapeHtml(String((payload && payload.message) || ''))}</div>
-    ${who}
+    <div class="oa-bar" aria-hidden="true"></div>
+    <div class="oa-body">
+      <div class="oa-brand">ORBIT · ANKÜNDIGUNG</div>
+      <div class="oa-msg">${escapeHtml(String((payload && payload.message) || ''))}</div>
+      ${who}
+    </div>
   `;
   root.appendChild(card);
   requestAnimationFrame(() => root.classList.add('in'));
