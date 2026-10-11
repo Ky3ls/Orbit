@@ -408,12 +408,51 @@ local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB,
   drawVerticalBar(barX + barGap, topY, botY, armor, 70, 140, 230, barW)
 end
 
+local function collectNpcPeds(myPed, myCoords, maxDist, maxCount)
+  local out = {}
+  local pool = GetGamePool('CPed')
+  if type(pool) == 'table' and #pool > 0 then
+    for i = 1, #pool do
+      local ped = pool[i]
+      if ped and ped ~= 0 and ped ~= myPed and DoesEntityExist(ped)
+        and not IsPedAPlayer(ped) and not IsEntityDead(ped) then
+        local coords = GetEntityCoords(ped)
+        local dist = #(coords - myCoords)
+        if dist < maxDist then
+          out[#out + 1] = { ped = ped, dist = dist }
+        end
+      end
+    end
+  else
+    -- Fallback falls GetGamePool leer/unavailable
+    local handle, ped = FindFirstPed()
+    local ok = true
+    while ok do
+      if ped and ped ~= 0 and ped ~= myPed and DoesEntityExist(ped)
+        and not IsPedAPlayer(ped) and not IsEntityDead(ped) then
+        local coords = GetEntityCoords(ped)
+        local dist = #(coords - myCoords)
+        if dist < maxDist then
+          out[#out + 1] = { ped = ped, dist = dist }
+        end
+      end
+      ok, ped = FindNextPed(handle)
+    end
+    EndFindPed(handle)
+  end
+  table.sort(out, function(a, b) return a.dist < b.dist end)
+  if #out > maxCount then
+    for i = #out, maxCount + 1, -1 do out[i] = nil end
+  end
+  return out
+end
+
 CreateThread(function()
   local textScale = 0.32
   local barW = 0.0036
   local barGap = 0.0055
   local ESP_DIST = 220.0
-  local ESP_NPC_DIST = 80.0
+  local ESP_NPC_DIST = 120.0
   while true do
     if showIds then
       local myPed = PlayerPedId()
@@ -432,20 +471,20 @@ CreateThread(function()
           end
         end
       end
-      -- TEMP: NPC-ESP
+      -- TEMP: NPC-ESP (nächste zuerst; auch wenn Density-Toggle aus, falls noch Peds da)
       if ESP_NPC_TEMP then
-        local pool = GetGamePool('CPed') or {}
-        local n = 0
-        for i = 1, #pool do
-          local ped = pool[i]
-          if ped ~= 0 and not seen[ped] and DoesEntityExist(ped) and not IsPedDeadOrDying(ped, true) then
-            local coords = GetEntityCoords(ped)
-            local dist = #(coords - myCoords)
-            if dist < ESP_NPC_DIST then
-              n = n + 1
-              if n > 40 then break end
-              drawEspEntity(ped, myPed, dist, '[NPC]', 160, 170, 190, 120, 180, 220, textScale, barW, barGap)
-            end
+        local npcs = collectNpcPeds(myPed, myCoords, ESP_NPC_DIST, 40)
+        -- etwas hellerer Akzent als Spieler, damit NPCs unterscheidbar bleiben
+        local nr = math.floor(accentR * 0.55 + 100)
+        local ng = math.floor(accentG * 0.55 + 100)
+        local nb = math.floor(accentB * 0.55 + 100)
+        local sr = math.floor(accentR2 * 0.5 + 90)
+        local sg = math.floor(accentG2 * 0.5 + 90)
+        local sb = math.floor(accentB2 * 0.5 + 90)
+        for i = 1, #npcs do
+          local e = npcs[i]
+          if not seen[e.ped] then
+            drawEspEntity(e.ped, myPed, e.dist, '[NPC]', nr, ng, nb, sr, sg, sb, textScale, barW, barGap)
           end
         end
       end
