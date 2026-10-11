@@ -10,6 +10,18 @@ export function sanitizeCfgMetaComments(text) {
   out = out.replace(/^\s*##?\s*Orbit Admin-Men[uü].*$/gim, '');
   out = out.replace(/^\s*#\s*Orbit\s*$/gim, '');
 
+  // Entfernt: Warning „sv_endpointPrivacy has been removed“
+  out = out.replace(/^\s*#{0,3}\s*Endpoints?\s*Privacy\s*#{0,3}\s*$/gim, '');
+  out = out.replace(/^\s*(?:set\s+)?sv_endpointPrivacy\b.*$/gim, '');
+
+  // onesync ist internes ConVar — nur Kommentar behalten (Wert via FX-Launch +set)
+  out = out.replace(
+    /^\s*##\s*\[txAdmin CFG validator\]:\s*onesync\s+(\w+)\s*$/gim,
+    '# OneSync: $1',
+  );
+  out = out.replace(/^\s*(?:##\s*)?set\s+onesync\s+(on|off|legacy)\s*$/gim, '# OneSync: $1');
+  out = out.replace(/^\s*#\s*set\s+onesync\s+(on|off|legacy)\s*$/gim, '# OneSync: $1');
+
   // OneSync-Hinweis vereinheitlichen (Wert behalten)
   out = out.replace(
     /^\s*##\s*\[Orbit\]:\s*onesync\s+(\w+)\b.*$/gim,

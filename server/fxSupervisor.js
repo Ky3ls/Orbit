@@ -249,6 +249,15 @@ export async function startFxProcess(settings, logLine, opts = {}) {
         const { stripHardcapEnsureFile } = await import('./cfxDefaults.js');
         stripHardcapEnsureFile(cfgFile, (m) => logPanel('info', `[FX:${key}] ${m}`));
       } catch { /* */ }
+      try {
+        const { sanitizeCfgMetaComments } = await import('./cfgSanitize.js');
+        const before = fs.readFileSync(cfgFile, 'utf8');
+        const after = sanitizeCfgMetaComments(before);
+        if (after !== before) {
+          fs.writeFileSync(cfgFile, after);
+          logPanel('info', `[FX:${key}] server.cfg bereinigt (onesync/endpointPrivacy).`);
+        }
+      } catch { /* */ }
       const synced = syncOrbitPermissionsFile(cfgFile, {
         db: database,
         master: loadMasterIdentity(database),
