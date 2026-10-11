@@ -55,6 +55,7 @@ import {
   readCfgFile,
   redactCfg,
   readHost,
+  readFxProcess,
   syncActiveCfgPath,
   validateCfg,
   writeCfg,
@@ -184,6 +185,7 @@ import {
   forceFreeGamePort,
   supervisorPhase,
   supervisorConsoleReady,
+  listSupervisorInstances,
 } from './fxSupervisor.js';
 import { pollOrbitLogDrops, pollFxConsole, backfillFxConsole } from './fxLogTail.js';
 import { syncOrbitPermissionsFile, applyOrbitPermissionsToCfg, loadMasterIdentity } from './cfgPermissions.js';
@@ -480,6 +482,10 @@ async function loop() {
   try {
     const host = readHost();
     runtime.host = host;
+    const fxPid = listSupervisorInstances().find((i) => i.pid)?.pid
+      || runtime.fx?.pid
+      || null;
+    runtime.fx = readFxProcess(fxPid, host.ramTotal);
     fivemTick += 1;
     if (fivemTick % 2 === 0) {
       const settings = settingMap(db);
@@ -547,6 +553,8 @@ async function loop() {
       t: Date.now(),
       cpu: host.cpu,
       ram: host.ramPct,
+      fxCpu: runtime.fx.cpu,
+      fxRam: runtime.fx.ramPct,
       players: runtime.clients,
     });
     checkSchedule();

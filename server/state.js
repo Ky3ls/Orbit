@@ -10,6 +10,8 @@ export const runtime = {
   playersSyncedAt: 0,
   fxResources: [],
   host: { cpu: 0, ramPct: 0, ramUsed: 0, ramTotal: 0 },
+  /** FiveM/FX-Prozessmetriken (Anteil am Host) */
+  fx: { pid: null, cpu: 0, ramPct: 0, ramUsed: 0, ramTotal: 0 },
   series: [],
   console: [],
   consoleSeq: 0,
@@ -152,6 +154,7 @@ export function snapshot() {
     maxClients: runtime.maxClients,
     clients: runtime.clients,
     host: runtime.host,
+    fx: runtime.fx,
     series: runtime.series,
     boot: runtime.boot,
     onlineSince: runtime.onlineSince,

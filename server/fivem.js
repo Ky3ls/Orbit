@@ -497,3 +497,59 @@ function readCpu() {
   if (dTotal <= 0) return 0;
   return Math.round((1 - dIdle / dTotal) * 1000) / 10;
 }
+
+function readSysTotalJiffies() {
+  const line = fs.readFileSync('/proc/stat', 'utf8').split('\n')[0];
+  const parts = line.trim().split(/\s+/).slice(1).map(Number);
+  return parts.reduce((a, b) => a + b, 0);
+}
+
+function readPidCpuJiffies(pid) {
+  const raw = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+  const end = raw.lastIndexOf(')');
+  if (end < 0) return null;
+  const rest = raw.slice(end + 2).split(/\s+/);
+  const utime = Number(rest[11]) || 0;
+  const stime = Number(rest[12]) || 0;
+  return utime + stime;
+}
+
+function readPidRssBytes(pid) {
+  const status = fs.readFileSync(`/proc/${pid}/status`, 'utf8');
+  const kb = Number(status.match(/VmRSS:\s+(\d+)/)?.[1] || 0);
+  return kb * 1024;
+}
+
+/** FX-Prozess (Anteil an Host-CPU / Host-RAM) — für Monitoring-Filter „nur FiveM“. */
+let lastFxCpu = null;
+export function readFxProcess(pid, ramTotal = 0) {
+  const empty = { pid: null, cpu: 0, ramUsed: 0, ramPct: 0, ramTotal: ramTotal || 0 };
+  const n = Number(pid) || 0;
+  if (n <= 0) {
+    lastFxCpu = null;
+    return empty;
+  }
+  try {
+    const proc = readPidCpuJiffies(n);
+    if (proc == null) {
+      lastFxCpu = null;
+      return empty;
+    }
+    const ramUsed = readPidRssBytes(n);
+    const totalSys = readSysTotalJiffies();
+    let cpu = 0;
+    if (lastFxCpu && lastFxCpu.pid === n && totalSys > lastFxCpu.totalSys) {
+      const dProc = proc - lastFxCpu.proc;
+      const dSys = totalSys - lastFxCpu.totalSys;
+      if (dProc >= 0 && dSys > 0) {
+        cpu = Math.min(100, Math.round((dProc / dSys) * 1000) / 10);
+      }
+    }
+    lastFxCpu = { pid: n, proc, totalSys };
+    const ramPct = ramTotal ? Math.round((ramUsed / ramTotal) * 1000) / 10 : 0;
+    return { pid: n, cpu, ramUsed, ramPct, ramTotal: ramTotal || 0 };
+  } catch {
+    lastFxCpu = null;
+    return empty;
+  }
+}
