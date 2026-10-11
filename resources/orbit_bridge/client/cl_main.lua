@@ -128,7 +128,7 @@ local function findZ(x, y)
   return 72.0
 end
 
-local function teleportTo(x, y, z)
+local function teleportTo(x, y, z, h)
   local ped = PlayerPedId()
   local veh = GetVehiclePedIsIn(ped, false)
   lastTp = GetEntityCoords(ped)
@@ -136,9 +136,26 @@ local function teleportTo(x, y, z)
   RequestCollisionAtCoord(x, y, z)
   if veh ~= 0 then
     SetEntityCoords(veh, x + 0.0, y + 0.0, z + 0.0, false, false, false, false)
+    if h ~= nil then SetEntityHeading(veh, h + 0.0) end
   else
     SetEntityCoords(ped, x + 0.0, y + 0.0, z + 0.0, false, false, false, false)
+    if h ~= nil then SetEntityHeading(ped, h + 0.0) end
   end
+end
+
+-- vec3/vec4/vector3/vector4/v3/v4(...) oder "x, y, z[, h]" / spaces
+local function parseCoords(raw)
+  raw = tostring(raw or ''):gsub('^%s+', ''):gsub('%s+$', '')
+  if raw == '' then return nil end
+  local inner = raw:match('^[%a_][%w_]*%s*%((.+)%)$')
+  if inner then raw = inner end
+  local nums = {}
+  for tok in raw:gmatch('%-?%d+%.?%d*[Ee]?[+-]?%d*') do
+    local n = tonumber(tok)
+    if n ~= nil then nums[#nums + 1] = n end
+  end
+  if #nums < 2 then return nil end
+  return nums[1], nums[2], nums[3], nums[4]
 end
 
 -- —— Modes ——
@@ -612,11 +629,10 @@ RegisterNUICallback('tpBack', function(_, cb)
   cb(1)
 end)
 RegisterNUICallback('tpCoords', function(data, cb)
-  local raw = tostring(data and data.coords or '')
-  local x, y, z = raw:match('([^,%s]+)%s*,%s*([^,%s]+)%s*,%s*([^,%s]+)')
-  x, y, z = tonumber(x), tonumber(y), tonumber(z)
+  local x, y, z, h = parseCoords(data and data.coords)
   if not x or not y then toast('warn', 'Teleport', 'Coords ungültig') cb(1) return end
-  teleportTo(x, y, z or 0.0)
+  teleportTo(x, y, z, h)
+  toast('ok', 'Teleport', h and ('%.1f, %.1f, %.1f (h %.0f)'):format(x, y, z or 0.0, h) or ('%.1f, %.1f, %.1f'):format(x, y, z or 0.0))
   cb(1)
 end)
 RegisterNUICallback('copyCoords', function(_, cb)

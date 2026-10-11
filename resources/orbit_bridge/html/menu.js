@@ -424,7 +424,7 @@ function runAction(act) {
     return;
   }
   if (act === 'promptCoords') {
-    openPrompt('coords', mt('coordsTitle'), 'x, y, z');
+    openPrompt('coords', mt('coordsTitle'), 'vec4(x, y, z, h) / vec3 / x, y, z');
     post('copyCoords').then(async (r) => {
       try {
         const d = await r.json();
