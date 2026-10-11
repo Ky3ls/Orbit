@@ -15,6 +15,7 @@ import { normalizeIdentifiers, primaryId, upsertLivePlayer } from './playerIdent
 import { checkPlayerJoin, ensureModerationSchema } from './moderation.js';
 import { gameSettingsForBridge, resolveAllowlistMode } from './settingsSchema.js';
 import { checkDiscordGuildAccess } from './discordBot.js';
+import { hasPerm } from './auth.js';
 
 function str(v, max) {
   return String(v ?? '').slice(0, max);
@@ -280,6 +281,105 @@ export async function handleIngamePublicApi(ctx) {
       webEmbedUrl,
       panelUrl: ORIGIN,
     });
+    return true;
+  }
+
+  /** Ban-Liste für Ingame-Optionen */
+  if (method === 'GET' && pathname === '/api/ingame/bans') {
+    if (!tokenOk(settings, url.searchParams.get('token') || req.headers['x-orbit-token'] || req.headers['x-orbit-ingame'])) {
+      json(res, 401, { error: 'Unauthorized' });
+      return true;
+    }
+    const ids = parseIdentifiersHeader(req.headers['x-orbit-identifiers']);
+    const user = resolveIngameAdmin(db, ids);
+    const menu = user ? menuPermsForUser(user) : null;
+    if (!user || (!menu?.banList && user.role !== 'owner' && !hasPerm(user, 'all_permissions'))) {
+      json(res, 403, { error: 'Keine Berechtigung.' });
+      return true;
+    }
+    try { ensureModerationSchema(db); } catch { /* */ }
+    const bans = db.prepare(`
+      SELECT id, identifier, name, reason, author, expires, created, revoked
+      FROM bans WHERE revoked = 0
+      ORDER BY id DESC LIMIT 80
+    `).all();
+    json(res, 200, { bans });
+    return true;
+  }
+
+  if (method === 'POST' && pathname === '/api/ingame/bans/revoke') {
+    const body = await readBody(req);
+    if (!tokenOk(settings, body.token || req.headers['x-orbit-token'] || req.headers['x-orbit-ingame'])) {
+      json(res, 401, { error: 'Unauthorized' });
+      return true;
+    }
+    const user = resolveMenuUser(db, body) || resolveIngameAdmin(db, body.identifiers || []);
+    const menu = user ? menuPermsForUser(user) : null;
+    if (!menu?.banRevoke && user?.role !== 'owner') {
+      json(res, 403, { error: 'Keine Berechtigung.' });
+      return true;
+    }
+    const banId = Number(body.banId);
+    if (!banId) {
+      json(res, 400, { error: 'banId fehlt' });
+      return true;
+    }
+    try { ensureModerationSchema(db); } catch { /* */ }
+    db.prepare('UPDATE bans SET revoked = 1, revoked_by = ?, revoked_at = ? WHERE id = ?')
+      .run(user?.username || body.author || 'ingame', Date.now(), banId);
+    audit(db, user?.username || body.author || 'ingame', 'unban', String(banId), ip || 'ingame');
+    json(res, 200, { ok: true });
+    return true;
+  }
+
+  if (method === 'POST' && pathname === '/api/ingame/console') {
+    const body = await readBody(req);
+    if (!tokenOk(settings, body.token || req.headers['x-orbit-token'] || req.headers['x-orbit-ingame'])) {
+      json(res, 401, { error: 'Unauthorized' });
+      return true;
+    }
+    const user = resolveMenuUser(db, body) || resolveIngameAdmin(db, body.identifiers || []);
+    const menu = user ? menuPermsForUser(user) : null;
+    if (!menu?.consoleWrite && user?.role !== 'owner') {
+      json(res, 403, { error: 'Keine Berechtigung.' });
+      return true;
+    }
+    const command = str(body.command, 180).trim();
+    if (!/^[a-zA-Z0-9_\-:.[\]'" ]{2,180}$/.test(command)) {
+      json(res, 400, { error: 'Befehl enthält ungültige Zeichen.' });
+      return true;
+    }
+    if (!fxConsoleReady(settings)) {
+      json(res, 503, { error: 'FX-Konsole nicht bereit.' });
+      return true;
+    }
+    try {
+      await dispatchFxCommand(settings, command);
+      audit(db, user?.username || body.author || 'ingame', 'console', command.slice(0, 180), ip || 'ingame');
+      json(res, 200, { ok: true });
+    } catch (err) {
+      json(res, 500, { error: err.message || 'Konsole fehlgeschlagen' });
+    }
+    return true;
+  }
+
+  if (method === 'GET' && pathname === '/api/ingame/console/tail') {
+    if (!tokenOk(settings, url.searchParams.get('token') || req.headers['x-orbit-token'] || req.headers['x-orbit-ingame'])) {
+      json(res, 401, { error: 'Unauthorized' });
+      return true;
+    }
+    const ids = parseIdentifiersHeader(req.headers['x-orbit-identifiers']);
+    const user = resolveIngameAdmin(db, ids);
+    const menu = user ? menuPermsForUser(user) : null;
+    if (!menu?.console && user?.role !== 'owner') {
+      json(res, 403, { error: 'Keine Berechtigung.' });
+      return true;
+    }
+    const lines = (runtime.console || []).slice(-60).map((row) => {
+      if (typeof row === 'string') return row;
+      return String(row?.text || row?.line || '');
+    }).filter(Boolean);
+    json(res, 200, { lines });
     return true;
   }
 

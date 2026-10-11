@@ -26,6 +26,7 @@
     <nav class="tabs" role="tablist">
       <button type="button" data-tab="main" class="active">Main</button>
       <button type="button" data-tab="players">Spieler</button>
+      <button type="button" data-tab="options">Optionen</button>
     </nav>
 
     <div class="scroll">
@@ -40,6 +41,177 @@
         </div>
         <input id="playerFilter" class="search" placeholder="Name, ID, License…" autocomplete="off" />
         <ul id="plist"></ul>
+      </section>
+
+      <section id="tab-options" class="tab hidden">
+        <div class="opt-page">
+          <header class="opt-head">
+            <div>
+              <h2>Optionen</h2>
+              <p class="opt-lead">Framework-unabhängig · mit Panel-Rechten</p>
+            </div>
+          </header>
+
+          <div class="opt-grid">
+            <article class="opt-card" data-opt-perm="money">
+              <h3>Geld geben</h3>
+              <div class="opt-row">
+                <label class="field grow">Spieler-ID
+                  <input id="optMoneyId" type="number" min="1" placeholder="z. B. 12" autocomplete="off" />
+                </label>
+                <label class="field grow">Betrag
+                  <input id="optMoneyAmt" type="number" min="1" value="5000" autocomplete="off" />
+                </label>
+              </div>
+              <div class="opt-actions">
+                <button type="button" class="primary" data-opt="moneyPlayer" data-perm="money">An Spieler</button>
+                <button type="button" class="ghost" data-opt="moneyAll" data-perm="moneyAll">An alle</button>
+              </div>
+            </article>
+
+            <article class="opt-card" data-opt-perm="giveaway">
+              <h3>Gewinnspiel</h3>
+              <p class="opt-hint">Spieler joinen mit <code>/gv</code> · Preis wird ausgelost</p>
+              <div class="opt-row">
+                <label class="field grow">Preis ($)
+                  <input id="optGvPrize" type="number" min="1" value="25000" autocomplete="off" />
+                </label>
+                <label class="field grow">Dauer (Sek.)
+                  <input id="optGvSec" type="number" min="10" value="60" autocomplete="off" />
+                </label>
+              </div>
+              <div class="opt-actions">
+                <button type="button" class="primary" data-opt="gvStart" data-perm="giveaway">Starten</button>
+                <button type="button" class="ghost" data-opt="gvStop" data-perm="giveaway">Stoppen</button>
+              </div>
+              <div id="optGvStatus" class="opt-status">Kein aktives Gewinnspiel</div>
+            </article>
+
+            <article class="opt-card" data-opt-perm="npc">
+              <h3>NPCs</h3>
+              <div class="opt-actions">
+                <button type="button" class="seg" data-opt="npcOn" data-perm="npc">An</button>
+                <button type="button" class="seg" data-opt="npcOff" data-perm="npc">Aus</button>
+              </div>
+              <div id="optNpcStatus" class="opt-status">Status: —</div>
+            </article>
+
+            <article class="opt-card" data-opt-perm="clearArea">
+              <h3>World Clear</h3>
+              <p class="opt-hint">Fahrzeuge, NPCs &amp; Objekte bei allen Spielern bereinigen</p>
+              <div class="opt-row">
+                <label class="field grow">Radius (m)
+                  <input id="optClearR" type="number" min="20" value="120" autocomplete="off" />
+                </label>
+              </div>
+              <div class="opt-actions">
+                <button type="button" class="primary danger" data-opt="worldClear" data-perm="clearArea">Welt bereinigen</button>
+              </div>
+            </article>
+
+            <article class="opt-card opt-card-wide" data-opt-perm="banList">
+              <h3>Ban-Liste</h3>
+              <div class="opt-actions">
+                <button type="button" class="ghost" data-opt="banRefresh" data-perm="banList">Aktualisieren</button>
+              </div>
+              <ul id="optBanList" class="opt-list"></ul>
+            </article>
+
+            <article class="opt-card opt-card-wide" data-opt-perm="console">
+              <h3>Konsole</h3>
+              <div id="optConsoleLog" class="opt-console" aria-live="polite"></div>
+              <div class="opt-row">
+                <label class="field grow">Befehl
+                  <input id="optConsoleCmd" placeholder="ensure orbit" autocomplete="off" data-perm="consoleWrite" />
+                </label>
+                <button type="button" class="primary" data-opt="consoleSend" data-perm="consoleWrite">Senden</button>
+              </div>
+            </article>
+
+            <article class="opt-card opt-card-wide" data-opt-perm="weather">
+              <h3>Wetter &amp; Zeit</h3>
+              <div id="optWxLive" class="opt-live">LIVE · —</div>
+              <div class="opt-actions" style="margin-bottom:10px">
+                <button type="button" class="seg" data-opt="wxModeManual" data-perm="weather">Manuell</button>
+                <button type="button" class="seg" data-opt="wxModeRealtime" data-perm="weather">Echtzeit</button>
+                <button type="button" class="ghost" data-opt="wxRefresh" data-perm="weather">Aktualisieren</button>
+                <button type="button" class="primary" data-opt="wxSave" data-perm="weather">Speichern</button>
+              </div>
+
+              <div id="optWxManual" class="opt-wx-block">
+                <div class="opt-row">
+                  <label class="field grow">Wetter
+                    <select id="optWxType">
+                      <option value="EXTRASUNNY">EXTRASUNNY</option>
+                      <option value="CLEAR">CLEAR</option>
+                      <option value="CLOUDS">CLOUDS</option>
+                      <option value="OVERCAST">OVERCAST</option>
+                      <option value="RAIN">RAIN</option>
+                      <option value="THUNDER">THUNDER</option>
+                      <option value="FOGGY">FOGGY</option>
+                      <option value="SMOG">SMOG</option>
+                      <option value="CLEARING">CLEARING</option>
+                      <option value="SNOW">SNOW</option>
+                      <option value="BLIZZARD">BLIZZARD</option>
+                      <option value="SNOWLIGHT">SNOWLIGHT</option>
+                      <option value="XMAS">XMAS</option>
+                      <option value="HALLOWEEN">HALLOWEEN</option>
+                    </select>
+                  </label>
+                  <label class="field">Stunde
+                    <input id="optWxHour" type="number" min="0" max="23" value="12" />
+                  </label>
+                  <label class="field">Minute
+                    <input id="optWxMin" type="number" min="0" max="59" value="0" />
+                  </label>
+                </div>
+                <label class="opt-toggle">
+                  <input type="checkbox" id="optWxFreeze" />
+                  Uhr einfrieren (PauseClock)
+                </label>
+              </div>
+
+              <div id="optWxRealtime" class="opt-wx-block hidden">
+                <p class="opt-label">Ort (Preset)</p>
+                <div class="opt-actions" id="optWxCities">
+                  <button type="button" class="seg" data-city="la" data-lon="-118.2437" data-lat="34.0522">Los Angeles</button>
+                  <button type="button" class="seg active" data-city="berlin" data-lon="13.405" data-lat="52.52">Berlin</button>
+                  <button type="button" class="seg" data-city="london" data-lon="-0.1276" data-lat="51.5072">London</button>
+                  <button type="button" class="seg" data-city="oslo" data-lon="10.7522" data-lat="59.9139">Oslo</button>
+                  <button type="button" class="seg" data-city="tokyo" data-lon="139.6917" data-lat="35.6895">Tokyo</button>
+                </div>
+                <div class="opt-row">
+                  <label class="field grow">Lon
+                    <input id="optWxLon" value="13.405" autocomplete="off" />
+                  </label>
+                  <label class="field grow">Lat
+                    <input id="optWxLat" value="52.52" autocomplete="off" />
+                  </label>
+                </div>
+                <p class="opt-label">Klima</p>
+                <div class="opt-actions" id="optWxClimate">
+                  <button type="button" class="seg active" data-climate="med">Mediterran</button>
+                  <button type="button" class="seg" data-climate="rain">Regenreich</button>
+                  <button type="button" class="seg" data-climate="snow">Schnee</button>
+                </div>
+                <div class="opt-row" style="margin-top:8px">
+                  <label class="opt-toggle">
+                    <input type="checkbox" id="optWxSeason" checked />
+                    Saisonalität
+                  </label>
+                  <label class="opt-toggle">
+                    <input type="checkbox" id="optWxBlackout" />
+                    Blackout
+                  </label>
+                </div>
+                <label class="field" style="margin-top:8px">Update-Intervall (Sek.)
+                  <input id="optWxInterval" type="number" min="15" max="600" value="60" />
+                </label>
+                <p class="opt-info">Zeit an Serveruhr gekoppelt · Wetter deterministisch ohne Web-API.</p>
+              </div>
+            </article>
+          </div>
+        </div>
       </section>
     </div>
 
