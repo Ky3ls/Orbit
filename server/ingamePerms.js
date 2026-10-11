@@ -10,10 +10,20 @@ export function menuPermsForUser(user) {
     'players.heal', 'players.spectate', 'players.teleport', 'menu.viewids',
   ].includes(id));
 
+  const banList = ownerOrStar || hasPerm(user, 'bans');
+  const consoleRead = ownerOrStar || hasPerm(user, 'console');
+  const consoleWrite = ownerOrStar || hasPerm(user, 'console.write');
+  const options = banList || consoleRead
+    || hasPerm(user, 'menu.money') || hasPerm(user, 'menu.money_all')
+    || hasPerm(user, 'menu.giveaway') || hasPerm(user, 'menu.npc')
+    || hasPerm(user, 'menu.weather') || hasPerm(user, 'menu.clear_area')
+    || ownerOrStar;
+
   return {
     panel: ownerOrStar || hasPerm(user, 'overview') || hasPerm(user, 'monitor') || hasPerm(user, 'console'),
     main: playersHub || hasPerm(user, 'control') || hasPerm(user, 'players.playermode'),
     players: playersHub,
+    options: !!options,
     vehicle: ownerOrStar || hasPerm(user, 'menu.vehicle'),
     noclip: ownerOrStar || hasPerm(user, 'players.playermode'),
     god: ownerOrStar || hasPerm(user, 'players.playermode'),
@@ -28,6 +38,15 @@ export function menuPermsForUser(user) {
     warn: p('players.warn'),
     message: p('players.dm'),
     ban: ownerOrStar || hasPerm(user, 'bans') || hasPerm(user, 'players.ban'),
+    banList,
+    banRevoke: ownerOrStar || hasPerm(user, 'bans.revoke'),
+    console: consoleRead,
+    consoleWrite,
+    money: ownerOrStar || hasPerm(user, 'menu.money'),
+    moneyAll: ownerOrStar || hasPerm(user, 'menu.money_all'),
+    giveaway: ownerOrStar || hasPerm(user, 'menu.giveaway'),
+    npc: ownerOrStar || hasPerm(user, 'menu.npc'),
+    weather: ownerOrStar || hasPerm(user, 'menu.weather'),
     goto: p('players.teleport'),
     bring: p('players.teleport'),
     spectate: p('players.spectate'),
@@ -39,9 +58,11 @@ export function menuPermsForUser(user) {
 export function fullAceMenuPerms() {
   const t = true;
   return {
-    panel: t, main: t, players: t, vehicle: t, noclip: t, god: t, superjump: t, ids: t,
+    panel: t, main: t, players: t, options: t, vehicle: t, noclip: t, god: t, superjump: t, ids: t,
     teleport: t, healSelf: t, healAll: t, clearArea: t, announce: t, kick: t, warn: t,
-    message: t, ban: t, goto: t, bring: t, spectate: t, freeze: t, troll: t,
+    message: t, ban: t, banList: t, banRevoke: t, console: t, consoleWrite: t,
+    money: t, moneyAll: t, giveaway: t, npc: t, weather: t,
+    goto: t, bring: t, spectate: t, freeze: t, troll: t,
   };
 }
 

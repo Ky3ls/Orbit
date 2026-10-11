@@ -634,6 +634,11 @@ export const panelDe = {
   'perm.menu.vehicle': 'Fahrzeuge spawnen/reparieren',
   'perm.menu.clear_area': 'Weltbereich zurücksetzen',
   'perm.menu.viewids': 'Spieler-IDs im Spiel',
+  'perm.menu.money': 'Geld geben (Spieler)',
+  'perm.menu.money_all': 'Geld geben (alle)',
+  'perm.menu.giveaway': 'Gewinnspiel starten',
+  'perm.menu.npc': 'NPCs an/aus',
+  'perm.menu.weather': 'Wetter & Zeit',
 
   // AppShell legacy
   'shell.navAria': 'Navigation',
@@ -1258,6 +1263,11 @@ export const panelEn = {
   'perm.menu.vehicle': 'Spawn/repair vehicles',
   'perm.menu.clear_area': 'Reset world area',
   'perm.menu.viewids': 'Player IDs in-game',
+  'perm.menu.money': 'Give money (player)',
+  'perm.menu.money_all': 'Give money (all)',
+  'perm.menu.giveaway': 'Start giveaway',
+  'perm.menu.npc': 'NPCs on/off',
+  'perm.menu.weather': 'Weather & time',
 
   'shell.navAria': 'Navigation',
   'shell.mobileAria': 'Mobile',
