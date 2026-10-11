@@ -56,7 +56,7 @@ const SECTION_FIELDS = {
     'discordBotEnabled', 'discordBotToken',
   ],
   game: [
-    'gameMenuEnabled', 'gameMenuAlignRight', 'gameMenuPageKey',
+    'gameMenuEnabled', 'gameMenuAlignRight', 'gameMenuPageKey', 'gameNotifyPos',
     'hideAdminInPunishments', 'hideAdminInMessages', 'hideAnnouncementNotif',
     'hideDmNotif', 'hideWarnNotif', 'hideRestartWarnNotif',
   ],
@@ -702,8 +702,19 @@ export default function Settings({ user, onUser, onSetupReset }) {
                 />
               </label>
             </ModuleCard>
-            <ModuleCard title="Benachrichtigungen" lead="Admin-Namen und Standard-Notifs ausblenden.">
-              <div className="st-chips st-chips-col">
+            <ModuleCard title="Benachrichtigungen" lead="Position der Orbit-Notify und Admin-/Notif-Optionen.">
+              <OrbitSelect
+                label={t('settings.game.notifyPos')}
+                value={form.gameNotifyPos || 'top-left'}
+                onChange={(v) => set({ gameNotifyPos: v })}
+                options={[
+                  { value: 'top-left', label: t('settings.game.notifyTopLeft') },
+                  { value: 'top-right', label: t('settings.game.notifyTopRight') },
+                  { value: 'bottom-left', label: t('settings.game.notifyBottomLeft') },
+                  { value: 'bottom-right', label: t('settings.game.notifyBottomRight') },
+                ]}
+              />
+              <div className="st-chips st-chips-col" style={{ marginTop: 12 }}>
                 <Toggle checked={form.hideAdminInPunishments !== false} onChange={(v) => set({ hideAdminInPunishments: v })} onLabel="Admin in Strafen versteckt" offLabel="Admin in Strafen sichtbar" />
                 <Toggle checked={!!form.hideAdminInMessages} onChange={(v) => set({ hideAdminInMessages: v })} onLabel="Admin in Nachrichten versteckt" offLabel="Admin in Nachrichten sichtbar" />
                 <Toggle checked={!!form.hideAnnouncementNotif} onChange={(v) => set({ hideAnnouncementNotif: v })} onLabel="Announce-Notif aus" offLabel="Announce-Notif an" />

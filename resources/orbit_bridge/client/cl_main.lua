@@ -10,6 +10,16 @@ local showIds = false
 local spectating = false
 local spectateTarget = nil
 
+local NOTIFY_OK = { ['top-left'] = true, ['top-right'] = true, ['bottom-left'] = true, ['bottom-right'] = true }
+local notifyPos = 'top-left'
+
+local function applyNotifyPos(pos)
+  if type(pos) ~= 'string' or not NOTIFY_OK[pos] then return end
+  if pos == notifyPos then return end
+  notifyPos = pos
+  SendNUIMessage({ action = 'notifyPos', pos = notifyPos })
+end
+
 -- Nie chat:addMessage — spamt Chat + bricht esx_rpchat (GetPlayerName null).
 local function toast(kind, title, message, duration)
   SendNUIMessage({
@@ -18,11 +28,25 @@ local function toast(kind, title, message, duration)
     title = title or 'Orbit',
     message = tostring(message or ''),
     duration = duration,
+    pos = notifyPos,
   })
 end
 
 RegisterNetEvent('orbit:toast', function(kind, title, message, duration)
   toast(kind, title, message, duration)
+end)
+
+RegisterNetEvent('orbit:notifyPos', function(pos)
+  applyNotifyPos(pos)
+end)
+
+CreateThread(function()
+  SendNUIMessage({ action = 'notifyPos', pos = notifyPos })
+  while true do
+    local p = GlobalState.orbitNotifyPos
+    if type(p) == 'string' then applyNotifyPos(p) end
+    Wait(4000)
+  end
 end)
 
 local function closeMenu()
@@ -393,6 +417,7 @@ RegisterNetEvent('orbit:openMenu', function(payload)
   menuOpen = true
   menuCursor = false
   local game = payload and payload.game or {}
+  if type(game.notifyPos) == 'string' then applyNotifyPos(game.notifyPos) end
   -- Main: Tastatur-Menü + laufen/umschauen (KeepInput)
   SetNuiFocus(true, false)
   SetNuiFocusKeepInput(true)
@@ -404,6 +429,7 @@ RegisterNetEvent('orbit:openMenu', function(payload)
     game = game,
     alignRight = game.alignRight == true,
     pageKey = game.pageKey or 'Tab',
+    notifyPos = notifyPos,
   })
   notifyToggles()
 end)
@@ -437,6 +463,7 @@ RegisterNetEvent('orbit:dm', function(author, message, meta)
     message = tostring(message or ''),
     meta = ('von %s'):format(who),
     duration = 6000,
+    pos = notifyPos,
   })
 end)
 
@@ -454,6 +481,7 @@ RegisterNetEvent('orbit:showWarning', function(payload)
     message = tostring(reason),
     meta = ('von %s'):format(who),
     duration = 7000,
+    pos = notifyPos,
   })
 end)
 

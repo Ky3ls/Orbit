@@ -3008,6 +3008,13 @@ async function handleApi(req, res, url) {
       }
       setSetting(db, 'gameMenuPageKey', key);
     }
+    if (body.gameNotifyPos !== undefined) {
+      const pos = String(body.gameNotifyPos || '').toLowerCase();
+      if (!['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(pos)) {
+        return json(res, 400, { error: 'Notify-Position ungültig.' });
+      }
+      setSetting(db, 'gameNotifyPos', pos);
+    }
     if (body.hideAdminInPunishments !== undefined) {
       setSetting(db, 'hideAdminInPunishments', body.hideAdminInPunishments ? '1' : '0');
     }
@@ -3151,6 +3158,16 @@ async function handleApi(req, res, url) {
     audit(db, me.username, 'settings', '', ip);
     if (me.role === 'owner') {
       refreshDiscordBot(settingMap(db)).catch((e) => logLine('warn', `Discord-Bot: ${e.message}`));
+    }
+    // Notify-Position sofort an alle Clients pushen (ohne ensure orbit)
+    if (body.gameNotifyPos !== undefined) {
+      try {
+        const map = settingMap(db);
+        const pos = String(body.gameNotifyPos || 'top-left').toLowerCase();
+        sendSupervisorCommand(map, `orbit_setNotifyPos ${pos}`);
+      } catch (e) {
+        logLine('warn', `NotifyPos push: ${e.message}`);
+      }
     }
     return json(res, 200, { ok: true });
   }
