@@ -311,6 +311,21 @@ function applyNotifyPos(pos) {
   root.classList.add(`pos-${p}`);
 }
 
+function applyAccent(data) {
+  if (!data) return;
+  const root = document.documentElement;
+  const hex = data.hex || data.accentHex;
+  const hex2 = data.hex2 || data.accentHex2;
+  const rgb = data.rgb || data.accentRgb;
+  if (hex) root.style.setProperty('--accent', hex);
+  if (hex2) root.style.setProperty('--accent-2', hex2);
+  if (rgb) {
+    root.style.setProperty('--accent-rgb', rgb);
+    root.style.setProperty('--accent-dim', `rgba(${rgb}, 0.14)`);
+  }
+  if (data.accent) root.dataset.accent = data.accent;
+}
+
 function showOrbitToast(payload) {
   const root = document.getElementById('orbitToasts');
   if (!root || !payload) return;
@@ -819,6 +834,7 @@ window.addEventListener('message', (e) => {
     app.classList.toggle('align-right', !!(d.alignRight || (d.game && d.game.alignRight)));
     if (d.game && d.game.notifyPos) applyNotifyPos(d.game.notifyPos);
     else if (d.notifyPos) applyNotifyPos(d.notifyPos);
+    if (d.game && (d.game.accent || d.game.accentRgb || d.game.accentHex)) applyAccent(d.game);
     if (d.game && d.game.language) applyMenuLang(d.game.language);
     else if (d.language) applyMenuLang(d.language);
     who.textContent = d.name ? `${mt('admin')} · ${d.name}` : mt('admin');
@@ -849,6 +865,7 @@ window.addEventListener('message', (e) => {
   }
   if (d.action === 'toast') showOrbitToast(d);
   if (d.action === 'notifyPos') applyNotifyPos(d.pos);
+  if (d.action === 'accent') applyAccent(d);
   if (d.action === 'announceUi') showOrbitAnnounce(d);
   if (d.action === 'optWeather') fillWeatherUi(d.weather);
   if (d.action === 'optNpc') {

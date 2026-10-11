@@ -244,6 +244,50 @@ RegisterCommand('orbit_setNotifyPos', function(src, args)
   pushNotifyPos(args[1] or 'top-left')
 end, true)
 
+-- Panel-Akzent an Ingame-Admin pushen: orbit_setAccent license:xxx orange
+-- oder: orbit_setAccent id:12 violet
+RegisterCommand('orbit_setAccent', function(src, args)
+  if src ~= 0 then return end
+  local who = tostring(args[1] or '')
+  local accentId = tostring(args[2] or 'orange')
+  if who == '' then return end
+  local hex = tostring(args[3] or '')
+  local hex2 = tostring(args[4] or '')
+  if hex ~= '' and hex:sub(1, 1) ~= '#' then hex = '#' .. hex end
+  if hex2 ~= '' and hex2:sub(1, 1) ~= '#' then hex2 = '#' .. hex2 end
+  local rgb = tostring(args[5] or ''):gsub('_', ', ')
+  local rgb2 = tostring(args[6] or ''):gsub('_', ', ')
+  local payload = {
+    accent = accentId,
+    accentHex = hex ~= '' and hex or nil,
+    accentHex2 = hex2 ~= '' and hex2 or nil,
+    accentRgb = rgb ~= '' and rgb or nil,
+    accentRgb2 = rgb2 ~= '' and rgb2 or nil,
+  }
+  local targetSrc = nil
+  if who:sub(1, 3) == 'id:' then
+    targetSrc = tonumber(who:sub(4))
+  else
+    local needle = who
+    if not needle:find(':', 1, true) then needle = 'license:' .. needle end
+    for _, id in ipairs(GetPlayers()) do
+      local pid = tonumber(id)
+      if pid then
+        for _, ident in ipairs(GetPlayerIdentifiers(pid) or {}) do
+          if ident == needle then
+            targetSrc = pid
+            break
+          end
+        end
+      end
+      if targetSrc then break end
+    end
+  end
+  if targetSrc and GetPlayerName(targetSrc) then
+    TriggerClientEvent('orbit:accent', targetSrc, payload)
+  end
+end, true)
+
 RegisterNetEvent('orbit:requestPlayerList', function()
   local src = source
   if not OrbitIsAdmin(src) then return end

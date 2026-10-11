@@ -16,6 +16,19 @@ import { checkPlayerJoin, ensureModerationSchema } from './moderation.js';
 import { gameSettingsForBridge, resolveAllowlistMode } from './settingsSchema.js';
 import { checkDiscordGuildAccess } from './discordBot.js';
 import { hasPerm } from './auth.js';
+import { getUserPrefs } from './userPrefs.js';
+import { ACCENT_PRESETS } from '../src/prefsShared.js';
+
+function accentPayloadFromPrefs(prefs) {
+  const id = prefs?.accent && ACCENT_PRESETS[prefs.accent] ? prefs.accent : 'orange';
+  const a = ACCENT_PRESETS[id] || ACCENT_PRESETS.orange;
+  return {
+    accent: a.id,
+    accentHex: a.hex,
+    accentHex2: a.hex2,
+    accentRgb: a.rgb,
+  };
+}
 
 function str(v, max) {
   return String(v ?? '').slice(0, max);
@@ -225,6 +238,8 @@ export async function handleIngamePublicApi(ctx) {
       json(res, 200, { logout: true, reason: 'Ingame-Menü ist in den Einstellungen deaktiviert.' });
       return true;
     }
+    const { prefs } = getUserPrefs(db, user.id);
+    Object.assign(game, accentPayloadFromPrefs(prefs));
     json(res, 200, {
       name: user.username,
       permissions: menu,
