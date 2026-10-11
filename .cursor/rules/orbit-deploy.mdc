@@ -1,5 +1,5 @@
 ---
-description: Orbit Deploy — Repo sync + Kick vor FX-Neustart
+description: Orbit Deploy — Repo sync + Kick vor FX-Stop
 alwaysApply: true
 ---
 
@@ -14,10 +14,13 @@ Nach Code-Änderungen (inkl. Ingame-Menü `resources/orbit_bridge/**`):
 
 Nicht nur Live patchen — GitHub-Repo ist Quelle der Wahrheit.
 
-## Vor FX Stop / Restart: Spieler kicken
-Bevor FX gestoppt oder neu gestartet wird (Panel-Steuerung, Zeitplan, Agent, Multi-Server):
-- **Zuerst** alle Spieler auf **allen** laufenden FX-Instanzen kicken (`kickAllPlayersOnAllServers` / `orbitEvent serverShuttingDown`)
-- Kurz warten (~1s), dann stop/restart
-- Sonst bleiben Clients „verbunden“ und timeouten
+## Panel-Restart ≠ FX-Restart
+- `systemctl restart orbit` darf FX **nicht** mitkillen (`KillMode=process`, detached spawn).
+- Spieler bleiben online; Panel adoptiert den laufenden FX wieder.
+- **Kein Kick** bei reinem Panel-Restart / UI-Deploy / `ensure orbit`.
 
-Nicht nötig bei: nur `ensure orbit`, Panel-`systemctl restart orbit`, reine Datei-Syncs ohne FX-Stop.
+## Vor echtem FX Stop / Restart: Spieler kicken
+Nur wenn FX wirklich gestoppt/neu gestartet wird (Panel-Steuerung, Zeitplan, `controlFx stop|restart`):
+- Zuerst `kickAllPlayersOnAllServers` / `orbitEvent serverShuttingDown` auf **allen** Instanzen
+- ~1s warten, dann stop/restart
+- Sonst Ghost-Timeouts

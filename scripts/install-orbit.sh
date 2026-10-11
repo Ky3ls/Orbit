@@ -139,6 +139,7 @@ rm -f /etc/sudoers.d/orbit
 chmod +x "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
 
 # Wie txAdmin: systemd ohne User= → root
+# KillMode=process: Panel-Restart tötet FXServer-Kinder NICHT (sonst Ghost-Timeouts)
 cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
 Description=Orbit Panel
@@ -151,9 +152,17 @@ $ENV_LINES
 ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
 Restart=on-failure
 RestartSec=3
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+mkdir -p "/etc/systemd/system/${SERVICE_NAME}.service.d"
+cat > "/etc/systemd/system/${SERVICE_NAME}.service.d/fx-survive.conf" <<'EOF'
+[Service]
+# FX läuft als Kind von Orbit — bei Panel-Restart nicht mitkillen
+KillMode=process
 EOF
 
 systemctl daemon-reload
