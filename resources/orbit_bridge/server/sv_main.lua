@@ -211,12 +211,23 @@ RegisterNetEvent('orbit:checkAdmin', function()
   end)
 end)
 
+local function pushNotifyPos(pos)
+  if type(pos) ~= 'string' then return end
+  local p = pos:lower()
+  if p ~= 'top-left' and p ~= 'top-right' and p ~= 'bottom-left' and p ~= 'bottom-right' then return end
+  GlobalState.orbitNotifyPos = p
+  TriggerClientEvent('orbit:notifyPos', -1, p)
+end
+
 RegisterNetEvent('orbit:requestMenu', function()
   local src = source
   OrbitAuth(src, function(ok, info, perms, game)
     if not ok then
       TriggerClientEvent('orbit:toast', src, 'warn', 'Orbit', tostring(info or 'Kein Zugriff'))
       return
+    end
+    if type(game) == 'table' and game.notifyPos then
+      pushNotifyPos(game.notifyPos)
     end
     TriggerClientEvent('orbit:openMenu', src, {
       name = info,
@@ -226,6 +237,12 @@ RegisterNetEvent('orbit:requestMenu', function()
     })
   end)
 end)
+
+-- Konsole (Panel nach Settings-Save): orbit_setNotifyPos top-left
+RegisterCommand('orbit_setNotifyPos', function(src, args)
+  if src ~= 0 then return end
+  pushNotifyPos(args[1] or 'top-left')
+end, true)
 
 RegisterNetEvent('orbit:requestPlayerList', function()
   local src = source

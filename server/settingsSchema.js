@@ -107,6 +107,10 @@ export function publicSettingsPayload(settings, { isOwner = false } = {}) {
     gameMenuEnabled: settings.gameMenuEnabled !== '0',
     gameMenuAlignRight: BOOL01(settings.gameMenuAlignRight, false),
     gameMenuPageKey: settings.gameMenuPageKey || 'Tab',
+    gameNotifyPos: (() => {
+      const p = String(settings.gameNotifyPos || 'top-left').toLowerCase();
+      return ['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(p) ? p : 'top-left';
+    })(),
     hideAdminInPunishments: settings.hideAdminInPunishments !== '0',
     hideAdminInMessages: BOOL01(settings.hideAdminInMessages, false),
     hideAnnouncementNotif: BOOL01(settings.hideAnnouncementNotif, false),
@@ -132,10 +136,15 @@ export function publicSettingsPayload(settings, { isOwner = false } = {}) {
 
 /** Settings die das Ingame-Menü braucht */
 export function gameSettingsForBridge(settings) {
+  const notifyPos = (() => {
+    const p = String(settings.gameNotifyPos || 'top-left').toLowerCase();
+    return ['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(p) ? p : 'top-left';
+  })();
   return {
     menuEnabled: settings.gameMenuEnabled !== '0',
     alignRight: BOOL01(settings.gameMenuAlignRight, false),
     pageKey: settings.gameMenuPageKey || 'Tab',
+    notifyPos,
     hideAdminInPunishments: settings.hideAdminInPunishments !== '0',
     hideAdminInMessages: BOOL01(settings.hideAdminInMessages, false),
     hideAnnouncementNotif: BOOL01(settings.hideAnnouncementNotif, false),

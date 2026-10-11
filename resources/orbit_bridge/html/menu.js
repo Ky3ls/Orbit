@@ -296,9 +296,20 @@ function blockMainMouse(e) {
   app?.addEventListener(type, blockMainMouse, true);
 });
 
+const NOTIFY_POS = new Set(['top-left', 'top-right', 'bottom-left', 'bottom-right']);
+
+function applyNotifyPos(pos) {
+  const root = document.getElementById('orbitToasts');
+  if (!root) return;
+  const p = NOTIFY_POS.has(pos) ? pos : 'top-left';
+  root.classList.remove('pos-top-left', 'pos-top-right', 'pos-bottom-left', 'pos-bottom-right');
+  root.classList.add(`pos-${p}`);
+}
+
 function showOrbitToast(payload) {
   const root = document.getElementById('orbitToasts');
   if (!root || !payload) return;
+  if (payload.pos) applyNotifyPos(payload.pos);
   const kind = payload.kind || 'info';
   const el = document.createElement('div');
   el.className = `orbit-toast kind-${kind}`;
@@ -792,6 +803,8 @@ window.addEventListener('message', (e) => {
   if (d.action === 'open') {
     app.classList.remove('hidden');
     app.classList.toggle('align-right', !!(d.alignRight || (d.game && d.game.alignRight)));
+    if (d.game && d.game.notifyPos) applyNotifyPos(d.game.notifyPos);
+    else if (d.notifyPos) applyNotifyPos(d.notifyPos);
     if (d.game && d.game.language) applyMenuLang(d.game.language);
     else if (d.language) applyMenuLang(d.language);
     who.textContent = d.name ? `${mt('admin')} · ${d.name}` : mt('admin');
@@ -821,8 +834,11 @@ window.addEventListener('message', (e) => {
     paintAllSelectors();
   }
   if (d.action === 'toast') showOrbitToast(d);
+  if (d.action === 'notifyPos') applyNotifyPos(d.pos);
   if (d.action === 'announceUi') showOrbitAnnounce(d);
 });
+
+applyNotifyPos('top-left');
 
 document.addEventListener('keydown', (e) => {
   if (app.classList.contains('hidden') && !isModalOpen() && !isPromptOpen()) return;
