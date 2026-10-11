@@ -255,9 +255,9 @@ local function drawScreenLine(x1, y1, x2, y2, r, g, b, a)
   local dx, dy = x2 - x1, y2 - y1
   local len = math.sqrt(dx * dx + dy * dy)
   if len < 0.0005 then return end
-  local steps = math.min(48, math.max(4, math.floor(len * 420)))
-  local w = 0.00135
-  local h = 0.0022
+  local steps = math.min(64, math.max(6, math.floor(len * 520)))
+  local w = 0.0019
+  local h = 0.0030
   for i = 0, steps do
     local t = i / steps
     DrawRect(x1 + dx * t, y1 + dy * t, w, h, r, g, b, a)
@@ -328,11 +328,9 @@ CreateThread(function()
               EndTextCommandDisplayText(hx, hy - 0.048)
             end
 
-            -- Skelett-ESP (Screen → durch Wände), inkl. sich selbst optional auslassen
-            if ped ~= myPed then
-              local alpha = dist < 40.0 and 220 or (dist < 100.0 and 170 or 120)
-              drawPedSkeleton(ped, 255, 140, 40, alpha)
-            end
+            -- Skelett-ESP (Screen → durch Wände), auch eigene Ped sichtbar
+            local alpha = ped == myPed and 200 or (dist < 40.0 and 230 or (dist < 100.0 and 180 or 130))
+            drawPedSkeleton(ped, 255, 140, 40, alpha)
 
             -- Vertikale Bars rechts am Körper (Fuß → Kopf)
             local headX, headY = boneScreen(ped, BONE_HEAD)
