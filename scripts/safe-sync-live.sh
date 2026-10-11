@@ -84,6 +84,9 @@ sync_tree scripts
 sync_tree docs
 sync_tree public
 sync_tree resources
+if [[ -d "$SRC/.cursor" ]]; then
+  sync_tree .cursor
+fi
 if [[ -d "$SRC/dist" ]]; then
   sync_tree dist
 else

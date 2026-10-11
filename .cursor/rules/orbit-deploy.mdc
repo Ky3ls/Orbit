@@ -1,0 +1,23 @@
+---
+description: Orbit Deploy — Repo sync + Kick vor FX-Neustart
+alwaysApply: true
+---
+
+# Orbit Deploy & Restart
+
+## Repo immer aktualisieren
+Nach Code-Änderungen (inkl. Ingame-Menü `resources/orbit_bridge/**`):
+1. In `/tmp/orbit-push` committen und nach `origin` pushen (Ky3ls)
+2. `bash scripts/safe-sync-live.sh` → `/opt/orbit`
+3. `syncOrbitSystemResource` / Bridge nach `artifacts/.../system_resources/orbit`
+4. Frontend bei UI-Änderungen: `npm run build` vor Sync
+
+Nicht nur Live patchen — GitHub-Repo ist Quelle der Wahrheit.
+
+## Vor FX Stop / Restart: Spieler kicken
+Bevor FX gestoppt oder neu gestartet wird (Panel-Steuerung, Zeitplan, Agent, Multi-Server):
+- **Zuerst** alle Spieler auf **allen** laufenden FX-Instanzen kicken (`kickAllPlayersOnAllServers` / `orbitEvent serverShuttingDown`)
+- Kurz warten (~1s), dann stop/restart
+- Sonst bleiben Clients „verbunden“ und timeouten
+
+Nicht nötig bei: nur `ensure orbit`, Panel-`systemctl restart orbit`, reine Datei-Syncs ohne FX-Stop.

@@ -464,11 +464,42 @@ function scheduleCrashRestart(inst, key, logLine, reason) {
  * @param {(level: string, text: string) => void} logLine
  * @param {{ instanceId?: string|number, stopAll?: boolean }} [opts]
  */
+/**
+ * Vor Stop/Restart: alle Online-Spieler auf ALLEN laufenden FX-Instanzen kicken
+ * (sonst bleiben Clients „verbunden“ und timeouten).
+ * @returns {number} Anzahl Instanzen, an die der Kick ging
+ */
+export async function kickAllPlayersOnAllServers(logLine = () => {}, message = 'Server wird neu gestartet…') {
+  const { orbitEventCommand } = await import('./orbitEvents.js');
+  const cmd = orbitEventCommand('serverShuttingDown', { message: String(message || 'Server wird neu gestartet…') });
+  let n = 0;
+  for (const [key, inst] of instances) {
+    if (inst.phase !== 'running' && inst.phase !== 'starting') continue;
+    const stdin = inst.child?.stdin;
+    if (!stdin || stdin.destroyed) continue;
+    try {
+      stdin.write(`${cmd}\n`);
+      n += 1;
+      logLine('info', `[FX:${key}] Spieler gekickt (vor Shutdown)`);
+    } catch (err) {
+      logLine('warn', `[FX:${key}] Kick vor Shutdown: ${err.message}`);
+    }
+  }
+  if (n > 0) await new Promise((r) => setTimeout(r, 1200));
+  return n;
+}
+
 export async function stopFxProcess(settings, logLine, opts = {}) {
+  if (opts.skipKick !== true) {
+    await kickAllPlayersOnAllServers(
+      logLine,
+      opts.stopAll ? 'Server wird gestoppt…' : 'Server wird gestoppt…',
+    );
+  }
   if (opts.stopAll) {
     const keys = [...instances.keys()];
     for (const k of keys) {
-      await stopFxProcess(settings, logLine, { instanceId: k, killOrphans: false });
+      await stopFxProcess(settings, logLine, { instanceId: k, killOrphans: false, skipKick: true });
     }
     const port = Number(settings?.fivemPort) || 30120;
     await killOrphanFxServers(logLine, port);
@@ -587,18 +618,22 @@ export async function forceFreeGamePort(settings, logLine = () => {}, port = 301
 }
 
 export async function restartFxProcess(settings, logLine, opts = {}) {
-  // Wie txAdmin: zuerst alle Spieler kicken, dann stoppen, dann starten
+  // Alle Instanzen kicken (Multi-Server), dann stoppen, dann starten
   try {
-    const { dispatchFxCommand } = await import('./fxCommand.js');
-    const { orbitEventCommand } = await import('./orbitEvents.js');
-    await dispatchFxCommand(settings, orbitEventCommand('serverShuttingDown', {
-      message: 'Server wird neu gestartet…',
-    }));
-    await new Promise((r) => setTimeout(r, 800));
+    const n = await kickAllPlayersOnAllServers(logLine, 'Server wird neu gestartet…');
+    if (n === 0) {
+      // Fallback: RCON / einzelne Konsole (systemd-Modus o.ä.)
+      const { dispatchFxCommand } = await import('./fxCommand.js');
+      const { orbitEventCommand } = await import('./orbitEvents.js');
+      await dispatchFxCommand(settings, orbitEventCommand('serverShuttingDown', {
+        message: 'Server wird neu gestartet…',
+      }));
+      await new Promise((r) => setTimeout(r, 1200));
+    }
   } catch (err) {
     logLine('warn', `Kick vor Restart: ${err.message}`);
   }
-  await stopFxProcess(settings, logLine, opts);
+  await stopFxProcess(settings, logLine, { ...opts, skipKick: true });
   await new Promise((r) => setTimeout(r, 500));
   return startFxProcess(settings, logLine, opts);
 }
