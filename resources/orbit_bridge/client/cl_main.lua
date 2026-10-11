@@ -325,22 +325,16 @@ local function drawVerticalBar(barX, topY, botY, pct, r, g, b, barW)
   end
 end
 
---- 2D-Linie: 1× DrawSprite (rotiert) — durch Wände, kein Draw-Limit
-local LINE_TXD, LINE_TEX = 'commonmenu', 'gradient_bgd'
-local lineTxdOk = false
-
+--- 2D-Linie aus wenigen farbigen DrawRects (Sprite-Rotation war kaputt → Querbalken)
 local function drawScreenLine(x1, y1, x2, y2, r, g, b, a)
   local dx, dy = x2 - x1, y2 - y1
   local len = math.sqrt(dx * dx + dy * dy)
-  if len < 0.0004 then return end
-  if lineTxdOk then
-    DrawSprite(LINE_TXD, LINE_TEX, (x1 + x2) * 0.5, (y1 + y2) * 0.5, len, 0.0026, math.deg(math.atan(dy, dx)), r, g, b, a)
-    return
-  end
-  local steps = math.min(10, math.max(2, math.floor(len * 90.0 + 0.5)))
+  if len < 0.0003 then return end
+  local steps = math.min(8, math.max(2, math.floor(len / 0.014 + 0.5)))
+  local w, h = 0.0019, 0.0029
   for i = 0, steps do
     local t = i / steps
-    DrawRect(x1 + dx * t, y1 + dy * t, 0.0022, 0.0032, r, g, b, a)
+    DrawRect(x1 + dx * t, y1 + dy * t, w, h, r, g, b, a)
   end
 end
 
@@ -373,18 +367,8 @@ local ESP_NPC_TEMP = true
 
 local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB, textScale, barW, barGap, withSkeleton)
   local headX, headY = boneScreen(ped, BONE_HEAD)
-  if headX then
-    SetTextScale(textScale, textScale)
-    SetTextFont(4)
-    SetTextCentre(true)
-    SetTextColour(tr, tg, tb, 220)
-    SetTextOutline()
-    BeginTextCommandDisplayText('STRING')
-    AddTextComponentSubstringPlayerName(label)
-    EndTextCommandDisplayText(headX, headY - 0.048)
-  end
 
-  -- Bars: immer wenn Kopf on-screen; Höhe per Knochen/Entity-Fallback (Fuß-Screen darf nicht Pflicht sein)
+  -- Bars zuerst (wenig Draws), dann Skeleton, Label zuletzt oben drauf
   if headX and headY then
     local topY, botY = headY, headY
     local leftX, rightX = headX, headX
@@ -436,6 +420,18 @@ local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB,
     local alpha = ped == myPed and 220 or (dist < 40.0 and 230 or (dist < 100.0 and 180 or 130))
     pcall(drawPedSkeleton, ped, skR, skG, skB, alpha)
   end
+
+  if headX and headY and label then
+    SetTextFont(4)
+    SetTextScale(textScale, textScale)
+    SetTextProportional(true)
+    SetTextCentre(true)
+    SetTextColour(tr, tg, tb, 255)
+    SetTextOutline()
+    SetTextEntry('STRING')
+    AddTextComponentString(label)
+    DrawText(headX, headY - 0.052)
+  end
 end
 
 local function collectNpcPeds(myPed, myCoords, maxDist, maxCount)
@@ -478,22 +474,15 @@ local function collectNpcPeds(myPed, myCoords, maxDist, maxCount)
 end
 
 CreateThread(function()
-  RequestStreamedTextureDict(LINE_TXD, true)
   local textScale = 0.32
   local barW = 0.0036
   local barGap = 0.0055
   local ESP_DIST = 220.0
   local ESP_NPC_DIST = 80.0
-  local ESP_NPC_MAX = 12
-  local ESP_NPC_SKELETON_MAX = 8
+  local ESP_NPC_MAX = 10
+  local ESP_NPC_SKELETON_MAX = 6
   while true do
     if showIds then
-      if not lineTxdOk and HasStreamedTextureDictLoaded(LINE_TXD) then
-        lineTxdOk = true
-      elseif not lineTxdOk then
-        RequestStreamedTextureDict(LINE_TXD, true)
-      end
-      -- pcall: ein Lua-Fehler darf den ESP-Thread nicht totlegen
       pcall(function()
         local myPed = PlayerPedId()
         local myCoords = GetEntityCoords(myPed)
