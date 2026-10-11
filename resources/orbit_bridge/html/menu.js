@@ -81,7 +81,7 @@ const selectors = {
 const MAIN_ACTIONS = [
   { id: 'announce', label: 'Ankündigung', ico: 'megaphone', act: 'promptAnnounce', perm: 'announce' },
   { id: 'area', label: 'Area bereinigen', ico: 'broom', act: 'clearArea', perm: 'clearArea' },
-  { id: 'ids', label: 'Spieler-IDs', ico: 'ids', act: 'toggleIds', perm: 'ids', toggle: 'ids' },
+  { id: 'ids', label: 'IDs / ESP', ico: 'ids', act: 'toggleIds', perm: 'ids', toggle: 'ids' },
 ];
 
 const PACT_MOD = [
@@ -107,7 +107,7 @@ const MENU_I18N = {
     tp: 'Teleport', wp: 'Wegpunkt', back: 'Zurück', coords: 'Koordinaten…',
     heal: 'Heilung', self: 'Selbst', all: 'Alle', armorSelf: 'Weste', armorAll: 'Weste alle',
     veh: 'Fahrzeug', repair: 'Reparieren', boost: 'Boost', flip: 'Aufrichten', del: 'Löschen',
-    announce: 'Ankündigung', area: 'Area bereinigen', ids: 'Spieler-IDs',
+    announce: 'Ankündigung', area: 'Area bereinigen', ids: 'IDs / ESP',
     drunk: 'Betrunken', fire: 'Feuer',
     announceTitle: 'Ankündigung', announcePh: 'Nachricht an alle…',
     coordsTitle: 'Koordinaten', admin: 'Admin',
@@ -117,7 +117,7 @@ const MENU_I18N = {
     tp: 'Teleport', wp: 'Waypoint', back: 'Back', coords: 'Coordinates…',
     heal: 'Heal', self: 'Self', all: 'All', armorSelf: 'Armor', armorAll: 'Armor all',
     veh: 'Vehicle', repair: 'Repair', boost: 'Boost', flip: 'Flip', del: 'Delete',
-    announce: 'Announce', area: 'Clear area', ids: 'Player IDs',
+    announce: 'Announce', area: 'Clear area', ids: 'IDs / ESP',
     drunk: 'Drunk', fire: 'Fire',
     announceTitle: 'Announcement', announcePh: 'Message to everyone…',
     coordsTitle: 'Coordinates', admin: 'Admin',
