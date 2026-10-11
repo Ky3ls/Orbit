@@ -179,6 +179,16 @@ html, body {
 .menu { display: flex; flex-direction: column; gap: 2px; }
 
 /* Zeile: Icon · Label: Wert · ‹ › */
+/* Main-Tab: keine Maus — Hover/Klick tot, nur Tastatur */
+#app.kb-nav,
+#app.kb-nav * {
+  pointer-events: none !important;
+  cursor: none !important;
+}
+#app.kb-nav .row:hover {
+  background: transparent;
+}
+
 .row {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
