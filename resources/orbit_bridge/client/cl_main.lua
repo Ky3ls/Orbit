@@ -303,16 +303,16 @@ local function boneScreen(ped, bone)
   return x, y, c
 end
 
---- 2D-Linie (Screen) — durch Wände; überlappende Rects = durchgehende Striche (keine Punkte)
+--- 2D-Linie (Screen) — überlappende Rects; steps begrenzt (sonst Draw-Limit → keine Bars mehr)
 local function drawScreenLine(x1, y1, x2, y2, r, g, b, a)
   local dx, dy = x2 - x1, y2 - y1
   local len = math.sqrt(dx * dx + dy * dy)
   if len < 0.0002 then return end
-  local thickness = 0.00235
-  local step = thickness * 0.32
-  local steps = math.min(180, math.max(3, math.floor(len / step + 0.5)))
+  local thickness = 0.0022
+  local step = thickness * 0.42
+  local steps = math.min(56, math.max(3, math.floor(len / step + 0.5)))
   local w = thickness
-  local h = thickness * 1.55
+  local h = thickness * 1.5
   for i = 0, steps do
     local t = i / steps
     DrawRect(x1 + dx * t, y1 + dy * t, w, h, r, g, b, a)
@@ -361,8 +361,8 @@ end
 local ESP_NPC_TEMP = true
 
 local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB, textScale, barW, barGap)
-  local hx, hy = boneScreen(ped, BONE_HEAD)
-  if hx then
+  local headX, headY = boneScreen(ped, BONE_HEAD)
+  if headX then
     SetTextScale(textScale, textScale)
     SetTextFont(4)
     SetTextCentre(true)
@@ -370,42 +370,49 @@ local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB,
     SetTextOutline()
     BeginTextCommandDisplayText('STRING')
     AddTextComponentSubstringPlayerName(label)
-    EndTextCommandDisplayText(hx, hy - 0.048)
+    EndTextCommandDisplayText(headX, headY - 0.048)
   end
 
-  local alpha = ped == myPed and 200 or (dist < 40.0 and 230 or (dist < 100.0 and 180 or 130))
-  drawPedSkeleton(ped, skR, skG, skB, alpha)
-
-  local headX, headY = boneScreen(ped, BONE_HEAD)
+  -- Bars ZUERST (vor Skeleton), sonst frisst das Draw-Limit die Balken
   local lFootX, lFootY = boneScreen(ped, BONE_L_FOOT)
   local rFootX, rFootY = boneScreen(ped, BONE_R_FOOT)
   local lx = select(1, boneScreen(ped, BONE_L_UPARM))
   local rx = select(1, boneScreen(ped, BONE_R_UPARM))
-  if not (headX and headY and (lFootY or rFootY)) then return end
-  local footY = lFootY or rFootY
-  if lFootY and rFootY then footY = math.max(lFootY, rFootY) end
-  local topY = math.min(headY, footY)
-  local botY = math.max(headY, footY)
-  local barPad = 0.022
-  local rightEdge = headX
-  if lx then rightEdge = math.max(rightEdge, lx) end
-  if rx then rightEdge = math.max(rightEdge, rx) end
-  if lFootX then rightEdge = math.max(rightEdge, lFootX) end
-  if rFootX then rightEdge = math.max(rightEdge, rFootX) end
-  local barX = rightEdge + barPad
-  if barX > 0.985 then
-    local leftEdge = headX
-    if lx then leftEdge = math.min(leftEdge, lx) end
-    if rx then leftEdge = math.min(leftEdge, rx) end
-    barX = leftEdge - barPad - barGap
+  if headX and headY and (lFootY or rFootY) then
+    local footY = lFootY or rFootY
+    if lFootY and rFootY then footY = math.max(lFootY, rFootY) end
+    local topY = math.min(headY, footY)
+    local botY = math.max(headY, footY)
+    if (botY - topY) < 0.02 then
+      topY = headY - 0.04
+      botY = headY + 0.06
+    end
+    local barPad = 0.022
+    local rightEdge = headX
+    if lx then rightEdge = math.max(rightEdge, lx) end
+    if rx then rightEdge = math.max(rightEdge, rx) end
+    if lFootX then rightEdge = math.max(rightEdge, lFootX) end
+    if rFootX then rightEdge = math.max(rightEdge, rFootX) end
+    local barX = rightEdge + barPad
+    if barX > 0.985 then
+      local leftEdge = headX
+      if lx then leftEdge = math.min(leftEdge, lx) end
+      if rx then leftEdge = math.min(leftEdge, rx) end
+      barX = leftEdge - barPad - barGap
+    end
+    if barX < 0.01 then barX = 0.01 end
+    if barX > 0.99 then barX = 0.99 end
+    local hp = pedHealthPct(ped)
+    local armor = pedArmorPct(ped)
+    local hr, hg, hb = 80, 200, 90
+    if hp < 35.0 then hr, hg, hb = 230, 70, 70
+    elseif hp < 65.0 then hr, hg, hb = 230, 180, 60 end
+    drawVerticalBar(barX, topY, botY, hp, hr, hg, hb, barW)
+    drawVerticalBar(barX + barGap, topY, botY, armor, 70, 140, 230, barW)
   end
-  local hp = pedHealthPct(ped)
-  local armor = pedArmorPct(ped)
-  local hr, hg, hb = 80, 200, 90
-  if hp < 35.0 then hr, hg, hb = 230, 70, 70
-  elseif hp < 65.0 then hr, hg, hb = 230, 180, 60 end
-  drawVerticalBar(barX, topY, botY, hp, hr, hg, hb, barW)
-  drawVerticalBar(barX + barGap, topY, botY, armor, 70, 140, 230, barW)
+
+  local alpha = ped == myPed and 200 or (dist < 40.0 and 230 or (dist < 100.0 and 180 or 130))
+  drawPedSkeleton(ped, skR, skG, skB, alpha)
 end
 
 local function collectNpcPeds(myPed, myCoords, maxDist, maxCount)
