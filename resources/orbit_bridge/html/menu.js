@@ -285,9 +285,10 @@ function syncMenuCursor() {
   post('setCursor', { enabled: wantMouse });
 }
 
-/** Main-Tab: Mausklicks/Hover komplett ignorieren */
+/** Main-Tab: echte Mausklicks/Hover ignorieren (programmatische .click() durchlassen) */
 function blockMainMouse(e) {
   if (!app || !app.classList.contains('kb-nav')) return;
+  if (e.isTrusted === false) return;
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
@@ -603,12 +604,26 @@ function cycleFocused(dir) {
   return false;
 }
 
+function activateTab(btn) {
+  if (!btn) return;
+  document.querySelectorAll('.tabs button').forEach((b) => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tab').forEach((t) => t.classList.add('hidden'));
+  const pane = document.getElementById(`tab-${btn.dataset.tab}`);
+  if (pane) pane.classList.remove('hidden');
+  if (btn.dataset.tab !== 'players') closePlayer();
+  syncMenuCursor();
+  requestAnimationFrame(() => {
+    setKbFocus(0, { domFocus: false });
+  });
+}
+
 function switchTab(dir) {
   const tabs = [...document.querySelectorAll('.tabs button')];
   if (!tabs.length) return;
   let i = tabs.findIndex((t) => t.classList.contains('active'));
   i = (i + dir + tabs.length) % tabs.length;
-  tabs[i].click();
+  activateTab(tabs[i]);
 }
 
 function setPmTab(name) {
@@ -755,19 +770,7 @@ function closePlayer() {
 }
 
 document.querySelectorAll('.tabs button').forEach((btn) => {
-  btn.onclick = () => {
-    document.querySelectorAll('.tabs button').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.tab').forEach((t) => t.classList.add('hidden'));
-    const pane = document.getElementById(`tab-${btn.dataset.tab}`);
-    if (pane) pane.classList.remove('hidden');
-    if (btn.dataset.tab !== 'players') closePlayer();
-    syncMenuCursor();
-    requestAnimationFrame(() => {
-      const items = focusables();
-      setKbFocus(0, { domFocus: false });
-    });
-  };
+  btn.onclick = () => activateTab(btn);
 });
 
 document.querySelectorAll('.pm-nav-btn').forEach((btn) => {
