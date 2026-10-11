@@ -364,7 +364,14 @@ RegisterNetEvent('orbit:heal', function()
   SetEntityHealth(ped, GetEntityMaxHealth(ped))
   SetPedArmour(ped, 100)
   ClearPedBloodDamage(ped)
-  toast('ok', 'Heilung', 'HP & Weste voll')
+  -- ESX: Hunger + Durst voll (esx_basicneeds / esx_status)
+  if GetResourceState('esx_basicneeds') == 'started' then
+    TriggerEvent('esx_basicneeds:healPlayer')
+  elseif GetResourceState('esx_status') == 'started' then
+    TriggerEvent('esx_status:set', 'hunger', 1000000)
+    TriggerEvent('esx_status:set', 'thirst', 1000000)
+  end
+  toast('ok', 'Heilung', 'HP, Weste, Essen & Trinken voll')
 end)
 
 RegisterNetEvent('orbit:armor', function()
