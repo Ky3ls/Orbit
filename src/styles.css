@@ -1902,6 +1902,34 @@ input[type='radio']:focus {
   color: var(--muted);
   user-select: none;
 }
+.mon-scope {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  max-width: 100%;
+}
+.mon-scope-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mon-scope-btn:hover { color: var(--text); }
+.mon-scope-btn.active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.45);
+}
 .mon-page {
   display: flex;
   flex-direction: column;

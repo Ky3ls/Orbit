@@ -217,7 +217,12 @@ export const panelDe = {
 
   // Monitoring
   'mon.eyebrow': 'Host',
+  'mon.eyebrowFx': 'FiveM',
   'mon.desc': 'Host-Last und Spielerzahl · Spielstatus vom FiveM-Endpunkt.',
+  'mon.descFx': 'CPU/RAM nur vom FXServer-Prozess · Spielerzahl unverändert.',
+  'mon.scopeAria': 'Monitoring-Bereich',
+  'mon.scopeHost': 'Kompletter Server',
+  'mon.scopeFx': 'Nur FiveM',
   'mon.cpuAria': 'CPU-Auslastung über Zeit',
   'mon.ramAria': 'RAM-Auslastung über Zeit',
   'mon.playersAria': 'Spielerzahl über Zeit',
@@ -846,7 +851,12 @@ export const panelEn = {
   'resources.status.offline': 'offline',
 
   'mon.eyebrow': 'Host',
+  'mon.eyebrowFx': 'FiveM',
   'mon.desc': 'Host load and player count · game status from the FiveM endpoint.',
+  'mon.descFx': 'CPU/RAM of the FXServer process only · player count unchanged.',
+  'mon.scopeAria': 'Monitoring scope',
+  'mon.scopeHost': 'Entire server',
+  'mon.scopeFx': 'FiveM only',
   'mon.cpuAria': 'CPU usage over time',
   'mon.ramAria': 'RAM usage over time',
   'mon.playersAria': 'Player count over time',
