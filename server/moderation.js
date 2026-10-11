@@ -197,9 +197,24 @@ export function checkPlayerJoin(db, settings, {
       const serverName = String(
         settings.serverName || settings.serverLabel || settings.hostname || '',
       ).trim().slice(0, 48);
+      const fmt = (ts) => new Date(ts).toLocaleString('de-DE', {
+        timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+      let remaining = '';
+      if (!permanent) {
+        const mins = Math.max(1, Math.ceil((ban.expires - Date.now()) / 60000));
+        const d = Math.floor(mins / 1440);
+        const h = Math.floor((mins % 1440) / 60);
+        const m = mins % 60;
+        remaining = d > 0 ? `${d} T ${h} Std` : h > 0 ? `${h} Std ${m} Min` : `${m} Min`;
+      }
       return {
         allow: false,
         kind: 'ban',
+        banCreatedLabel: ban.created ? fmt(ban.created) : '',
+        banExpiresShort: permanent ? 'Permanent' : fmt(ban.expires),
+        banRemainingLabel: remaining,
+        banAuthor: String(ban.author || '').slice(0, 32),
         reason: [
           `[Orbit] Du bist gebannt.`,
           `Grund: ${ban.reason}`,
