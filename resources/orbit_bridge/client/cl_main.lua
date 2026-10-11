@@ -295,9 +295,9 @@ RegisterNetEvent('orbit:openMenu', function(payload)
   menuOpen = true
   menuCursor = false
   local game = payload and payload.game or {}
-  -- Main: nur Tastatur; Maus erst auf Spieler-Tab (NUI setCursor)
+  -- Main: Tastatur-Menü + laufen/umschauen (KeepInput)
   SetNuiFocus(true, false)
-  SetNuiFocusKeepInput(false)
+  SetNuiFocusKeepInput(true)
   SendNUIMessage({
     action = 'open',
     name = payload and payload.name or '',
@@ -425,7 +425,8 @@ RegisterNUICallback('setCursor', function(data, cb)
   local want = data and data.enabled and true or false
   menuCursor = want
   SetNuiFocus(true, want)
-  SetNuiFocusKeepInput(false)
+  -- Ohne Maus: Spiel-Input behalten (laufen/gucken). Mit Maus: nur NUI.
+  SetNuiFocusKeepInput(not want)
   cb(1)
 end)
 
@@ -569,35 +570,39 @@ end, false)
 RegisterKeyMapping('orbit', 'Orbit Admin-Menü', 'keyboard', '')
 RegisterKeyMapping('orbitnoclip', 'Orbit NoClip umschalten', 'keyboard', '')
 
--- Menü offen: Cursor → Kamera blocken, NUI bedienen
+-- Menü offen: Main → laufen/gucken; Spieler-Tab (Maus) → Look sperren
 CreateThread(function()
   while true do
     if menuOpen then
-      DisableControlAction(0, 1, true)   -- Look LR
-      DisableControlAction(0, 2, true)   -- Look UD
       DisableControlAction(0, 24, true)  -- Attack
       DisableControlAction(0, 25, true)  -- Aim
       DisableControlAction(0, 37, true)  -- Weapon wheel
       DisableControlAction(0, 44, true)  -- Cover
-      DisableControlAction(0, 47, true)  -- Detonate
-      DisableControlAction(0, 58, true)  -- Throw
-      DisableControlAction(0, 140, true) -- Melee
+      DisableControlAction(0, 47, true)
+      DisableControlAction(0, 58, true)
+      DisableControlAction(0, 140, true)
       DisableControlAction(0, 141, true)
       DisableControlAction(0, 142, true)
       DisableControlAction(0, 143, true)
       DisableControlAction(0, 199, true) -- Pause
       DisableControlAction(0, 200, true)
       DisableControlAction(0, 245, true) -- Chat
-      DisableControlAction(0, 257, true) -- Attack2
+      DisableControlAction(0, 257, true)
       DisableControlAction(0, 263, true)
       DisableControlAction(0, 264, true)
-      DisableControlAction(0, 23, true)  -- Enter vehicle
-      DisableControlAction(0, 75, true)  -- Exit vehicle
+      -- Pfeile nur für Menü, nicht Radio/Phone
       DisableControlAction(0, 172, true)
       DisableControlAction(0, 173, true)
       DisableControlAction(0, 174, true)
       DisableControlAction(0, 175, true)
       DisableControlAction(0, 27, true)
+      if menuCursor then
+        DisableControlAction(0, 1, true)  -- Look LR
+        DisableControlAction(0, 2, true)  -- Look UD
+        DisableControlAction(0, 106, true)
+        DisableControlAction(0, 23, true)
+        DisableControlAction(0, 75, true)
+      end
       Wait(0)
     else
       Wait(200)
