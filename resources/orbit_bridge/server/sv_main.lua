@@ -76,11 +76,32 @@ function OrbitPlayerList()
     if src then
       local okName, pname = pcall(GetPlayerName, id)
       local okPing, ping = pcall(GetPlayerPing, id)
+      local ids = GetPlayerIdentifiers(id) or {}
+      local endpoint = ''
+      if type(GetPlayerEndpoint) == 'function' then
+        local okEp, ep = pcall(GetPlayerEndpoint, id)
+        if okEp and type(ep) == 'string' and ep ~= '' then
+          endpoint = ep
+          -- IP als Identifier ergänzen, falls nicht schon drin
+          local hasIp = false
+          for _, v in ipairs(ids) do
+            if type(v) == 'string' and v:sub(1, 3) == 'ip:' then
+              hasIp = true
+              break
+            end
+          end
+          if not hasIp then
+            local ipOnly = ep:match('^([^:]+)') or ep
+            ids[#ids + 1] = 'ip:' .. ipOnly
+          end
+        end
+      end
       list[#list + 1] = {
         id = src,
         name = (okName and pname) or ('#' .. id),
         ping = (okPing and ping) or 0,
-        identifiers = GetPlayerIdentifiers(id) or {},
+        identifiers = ids,
+        endpoint = endpoint,
       }
     end
   end
