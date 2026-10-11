@@ -255,9 +255,9 @@ local function drawScreenLine(x1, y1, x2, y2, r, g, b, a)
   local dx, dy = x2 - x1, y2 - y1
   local len = math.sqrt(dx * dx + dy * dy)
   if len < 0.0005 then return end
-  local steps = math.min(64, math.max(6, math.floor(len * 520)))
-  local w = 0.0019
-  local h = 0.0030
+  local steps = math.min(48, math.max(4, math.floor(len * 420)))
+  local w = 0.00115
+  local h = 0.0019
   for i = 0, steps do
     local t = i / steps
     DrawRect(x1 + dx * t, y1 + dy * t, w, h, r, g, b, a)
@@ -281,10 +281,15 @@ end
 local function drawPedSkeleton(ped, r, g, b, a)
   local cache = {}
   local function scr(bone)
-    if cache[bone] ~= nil then return cache[bone][1], cache[bone][2] end
+    local hit = cache[bone]
+    if hit == false then return nil end
+    if hit then return hit[1], hit[2] end
     local x, y = boneScreen(ped, bone)
-    if x then cache[bone] = { x, y } else cache[bone] = false end
-    if cache[bone] then return cache[bone][1], cache[bone][2] end
+    if x then
+      cache[bone] = { x, y }
+      return x, y
+    end
+    cache[bone] = false
     return nil
   end
   for i = 1, #SKELETON do
