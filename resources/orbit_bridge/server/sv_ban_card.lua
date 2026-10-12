@@ -149,12 +149,6 @@ function OrbitPresentBanCard(deferrals, payload, fallbackText)
     return false
   end
 
-  -- Einmalig exakte JSON-Payload loggen (Debug)
-  if not _G.__orbitBanCardJsonLogged then
-    _G.__orbitBanCardJsonLogged = true
-    print(('^3[Orbit] Ban-Card JSON: %s^0'):format(cardJson))
-  end
-
   local rejectMsg = shortReject(payload, fallbackText)
   local finished = false
 
@@ -176,6 +170,5 @@ function OrbitPresentBanCard(deferrals, payload, fallbackText)
     return false
   end
 
-  print('^2[Orbit] Ban-Card via presentCard angezeigt^0')
   return true
 end
