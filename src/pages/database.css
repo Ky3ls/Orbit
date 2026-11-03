@@ -1114,3 +1114,13 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
     display: flex;
   }
 }
+
+/* ═══ Datenbank — gerahmtes Arbeitsfenster ═══ */
+.db-shell {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+.db-shell-aside { background: var(--surface-2); }
+.db-main { background: var(--surface); }

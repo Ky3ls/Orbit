@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
 import { fmtFull, fmtPlaytime } from '../format.js';
-import { AreaChart, Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import { Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import Sparkline from '../components/Sparkline.jsx';
+import { NavIcon } from '../layout/icons.jsx';
 import PlayerIdentifiers from '../components/PlayerIdentifiers.jsx';
 import {
   BAN_DURATION_PRESETS,
@@ -37,9 +39,6 @@ const SECTIONS = [
   { id: 'ban', labelKey: 'players.section.ban' },
 ];
 
-const intAxis = (v) => `${Math.round(v)}`;
-const seriesPlayers = (d) => d.players;
-const seriesDrops = (d) => d.drops;
 
 function playerFingerprint(p) {
   if (!p) return '';
@@ -127,7 +126,7 @@ function histEntrySearchText(e, t) {
 }
 
 export default function Players({ user }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = FILTERS.some((f) => f.id === searchParams.get('filter'))
     ? searchParams.get('filter')
@@ -605,109 +604,90 @@ export default function Players({ user }) {
   const maxClients = Math.max(data.maxClients || 48, 1);
   const dropTotal = drops.total ?? (drops.rows || []).length;
 
+  const dropValues = dropSeries.map((d) => d.drops || 0);
+  const playerValues = playerSeries.map((d) => d.players || 0);
+  const topDrop = (drops.stats || [])[0];
+  const now = Date.now();
+  const rel = (ts) => {
+    if (!ts) return '–';
+    const m = Math.round((now - ts) / 60000);
+    if (m < 1) return 'gerade eben';
+    if (m < 60) return `vor ${m} Min.`;
+    const h = Math.round(m / 60);
+    if (h < 48) return `vor ${h} Std.`;
+    return `vor ${Math.round(h / 24)} Tagen`;
+  };
+  const pingTone = (ms) => (ms == null ? '' : ms < 60 ? 'ok' : ms < 120 ? 'warn' : 'bad');
+  const reload = () => {
+    if (filter === 'banned') loadBans();
+    else if (filter === 'allowlist') loadWl();
+    else loadPlayers();
+    loadDrops(true);
+  };
+
   return (
-    <Page>
+    <Page className="pl-page">
       <PageHeader
         eyebrow={t('players.eyebrow')}
         title={t('page.players')}
-        description={t('players.desc', { online: onlineCount, offline: Math.max(0, totalKnown - onlineCount), drops: dropTotal })}
-        actions={(
-          <Badge tone={data.online ? 'ok' : 'bad'}>{t('players.live', { n: onlineCount })}</Badge>
-        )}
+        description="Alle Spieler, die je verbunden waren — Status, Moderation und Allowlist."
+        actions={<button className="btn btn-sm" type="button" onClick={reload}><NavIcon name="refresh" />{t('common.refresh')}</button>}
       />
 
-      <section className="pl-hub-charts" aria-label={t('common.trends')}>
-        <PanelCard className="pl-hub-chart">
-          <div className="spread mon-chart-head">
-            <div>
-              <h3>{t('players.count')}</h3>
-              <p className="pl-hub-hint">{t('players.countHint')}</p>
-            </div>
-            <b className="mon-chart-val">{onlineCount} / {maxClients}</b>
-          </div>
-          <AreaChart
-            data={playerSeries}
-            accessor={seriesPlayers}
-            yMax={maxClients}
-            formatY={intAxis}
-            ariaLabel={t('players.countAria')}
-          />
-        </PanelCard>
-        <PanelCard className="pl-hub-chart">
-          <div className="spread mon-chart-head">
-            <div>
-              <h3>{t('players.drops')}</h3>
-              <p className="pl-hub-hint">{t('players.dropsHint')}</p>
-            </div>
-            <b className="mon-chart-val">{dropTotal}</b>
-          </div>
-          <AreaChart
-            data={dropSeries}
-            accessor={seriesDrops}
-            color="var(--bad)"
-            formatY={intAxis}
-            ariaLabel={t('players.dropsAria')}
-          />
-          {(drops.stats || []).length > 0 && (
-            <div className="pl-drop-tags">
-              {(drops.stats || []).slice(0, 6).map((s) => (
-                <span key={s.reason} className="pl-drop-tag" title={s.reason}>
-                  <em>{s.c}</em> {String(s.reason).slice(0, 28)}{String(s.reason).length > 28 ? '…' : ''}
-                </span>
-              ))}
-            </div>
-          )}
-        </PanelCard>
+      <section className="pl-kpis" aria-label={t('common.trends')}>
+        <div className="pl-kpi pl-kpi-main">
+          <div className="pl-kpi-top"><span className="pl-kpi-dot" />Online</div>
+          <div className="pl-kpi-val"><b>{onlineCount}</b><span>/ {maxClients}</span></div>
+          <div className="pl-kpi-spark"><Sparkline values={playerValues} max={maxClients} color="var(--accent)" height={40} /></div>
+        </div>
+        <div className="pl-kpi">
+          <div className="pl-kpi-top">Bekannte Spieler</div>
+          <div className="pl-kpi-val"><b>{totalKnown}</b></div>
+          <span className="pl-kpi-sub">{stats.last24 != null ? `${stats.last24} in den letzten 24 Std.` : ' '}</span>
+        </div>
+        <div className="pl-kpi">
+          <div className="pl-kpi-top">Neu</div>
+          <div className="pl-kpi-val"><b>{stats.new24 ?? 0}</b><span>heute</span></div>
+          <span className="pl-kpi-sub">{stats.new7 != null ? `${stats.new7} in 7 Tagen` : ' '}</span>
+        </div>
+        <div className="pl-kpi">
+          <div className="pl-kpi-top">Verbindungsabbrüche</div>
+          <div className="pl-kpi-val"><b>{dropTotal}</b><span>72 Std.</span></div>
+          <span className="pl-kpi-sub" title={topDrop?.reason || ''}>{topDrop ? `Häufigster Grund: ${String(topDrop.reason).slice(0, 34)}` : 'Keine Abbrüche'}</span>
+          {dropValues.some(Boolean) ? <div className="pl-kpi-spark"><Sparkline values={dropValues} color="var(--bad)" height={28} /></div> : null}
+        </div>
       </section>
 
-      <div className="pl-toolbar">
-        <div className="pl-filters" role="tablist">
+      <div className="pl-bar">
+        <div className="seg" role="tablist">
           {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              role="tab"
-              aria-selected={filter === f.id}
-              className={`pl-filter${filter === f.id ? ' active' : ''}`}
-              onClick={() => setHubFilter(f.id)}
-            >
+            <button key={f.id} type="button" role="tab" aria-selected={filter === f.id} className={filter === f.id ? 'active' : ''} onClick={() => setHubFilter(f.id)}>
+              {f.id === 'online' ? <i className="pl-seg-dot" /> : null}
               {t(f.labelKey)}
+              {f.id === 'online' ? <span className="res-seg-n">{onlineCount}</span> : null}
             </button>
           ))}
         </div>
-        <input
-          className="search grow"
-          placeholder={filter === 'banned' ? t('players.searchBan') : filter === 'allowlist' ? t('players.searchWl') : t('players.search')}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              if (filter === 'banned') loadBans();
-              else if (filter === 'allowlist') loadWl();
-              else loadPlayers();
-            }
-          }}
-        />
+        <div className="pl-search">
+          <NavIcon name="search" />
+          <input
+            placeholder={filter === 'banned' ? t('players.searchBan') : filter === 'allowlist' ? t('players.searchWl') : t('players.search')}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') reload(); }}
+          />
+        </div>
         {!['banned', 'allowlist'].includes(filter) && (
-          <select value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="status">{t('players.sort.status')}</option>
-            <option value="last">{t('players.sort.last')}</option>
-            <option value="play">{t('players.sort.play')}</option>
-            <option value="name">{t('players.sort.name')}</option>
-          </select>
+          <label className="pl-sort">
+            <span>Sortieren</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="status">{t('players.sort.status')}</option>
+              <option value="last">{t('players.sort.last')}</option>
+              <option value="play">{t('players.sort.play')}</option>
+              <option value="name">{t('players.sort.name')}</option>
+            </select>
+          </label>
         )}
-        <button
-          className="btn btn-sm"
-          type="button"
-          onClick={() => {
-            if (filter === 'banned') loadBans();
-            else if (filter === 'allowlist') loadWl();
-            else loadPlayers();
-            loadDrops(true);
-          }}
-        >
-          {t('common.refresh')}
-        </button>
       </div>
 
       {err && !pick && <div className="err" style={{ marginBottom: 12 }}>{err}</div>}
@@ -799,57 +779,54 @@ export default function Players({ user }) {
           </PanelCard>
         </div>
       ) : rows.length === 0 ? (
-        <Empty title={t('players.empty')} text={t('players.emptyText')} />
+        <div className="card"><Empty title={t('players.empty')} text={t('players.emptyText')} /></div>
       ) : (
-        <div className="pl-grid">
-          {rows.map((row) => (
-            <article
-              key={row.identifier}
-              className={`pl-card${row.online ? ' online' : ''}${row.banned ? ' banned' : ''}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => openPlayer(row)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  openPlayer(row);
-                }
-              }}
-            >
-              <div className="pl-card-top">
-                <span className="pl-card-avatar" aria-hidden="true">{String(row.name || '?').slice(0, 1).toUpperCase()}</span>
-                <div className="pl-card-identity">
-                  <strong className="pl-card-name">{row.name}</strong>
-                  <div className="pl-card-meta">
-                    {row.online
-                      ? (
-                        <>
-                          <span>ID {row.serverId}</span>
-                          <span className="pl-meta-sep" aria-hidden="true">·</span>
-                          <span>{row.ping ?? 0} ms</span>
-                          <span className="pl-meta-sep" aria-hidden="true">·</span>
-                          <span>{fmtPlaytime(row.play_ms)}</span>
-                        </>
-                      )
-                      : (
-                        <>
-                          <span>{t('status.offline')}</span>
-                          <span className="pl-meta-sep" aria-hidden="true">·</span>
-                          <span>{fmtPlaytime(row.play_ms)}</span>
-                        </>
-                      )}
-                  </div>
-                </div>
-                <div className="pl-card-badges">
-                  {row.banned && <Badge tone="bad">Ban</Badge>}
-                  {row.whitelisted && <Badge tone="ok">WL</Badge>}
+        <div className="pl-table card">
+          <div className="pl-thead" role="row">
+            <span>Spieler</span>
+            <span>Status</span>
+            <span className="pl-c-num">Ping</span>
+            <span className="pl-c-num">Spielzeit</span>
+            <span>Erstmals gesehen</span>
+            <span>Markierungen</span>
+            <span />
+          </div>
+          {rows.map((row) => {
+            const idShort = String(row.identifier || '').replace(/^license:/, '').slice(0, 10);
+            return (
+              <div
+                key={row.identifier}
+                className={`pl-tr${row.online ? ' online' : ''}${row.banned ? ' banned' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => openPlayer(row)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPlayer(row); } }}
+              >
+                <span className="pl-c-player">
+                  <span className="pl-avatar">{String(row.name || '?').slice(0, 1).toUpperCase()}</span>
+                  <span className="pl-c-name">
+                    <b>{row.name}</b>
+                    <small className="mono">{row.online ? `#${row.serverId} · ` : ''}{idShort}…</small>
+                  </span>
+                </span>
+                <span className="pl-c-status">
                   {row.online
-                    ? <span className="pl-status online">{t('status.online')}</span>
-                    : <span className="pl-status">{t('status.offline')}</span>}
-                </div>
+                    ? <span className="pl-state on"><i />Online</span>
+                    : <span className="pl-state"><i />{rel(row.last_seen)}</span>}
+                </span>
+                <span className={`pl-c-num mono pl-ping tone-${row.online ? pingTone(row.ping) : ''}`}>{row.online ? `${row.ping ?? '–'} ms` : '–'}</span>
+                <span className="pl-c-num pl-play">{fmtPlaytime(row.play_ms)}</span>
+                <span className="pl-c-muted">{row.first_seen ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(row.first_seen) : '–'}</span>
+                <span className="pl-c-flags">
+                  {row.banned && <span className="badge bad">Gebannt</span>}
+                  {row.whitelisted && <span className="badge ok">Allowlist</span>}
+                  {row.note ? <span className="badge" title={row.note}>Notiz</span> : null}
+                </span>
+                <span className="pl-c-go"><NavIcon name="chevron" /></span>
               </div>
-            </article>
-          ))}
+            );
+          })}
+          <div className="pl-tfoot">{rows.length} Spieler</div>
         </div>
       )}
 

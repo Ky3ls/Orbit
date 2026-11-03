@@ -1650,8 +1650,9 @@ export default function Database({ user }) {
   return (
     <Page className="db-page ws-module-flush">
       <PageHeader
-        title={t('db.eyebrow')}
-        description={meta.version ? t('db.serverVer', { version: meta.version }) : undefined}
+        eyebrow="Server"
+        title={t('page.database')}
+        description={meta.version ? t('db.serverVer', { version: meta.version }) : 'MySQL/MariaDB der Server-Ressourcen durchsuchen und bearbeiten.'}
       />
 
       <div className="db-shell">

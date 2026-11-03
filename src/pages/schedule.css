@@ -515,3 +515,26 @@
     flex: 1;
   }
 }
+
+/* ═══ Automationen — einheitlich mit restlichem Panel ═══ */
+.sch-stats { display: grid; grid-template-columns: repeat(2, minmax(110px, 160px)) minmax(220px, 360px); gap: 12px; width: auto; }
+.sch-stat { padding: 14px 16px; border-radius: var(--radius-lg); background: var(--surface); gap: 4px; }
+.sch-stat span { font-size: 12px; font-weight: 560; letter-spacing: 0; text-transform: none; }
+.sch-stat strong { font-size: 24px; color: var(--text); letter-spacing: -0.02em; }
+.sch-stat small { color: var(--muted); font-size: 12px; }
+.sch-stat-wide { max-width: none; }
+.sch-stat-wide strong { font-size: 15px; color: var(--accent-ink); }
+.sch-card { border-radius: var(--radius-lg); background: var(--surface); }
+.sch-jobs { gap: 0; }
+.sch-job {
+  padding: 14px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.sch-job:last-child { border-bottom: 0; }
+.sch-job.is-on { background: transparent; border-color: var(--line); }
+.sch-job:not(.is-on) .sch-job-time b { color: var(--faint); }
+.sch-job-body strong { font-weight: 620; }
+@media (max-width: 720px) { .sch-stats { grid-template-columns: 1fr 1fr; } .sch-stat-wide { grid-column: span 2; } }
