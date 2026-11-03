@@ -4,6 +4,9 @@ import { api } from '../api.js';
 import { fmtFull } from '../format.js';
 import SettingsHostPanel from '../components/SettingsHostPanel.jsx';
 import { Page, PageHeader } from '../components/Ui.jsx';
+import { toast } from '../components/toast.jsx';
+import { NavIcon } from '../layout/icons.jsx';
+import './settings-v2.css';
 import OrbitSelect from '../components/OrbitSelect.jsx';
 import AllowlistPanel from '../components/allowlist/AllowlistPanel.jsx';
 import {
@@ -21,30 +24,34 @@ import { BAN_DURATION_PRESETS, banDurationLabel, customDurationToId } from './ba
 const HOST_TABS = new Set(['servers', 'artifacts', 'prod']);
 const PERSONAL_SECTIONS = new Set(['appearance', 'account']);
 
-const SECTION_DEFS = [
-  { id: 'general', labelKey: 'settings.sec.general', hintKey: 'settings.sec.generalHint', owner: false },
-  { id: 'fxserver', labelKey: 'settings.sec.fxserver', hintKey: 'settings.sec.fxserverHint', owner: true },
-  { id: 'moderation', labelKey: 'settings.sec.moderation', hintKey: 'settings.sec.moderationHint', owner: false, admin: true },
-  { id: 'discord', labelKey: 'settings.sec.discord', hintKey: 'settings.sec.discordHint', owner: true },
-  { id: 'game', labelKey: 'settings.sec.game', hintKey: 'settings.sec.gameHint', owner: false, admin: true },
-  { id: 'system', labelKey: 'settings.sec.system', hintKey: 'settings.sec.systemHint', owner: true },
-  { id: 'appearance', labelKey: 'settings.sec.appearance', hintKey: 'settings.sec.appearanceHint', owner: false },
-  { id: 'host', labelKey: 'settings.sec.host', hintKey: 'settings.sec.hostHint', owner: true },
-  { id: 'account', labelKey: 'settings.sec.account', hintKey: 'settings.sec.accountHint', owner: false },
-  { id: 'danger', labelKey: 'settings.sec.danger', hintKey: 'settings.sec.dangerHint', owner: true },
+/** Navigation in vier klaren Gruppen — jedes Feld existiert genau einmal. */
+const SECTION_GROUPS = [
+  { id: 'me', label: 'Persönlich' },
+  { id: 'server', label: 'Server' },
+  { id: 'community', label: 'Community' },
+  { id: 'system', label: 'System' },
 ];
 
-/** Felder je Settings-Tab — verhindert Cross-Tab-Validierung (z. B. RCON beim Language-Save). */
+const SECTION_DEFS = [
+  { id: 'account', group: 'me', icon: 'audit', label: 'Konto & Sicherheit', hint: 'Passwort, 2FA, Cfx.re und aktive Sitzungen' },
+  { id: 'appearance', group: 'me', icon: 'palette', label: 'Darstellung', hint: 'Farbschema, Akzentfarbe, Sidebar und Konsole' },
+  { id: 'general', group: 'server', icon: 'globe', label: 'Server-Profil', hint: 'Name, Sprache und Eintrag in der Serverliste' },
+  { id: 'fxserver', group: 'server', icon: 'cpu', label: 'FXServer & Start', hint: 'Prozess, Netzwerk, Pfade und RCON', owner: true },
+  { id: 'host', group: 'server', icon: 'box', label: 'Instanzen & Builds', hint: 'Weitere Server und FXServer-Artifacts', owner: true },
+  { id: 'moderation', group: 'community', icon: 'ban', label: 'Zugang & Bans', hint: 'Allowlist, Ban-Prüfung und Ban-Vorlagen', admin: true },
+  { id: 'game', group: 'community', icon: 'gamepad', label: 'Ingame-Menü', hint: '/orbit-Menü und Benachrichtigungen im Spiel', admin: true },
+  { id: 'discord', group: 'community', icon: 'megaphone', label: 'Discord', hint: 'Webhook-Meldungen und Status-Bot', owner: true },
+  { id: 'system', group: 'system', icon: 'db', label: 'Backup & Wartung', hint: 'Panel-Datenbank sichern und bereinigen', owner: true },
+  { id: 'danger', group: 'system', icon: 'bolt', label: 'Gefahrenzone', hint: 'Zurücksetzen und Deinstallieren', owner: true },
+];
+
+/** Felder je Bereich — keine Überschneidungen mehr (vorher Port/Hostname doppelt). */
 const SECTION_FIELDS = {
-  general: [
-    'serverName', 'language', 'locale', 'hostname', 'project',
-    'maxClients', 'tags', 'gameBuild', 'fivemHost', 'fivemPort',
-  ],
+  general: ['serverName', 'language', 'locale', 'hostname', 'project', 'maxClients', 'tags'],
   fxserver: [
-    'hostname', 'fivemHost', 'fivemPort',
-    'fxControlMode', 'fxDataPath', 'fxCfgPath', 'fxServerExtraArgs', 'fxServerRoot',
-    'onesync', 'resourceStartingTolerance', 'quietMode', 'fxAutostart', 'autoRestartEnabled',
-    'rconPort', 'rconPassword',
+    'fxControlMode', 'fivemHost', 'fivemPort', 'gameBuild', 'onesync', 'resourceStartingTolerance',
+    'fxDataPath', 'fxCfgPath', 'fxServerExtraArgs', 'fxServerRoot',
+    'quietMode', 'fxAutostart', 'autoRestartEnabled', 'rconPort', 'rconPassword',
   ],
   moderation: [
     'allowlistMode', 'allowlistEnabled', 'allowlistInstructions', 'allowlistDiscordRoles', 'ipAllowlist',
@@ -72,53 +79,57 @@ function pickSectionPayload(form, section) {
   return out;
 }
 
-function ModuleCard({ title, lead, children, actions, wide }) {
+function Card({ title, lead, children, actions, tone }) {
   return (
-    <article className={`st-mod${wide ? ' st-wide' : ''}`}>
+    <section className={`sx-card${tone ? ` tone-${tone}` : ''}`}>
       {(title || lead || actions) && (
-        <header className="st-mod-head">
+        <header className="sx-card-head">
           <div>
-            {title ? <h2>{title}</h2> : null}
+            {title ? <h3>{title}</h3> : null}
             {lead ? <p>{lead}</p> : null}
           </div>
-          {actions ? <div className="st-mod-actions">{actions}</div> : null}
+          {actions ? <div className="sx-card-actions">{actions}</div> : null}
         </header>
       )}
-      <div className="st-mod-body">{children}</div>
-    </article>
+      <div className="sx-card-body">{children}</div>
+    </section>
   );
 }
 
-function FieldRow({ children }) {
-  return <div className="st-fields">{children}</div>;
-}
-
-function Toggle({ checked, onChange, onLabel = 'On', offLabel = 'Off' }) {
+/** Einstellungs-Zeile: Beschriftung links, Steuerelement rechts */
+function Row({ label, hint, children, stack }) {
   return (
-    <label className={`st-chip${checked ? ' on' : ''}`}>
-      <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
-      {checked ? onLabel : offLabel}
-    </label>
-  );
-}
-
-function SegControl({ label, value, options, onChange, ariaLabel }) {
-  return (
-    <div className="st-row">
-      {label ? <span className="st-row-label">{label}</span> : null}
-      <div className="st-seg" role="group" aria-label={ariaLabel || label}>
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            className={`st-seg-btn${value === o.value ? ' active' : ''}`}
-            onClick={() => onChange(o.value)}
-          >
-            {o.label}
-            {o.hint ? <small>{o.hint}</small> : null}
-          </button>
-        ))}
+    <div className={`sx-row${stack ? ' stack' : ''}`}>
+      <div className="sx-row-text">
+        <b>{label}</b>
+        {hint ? <span>{hint}</span> : null}
       </div>
+      <div className="sx-row-ctl">{children}</div>
+    </div>
+  );
+}
+
+function Switch({ checked, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={!!checked}
+      aria-label={label}
+      className={`switch${checked ? ' on' : ''}`}
+      onClick={() => onChange(!checked)}
+    />
+  );
+}
+
+function Seg({ value, options, onChange, ariaLabel }) {
+  return (
+    <div className="seg" role="group" aria-label={ariaLabel}>
+      {options.map((o) => (
+        <button key={o.value} type="button" className={value === o.value ? 'active' : ''} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -131,8 +142,10 @@ export default function Settings({ user, onUser, onSetupReset }) {
   const [code, setCode] = useState('');
   const [sessions, setSessions] = useState([]);
   const [params, setParams] = useSearchParams();
-  const [msg, setMsg] = useState('');
-  const [err, setErr] = useState('');
+  const [err, setErrState] = useState('');
+  const setMsg = useCallback((m) => { if (m) toast.ok(m); }, []);
+  const setErr = useCallback((m) => { setErrState(m || ''); if (m) toast.err(m); }, []);
+  const [saved, setSaved] = useState(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [tplTitle, setTplTitle] = useState('');
@@ -169,8 +182,8 @@ export default function Settings({ user, onUser, onSetupReset }) {
       if (s.owner && !isOwner) return false;
       if (s.admin && !isAdmin) return false;
       return true;
-    }).map((s) => ({ ...s, label: t(s.labelKey), hint: t(s.hintKey) })),
-    [isOwner, isAdmin, canViewSettings, t],
+    }),
+    [isOwner, isAdmin, canViewSettings],
   );
 
   const sectionParam = params.get('section');
@@ -191,10 +204,12 @@ export default function Settings({ user, onUser, onSetupReset }) {
   function load() {
     if (!canViewSettings) {
       setForm({});
+      setSaved({});
       return;
     }
     api('/api/settings').then((d) => {
       setForm(d.settings);
+      setSaved(d.settings);
       if (d.settings) syncFromSettings(d.settings);
     }).catch((e) => setErr(e.message));
     api('/api/sessions').then((d) => setSessions(d.sessions)).catch(() => {});
@@ -334,72 +349,190 @@ export default function Settings({ user, onUser, onSetupReset }) {
     ? form.allowlistModes.map((m) => ({ ...m, label: t(ALLOWLIST_MODE_KEYS[m.value] || m.label) }))
     : ALLOWLIST_MODE_VALUES.map((value) => ({ value, label: t(ALLOWLIST_MODE_KEYS[value]) })));
 
-  function SaveBar({ extra }) {
-    return (
-      <div className="st-foot st-wide st-savebar">
-        <button
-          type="submit"
-          className="btn btn-primary"
-          disabled={saveBusy}
-        >
-          {saveBusy ? '…' : t('common.save')}
-        </button>
-        <kbd className="st-save-kbd">Ctrl+S</kbd>
-        {extra}
-      </div>
-    );
+  const dirtyKeys = canSaveSection && saved
+    ? SECTION_FIELDS[section].filter((k) => JSON.stringify(form[k] ?? '') !== JSON.stringify(saved[k] ?? ''))
+    : [];
+  const dirty = dirtyKeys.length > 0;
+
+  function discard() {
+    const back = { ...form };
+    for (const k of SECTION_FIELDS[section] || []) back[k] = saved?.[k];
+    setForm(back);
   }
 
-  const aside = (
-    <nav className="st-nav" aria-label={t('settings.navAria')}>
-      {nav.map((s) => (
-        <button
-          key={s.id}
-          type="button"
-          className={`st-nav-item${section === s.id ? ' active' : ''}${s.id === 'danger' ? ' danger' : ''}`}
-          onClick={() => setSection(s.id)}
-        >
-          <span className="st-nav-label">{s.label}</span>
-          <span className="st-nav-hint">{s.hint}</span>
-        </button>
-      ))}
+  const saveBar = canSaveSection && dirty && (
+    <div className="sx-savebar" role="status">
+      <span className="sx-savebar-dot" />
+      <span className="sx-savebar-text">
+        {`${dirtyKeys.length} ungespeicherte Änderung${dirtyKeys.length === 1 ? '' : 'en'}`}
+      </span>
+      <button type="button" className="btn btn-sm btn-ghost" onClick={discard} disabled={saveBusy}>Verwerfen</button>
+      <button type="submit" className="btn btn-sm btn-primary" disabled={saveBusy}>
+        {saveBusy ? 'Speichert…' : t('common.save')}
+        <kbd>Ctrl S</kbd>
+      </button>
+    </div>
+  );
+
+  const navEl = (
+    <nav className="sx-nav" aria-label={t('settings.navAria')}>
+      {SECTION_GROUPS.map((g) => {
+        const items = nav.filter((s) => s.group === g.id);
+        if (!items.length) return null;
+        return (
+          <div key={g.id} className="sx-nav-group">
+            <span className="sx-nav-label">{g.label}</span>
+            {items.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className={`sx-nav-item${section === s.id ? ' active' : ''}${s.id === 'danger' ? ' danger' : ''}`}
+                onClick={() => setSection(s.id)}
+              >
+                <NavIcon name={s.icon} />
+                <span>{s.label}</span>
+              </button>
+            ))}
+          </div>
+        );
+      })}
     </nav>
   );
 
+  const confirmAction = async (question, fn) => {
+    if (!window.confirm(question)) return;
+    setSysBusy(true);
+    try { await fn(); } catch (e) { setErr(e.message); }
+    setSysBusy(false);
+  };
+
   return (
-    <Page className="settings-page">
+    <Page className="settings-page sx-page">
       <PageHeader
         eyebrow={t('settings.eyebrow')}
         title={t('settings.title')}
-        description={activeMeta ? `${activeMeta.label} — ${activeMeta.hint}` : t('settings.desc')}
+        description="Alles an einem Ort — persönliche Einstellungen, Server, Community und System."
       />
-      {err && <div className="err">{err}</div>}
-      {msg && <div className="banner">{msg}</div>}
 
-      <div className="st-shell">
-        {aside}
-        <div className="st-main">
+      <div className="sx-shell">
+        {navEl}
+        <div className="sx-main">
+          <header className="sx-head">
+            <span className="sx-head-ico"><NavIcon name={activeMeta?.icon || 'gear'} /></span>
+            <div>
+              <h2>{activeMeta?.label}</h2>
+              <p>{activeMeta?.hint}</p>
+            </div>
+          </header>
 
-        {section === 'general' && (
-          <form className="st-stack" onSubmit={save}>
-            <ModuleCard
-              wide
-              title={t('settings.general.title')}
-              lead={t('settings.general.lead')}
-            >
-              <FieldRow>
-                <label className="field">
-                  <span>{t('settings.serverName')} <em className="req">{t('common.required')}</em></span>
-                  <input
-                    value={form.serverName || ''}
-                    maxLength={18}
-                    required
-                    onChange={(e) => set({ serverName: e.target.value })}
-                    placeholder={t('settings.serverNamePh')}
-                  />
-                </label>
-                <label className="field">
-                  <span>{t('settings.language')} <em className="req">{t('common.required')}</em></span>
+          {/* ── Konto & Sicherheit ── */}
+          {section === 'account' && (
+            <div className="sx-stack">
+              <Card title="Anmeldung" lead="Wie du dich bei Orbit anmeldest.">
+                <Row label="Cfx.re-Konto" hint={t('settings.account.cfxLead')}>
+                  {user.cfxName ? (
+                    <div className="sx-inline">
+                      <span className="badge ok">{user.cfxName}</span>
+                      <button className="btn btn-sm" type="button" onClick={() => api('/api/auth/cfx/unlink', { method: 'POST', body: {} }).then(() => { onUser({ ...user, cfxName: '' }); setMsg('Cfx.re getrennt.'); }).catch((e) => setErr(e.message))}>Trennen</button>
+                    </div>
+                  ) : (
+                    <a className="btn btn-sm" href="/api/auth/cfx/start?mode=link">Mit Cfx.re verbinden</a>
+                  )}
+                </Row>
+                <Row label="Zwei-Faktor (2FA)" hint="Zusätzlicher Code aus einer Authenticator-App beim Login.">
+                  {user.totp ? (
+                    <span className="badge ok">Aktiv</span>
+                  ) : !totp ? (
+                    <button className="btn btn-sm" type="button" onClick={() => api('/api/auth/totp/setup', { method: 'POST', body: {} }).then(setTotp).catch((e) => setErr(e.message))}>Einrichten</button>
+                  ) : (
+                    <div className="sx-totp">
+                      <code className="sx-secret">{totp.secret}</code>
+                      <div className="sx-inline">
+                        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" inputMode="numeric" maxLength={8} />
+                        <button className="btn btn-sm btn-primary" type="button" onClick={() => api('/api/auth/totp/enable', { method: 'POST', body: { code } }).then(() => { setMsg('2FA aktiv.'); onUser({ ...user, totp: true }); setTotp(null); }).catch((e) => setErr(e.message))}>Aktivieren</button>
+                      </div>
+                    </div>
+                  )}
+                </Row>
+              </Card>
+              <Card title={t('settings.account.password')}>
+                <form className="sx-pw" onSubmit={password}>
+                  <label className="field"><span>Aktuelles Passwort</span><input type="password" autoComplete="current-password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></label>
+                  <label className="field"><span>Neues Passwort</span><input type="password" autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></label>
+                  <button className="btn btn-primary" type="submit" disabled={!pw.current || !pw.next}>{t('settings.account.changePw')}</button>
+                </form>
+              </Card>
+              <Card title={t('settings.account.sessions')} lead="Geräte, auf denen du gerade angemeldet bist.">
+                <ul className="sx-list">
+                  {sessions.map((s) => (
+                    <li key={s.id}>
+                      <span className="sx-list-ico"><NavIcon name="globe" /></span>
+                      <div className="sx-list-text">
+                        <b className="mono">{s.ip}</b>
+                        <span>Zuletzt aktiv {fmtFull(s.last_seen)}</span>
+                      </div>
+                      {s.current ? <span className="badge accent">Dieses Gerät</span> : (
+                        <button className="btn btn-sm" type="button" onClick={() => api(`/api/sessions/${s.id}`, { method: 'DELETE' }).then(() => { setMsg('Sitzung beendet.'); load(); }).catch((e) => setErr(e.message))}>Abmelden</button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </div>
+          )}
+
+          {/* ── Darstellung ── */}
+          {section === 'appearance' && (
+            <div className="sx-stack">
+              <Card title="Oberfläche" lead="Gilt für deinen Account auf allen Geräten.">
+                <Row label="Farbschema">
+                  <Seg value={prefs.theme} onChange={(v) => setAppearance({ theme: v })} options={[{ value: 'dark', label: 'Dunkel' }, { value: 'light', label: 'Hell' }]} />
+                </Row>
+                <Row label="Sidebar" hint="Kompakt zeigt nur Icons. Tastenkürzel: [">
+                  <Seg value={prefs.sidebarCollapsed ? 'compact' : 'full'} onChange={(v) => setAppearance({ sidebarCollapsed: v === 'compact' })} options={[{ value: 'full', label: 'Ausgeklappt' }, { value: 'compact', label: 'Kompakt' }]} />
+                </Row>
+                <Row label="Akzentfarbe" hint="Buttons, Markierungen und Diagramme." stack>
+                  <div className="st-accents" role="group" aria-label="Akzentfarbe">
+                    {Object.values(ACCENT_PRESETS).map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`st-accent${prefs.accent === c.id ? ' active' : ''}`}
+                        style={{ ['--swatch']: c.hex, ['--swatch-b']: c.hex2 }}
+                        aria-pressed={prefs.accent === c.id}
+                        onClick={() => setAppearance({ accent: c.id })}
+                      >
+                        <i />
+                        <span>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Row>
+              </Card>
+              <Card title="Live-Konsole" lead="Welche Zeilen in der Konsole angezeigt werden.">
+                {[
+                  { key: 'showInfo', label: 'Infos', hint: 'Normale Server-Ausgabe' },
+                  { key: 'showWarn', label: 'Warnungen' },
+                  { key: 'showBad', label: 'Fehler' },
+                  { key: 'showOk', label: 'Erfolgsmeldungen' },
+                  { key: 'hideAssetSpam', label: 'Asset-Spam ausblenden', hint: 'Oversized-Asset- und Streaming-Hinweise' },
+                ].map((o) => (
+                  <Row key={o.key} label={o.label} hint={o.hint}>
+                    <Switch label={o.label} checked={prefs.console?.[o.key] !== false} onChange={(v) => setAppearance({ console: { [o.key]: v } })} />
+                  </Row>
+                ))}
+              </Card>
+            </div>
+          )}
+
+          {/* ── Server-Profil ── */}
+          {section === 'general' && (
+            <form className="sx-stack" onSubmit={save}>
+              <Card title="Panel" lead="Wie Orbit deinen Server nennt.">
+                <Row label="Kurzname" hint="Für Panel, Discord und Ingame-Menü (max. 18 Zeichen).">
+                  <input value={form.serverName || ''} maxLength={18} required onChange={(e) => set({ serverName: e.target.value })} placeholder={t('settings.serverNamePh')} />
+                </Row>
+                <Row label="Sprache" hint="Panel, Discord-Meldungen und Ingame-Texte.">
                   <select
                     value={toSettingsValue(form.language || form.locale || 'de-DE')}
                     onChange={(e) => {
@@ -408,113 +541,119 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       setLanguage(language);
                     }}
                   >
-                    {LANGUAGE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
-                    ))}
+                    {LANGUAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
                   </select>
-                </label>
-              </FieldRow>
-            </ModuleCard>
-            <ModuleCard wide title={t('settings.identity')} lead={t('settings.identityLead')}>
-              <FieldRow>
-                <label className="field"><span>{t('settings.hostname')}</span><input value={form.hostname} onChange={(e) => set({ hostname: e.target.value })} /></label>
-                <label className="field"><span>{t('settings.project')}</span><input value={form.project} onChange={(e) => set({ project: e.target.value })} /></label>
-                <label className="field"><span>{t('settings.slots')}</span><input type="number" min={1} max={2048} value={form.maxClients} onChange={(e) => set({ maxClients: e.target.value })} /></label>
-                <label className="field"><span>{t('settings.tags')}</span><input value={form.tags || ''} onChange={(e) => set({ tags: e.target.value })} placeholder={t('settings.tagsPh')} /></label>
-                <label className="field"><span>{t('settings.gameBuild')}</span>
-                  <select value={form.gameBuild || ''} onChange={(e) => set({ gameBuild: e.target.value })}>
-                    {GAME_BUILD_OPTIONS.map((o) => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
-                  </select>
-                </label>
-                <label className="field"><span>{t('settings.port')}</span><input value={form.fivemPort} onChange={(e) => set({ fivemPort: e.target.value })} /></label>
-              </FieldRow>
-            </ModuleCard>
-            <SaveBar />
-          </form>
-        )}
+                </Row>
+              </Card>
+              <Card title="Serverliste" lead="Erscheint in der FiveM-Serverliste — wird in die aktive server.cfg geschrieben.">
+                <Row label="Anzeigename" hint="sv_hostname">
+                  <input value={form.hostname || ''} onChange={(e) => set({ hostname: e.target.value })} />
+                </Row>
+                <Row label="Projektname" hint="sv_projectName">
+                  <input value={form.project || ''} onChange={(e) => set({ project: e.target.value })} />
+                </Row>
+                <Row label="Tags" hint="Kommagetrennt, z. B. roleplay, german">
+                  <input value={form.tags || ''} onChange={(e) => set({ tags: e.target.value })} placeholder={t('settings.tagsPh')} />
+                </Row>
+                <Row label="Slots" hint="Maximale Spielerzahl (sv_maxclients)">
+                  <input type="number" min={1} max={2048} value={form.maxClients ?? ''} onChange={(e) => set({ maxClients: e.target.value })} className="sx-num" />
+                </Row>
+              </Card>
+              {saveBar}
+            </form>
+          )}
 
-        {section === 'fxserver' && isOwner && (
-          <form className="st-stack" onSubmit={save}>
-            <ModuleCard
-              wide
-              title={t('settings.fx.title')}
-              lead={t('settings.fx.lead')}
-            >
-              <label className="field">
-                <span>Steuerungsmodus</span>
-                <select value={form.fxControlMode || 'systemd'} onChange={(e) => set({ fxControlMode: e.target.value })}>
-                  <option value="systemd">systemd (bestehender Dienst)</option>
-                  <option value="orbit">Orbit startet FXServer selbst</option>
-                </select>
-              </label>
-              <FieldRow>
-                <label className="field st-span-2">
-                  <span>Server-Datenordner</span>
-                  <input value={form.fxDataPath || ''} onChange={(e) => set({ fxDataPath: e.target.value })} placeholder="/opt/orbit/servers/…" />
-                </label>
-                <label className="field">
-                  <span>CFG-Pfad</span>
-                  <input value={form.fxCfgPath || 'server.cfg'} onChange={(e) => set({ fxCfgPath: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>Startup-Argumente</span>
-                  <input value={form.fxServerExtraArgs || ''} onChange={(e) => set({ fxServerExtraArgs: e.target.value })} placeholder="optional" />
-                </label>
-                <label className="field">
-                  <span>FXServer-Root</span>
-                  <input value={form.fxServerRoot || ''} onChange={(e) => set({ fxServerRoot: e.target.value })} />
-                </label>
-                <label className="field">
-                  <span>OneSync</span>
-                  <select value={form.onesync || 'on'} onChange={(e) => set({ onesync: e.target.value })}>
-                    {ONESYNC_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {/* ── FXServer & Start ── */}
+          {section === 'fxserver' && isOwner && (
+            <form className="sx-stack" onSubmit={save}>
+              <Card title="Prozess" lead="Wie der FXServer gestartet und überwacht wird.">
+                <Row label="Steuerung" hint="Orbit startet FX selbst oder nutzt einen bestehenden systemd-Dienst.">
+                  <select value={form.fxControlMode || 'systemd'} onChange={(e) => set({ fxControlMode: e.target.value })}>
+                    <option value="orbit">Orbit startet FXServer</option>
+                    <option value="systemd">systemd-Dienst</option>
                   </select>
-                </label>
-                <label className="field">
-                  <span>Resource-Start-Toleranz</span>
+                </Row>
+                <Row label="Autostart" hint="FX beim Start von Orbit automatisch hochfahren.">
+                  <Switch label="Autostart" checked={form.fxAutostart !== false} onChange={(v) => set({ fxAutostart: v })} />
+                </Row>
+                <Row label="Crash-Neustart" hint="Nach einem Absturz automatisch neu starten.">
+                  <Switch label="Crash-Neustart" checked={form.autoRestartEnabled !== false} onChange={(v) => set({ autoRestartEnabled: v })} />
+                </Row>
+                <Row label="Ausgabe im Journal" hint="FX-Ausgabe zusätzlich ins Host-Terminal/Journal schreiben.">
+                  <Switch label="Ausgabe im Journal" checked={!form.quietMode} onChange={(v) => set({ quietMode: !v })} />
+                </Row>
+                <Row label="Start-Toleranz" hint="So lange darf das Hochfahren dauern, bevor neu gestartet wird.">
                   <select value={form.resourceStartingTolerance || '90'} onChange={(e) => set({ resourceStartingTolerance: e.target.value })}>
                     <option value="60">1 Minute</option>
-                    <option value="90">1,5 Minuten (Standard)</option>
+                    <option value="90">1,5 Minuten</option>
                     <option value="120">2 Minuten</option>
                     <option value="180">3 Minuten</option>
                     <option value="300">5 Minuten</option>
                   </select>
-                </label>
-              </FieldRow>
-              <div className="st-chips" style={{ marginTop: 12 }}>
-                <Toggle checked={!!form.quietMode} onChange={(v) => set({ quietMode: v })} onLabel="Quiet Mode an" offLabel="Quiet Mode aus" />
-                <Toggle checked={form.fxAutostart !== false} onChange={(v) => set({ fxAutostart: v })} onLabel="Autostart an" offLabel="Autostart aus" />
-                <Toggle checked={form.autoRestartEnabled !== false} onChange={(v) => set({ autoRestartEnabled: v })} onLabel="Crash-Restart an" offLabel="Crash-Restart aus" />
-              </div>
-              <p className="st-meta" style={{ marginTop: 8 }}>
-                Quiet Mode: FX-Ausgabe nur in der Live-Konsole, nicht im Host-Terminal/Journal von Orbit.
-                Resource-Start-Toleranz: wenn der Endpunkt nach der Zeit nicht online ist (oder „failed to start in time“), wird neu gestartet.
-              </p>
-            </ModuleCard>
-            <ModuleCard title={t('settings.rcon')}>
-              <div className="st-fields st-fields-1">
-                <label className="field"><span>Port</span><input value={form.rconPort || ''} onChange={(e) => set({ rconPort: e.target.value })} placeholder={form.fivemPort || '30120'} /></label>
-                <label className="field"><span>Passwort</span><input type="password" value={form.rconPassword || ''} onChange={(e) => set({ rconPassword: e.target.value })} placeholder={form.rconConfigured ? 'leer lassen' : 'eintragen'} autoComplete="new-password" /></label>
-              </div>
-            </ModuleCard>
-            <SaveBar
-              extra={(
-                <button className="btn" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || t('settings.rconOk'))).catch((e) => setErr(e.message))}>{t('settings.fx.rconTest')}</button>
-              )}
-            />
-          </form>
-        )}
+                </Row>
+              </Card>
+              <Card title="Netzwerk & Spiel">
+                <Row label="Port" hint="Game-Port (TCP + UDP)">
+                  <input value={form.fivemPort || ''} onChange={(e) => set({ fivemPort: e.target.value })} className="sx-num" />
+                </Row>
+                <Row label="Game-Build" hint="sv_enforceGameBuild">
+                  <select value={form.gameBuild || ''} onChange={(e) => set({ gameBuild: e.target.value })}>
+                    {GAME_BUILD_OPTIONS.map((o) => <option key={o.value || 'none'} value={o.value}>{o.label}</option>)}
+                  </select>
+                </Row>
+                <Row label="OneSync">
+                  <select value={form.onesync || 'on'} onChange={(e) => set({ onesync: e.target.value })}>
+                    {ONESYNC_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </Row>
+              </Card>
+              <Card title="Pfade" lead="Wo Server-Daten und FXServer liegen. Weitere Instanzen unter „Instanzen & Builds“.">
+                <Row label="Server-Datenordner" stack>
+                  <input className="mono" value={form.fxDataPath || ''} onChange={(e) => set({ fxDataPath: e.target.value })} placeholder="/opt/orbit/servers/…" />
+                </Row>
+                <Row label="FXServer-Ordner" stack>
+                  <input className="mono" value={form.fxServerRoot || ''} onChange={(e) => set({ fxServerRoot: e.target.value })} />
+                </Row>
+                <Row label="CFG-Datei" hint="Relativ zum Datenordner">
+                  <input className="mono" value={form.fxCfgPath || 'server.cfg'} onChange={(e) => set({ fxCfgPath: e.target.value })} />
+                </Row>
+                <Row label="Zusätzliche Start-Argumente" hint="Optional">
+                  <input className="mono" value={form.fxServerExtraArgs || ''} onChange={(e) => set({ fxServerExtraArgs: e.target.value })} />
+                </Row>
+              </Card>
+              <Card
+                title="RCON"
+                lead="Fallback-Konsole, wenn Orbit den FX nicht selbst steuert."
+                actions={<button className="btn btn-sm" type="button" onClick={() => api('/api/settings/rcon-test', { method: 'POST', body: {} }).then((d) => setMsg(d.message || t('settings.rconOk'))).catch((e) => setErr(e.message))}>{t('settings.fx.rconTest')}</button>}
+              >
+                <Row label="Port">
+                  <input value={form.rconPort || ''} onChange={(e) => set({ rconPort: e.target.value })} placeholder={form.fivemPort || '30120'} className="sx-num" />
+                </Row>
+                <Row label="Passwort" hint={form.rconConfigured ? 'Gesetzt — leer lassen, um es zu behalten.' : 'Noch nicht gesetzt.'}>
+                  <input type="password" value={form.rconPassword || ''} onChange={(e) => set({ rconPassword: e.target.value })} autoComplete="new-password" />
+                </Row>
+              </Card>
+              {saveBar}
+            </form>
+          )}
 
-        {section === 'moderation' && isAdmin && (
-          <>
-          <form className="st-stack" onSubmit={save}>
-          <div className="st-mod-split">
-            <div className="st-mod-split-pane">
-              <div className="st-mod-split-stack">
-                <ModuleCard
-                  title={t('settings.allowlist.title')}
-                  lead={t('settings.allowlist.lead')}
-                >
+          {/* ── Instanzen & Builds ── */}
+          {section === 'host' && isOwner && (
+            <div className="sx-stack">
+              <Card
+                title="Instanzen & FX-Builds"
+                lead={form.orbitServerName ? `Aktiv: ${form.orbitServerName}` : 'Weitere Server anlegen und FXServer-Builds verwalten.'}
+              >
+                <SettingsHostPanel initialTab={hostTab} onMessage={setMsg} onError={setErr} />
+              </Card>
+            </div>
+          )}
+
+          {/* ── Zugang & Bans ── */}
+          {section === 'moderation' && isAdmin && (
+            <div className="sx-stack">
+              <form className="sx-stack" onSubmit={save}>
+                <Card title={t('settings.allowlist.title')} lead={t('settings.allowlist.lead')}>
                   <AllowlistPanel
                     mode={form.allowlistMode}
                     modes={modes}
@@ -524,538 +663,311 @@ export default function Settings({ user, onUser, onSetupReset }) {
                     showIp={isOwner}
                     onChange={set}
                   />
-                </ModuleCard>
-              </div>
-            </div>
-            <div className="st-mod-split-pane">
-              <div className="st-mod-split-stack">
-                  <ModuleCard
-                    title={t('settings.bans.title')}
-                    lead={t('settings.bans.lead')}
-                  >
-                    <Toggle checked={form.banChecking !== false} onChange={(v) => set({ banChecking: v })} onLabel={t('settings.bans.checkOnShort')} offLabel={t('settings.bans.checkOffShort')} />
-                    <label className="field">
-                      <span>{t('settings.bans.reject')}</span>
-                      <textarea rows={3} value={form.banRejectionMessage || ''} onChange={(e) => set({ banRejectionMessage: e.target.value })} />
-                    </label>
-                    <label className="field">
-                      <span>{t('settings.bans.hwid')}</span>
-                      <select value={String(form.requiredHwidMatches ?? '1')} onChange={(e) => set({ requiredHwidMatches: e.target.value })}>
-                        <option value="0">{t('settings.bans.hwidOff')}</option>
-                        <option value="1">{t('settings.bans.hwidRec')}</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                      </select>
-                    </label>
-                  </ModuleCard>
-              </div>
-            </div>
-          </div>
-          <SaveBar />
-          </form>
-          <div className="st-stack" style={{ marginTop: 12 }}>
-            <ModuleCard title={t('settings.bans.templates')} lead={t('settings.bans.templatesLead')}>
-              <form className="st-fields st-fields-1" onSubmit={addTemplate}>
-                <label className="field">
-                  <span>{t('settings.bans.tplTitle')}</span>
-                  <input
-                    value={tplTitle}
-                    onChange={(e) => setTplTitle(e.target.value)}
-                    placeholder={t('settings.bans.tplTitlePh')}
-                    required
-                    minLength={1}
-                    maxLength={48}
-                  />
-                </label>
-                <label className="field">
-                  <span>{t('settings.bans.reason')}</span>
-                  <input
-                    value={tplReason}
-                    onChange={(e) => setTplReason(e.target.value)}
-                    placeholder={t('settings.bans.reasonPh')}
-                    required
-                    minLength={3}
-                    maxLength={280}
-                  />
-                </label>
-                <OrbitSelect
-                  label={t('settings.bans.duration')}
-                  value={tplDuration}
-                  onChange={setTplDuration}
-                  options={[
-                    ...BAN_DURATION_PRESETS.map((p) => ({
-                      value: p.id,
-                      label: banDurationLabel(p.id, t),
-                    })),
-                    { value: 'custom', label: t('ban.custom') },
-                  ]}
-                />
-                {tplDuration === 'custom' && (
-                  <div className="st-custom-dur">
-                    <label className="field">
-                      <span>{t('common.days')}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={9999}
-                        inputMode="numeric"
-                        placeholder={t('ban.daysPh')}
-                        value={tplDays}
-                        onChange={(e) => setTplDays(e.target.value)}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>{t('ban.hhmm')}</span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder={t('ban.hhmmPh')}
-                        value={tplHhmm}
-                        onChange={(e) => setTplHhmm(e.target.value)}
-                        maxLength={5}
-                        autoComplete="off"
-                      />
-                    </label>
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={
-                    tplBusy
-                    || !tplTitle.trim()
-                    || tplReason.trim().length < 3
-                    || (tplDuration === 'custom' && !customDurationToId(tplDays, tplHhmm).ok)
-                  }
-                >
-                  {tplBusy ? '…' : t('settings.tplAdd')}
-                </button>
+                </Card>
+                <Card title="Ban-Prüfung" lead={t('settings.bans.lead')}>
+                  <Row label="Bans beim Verbinden prüfen" hint="Gebannte Spieler werden abgewiesen.">
+                    <Switch label="Bans prüfen" checked={form.banChecking !== false} onChange={(v) => set({ banChecking: v })} />
+                  </Row>
+                  <Row label={t('settings.bans.hwid')} hint="Wie viele Hardware-IDs übereinstimmen müssen.">
+                    <select value={String(form.requiredHwidMatches ?? '1')} onChange={(e) => set({ requiredHwidMatches: e.target.value })}>
+                      <option value="0">{t('settings.bans.hwidOff')}</option>
+                      <option value="1">{t('settings.bans.hwidRec')}</option>
+                      {[2, 3, 4, 5, 6].map((n) => <option key={n} value={String(n)}>{n}</option>)}
+                    </select>
+                  </Row>
+                  <Row label={t('settings.bans.reject')} hint="Nachricht, die gebannte Spieler sehen." stack>
+                    <textarea rows={3} value={form.banRejectionMessage || ''} onChange={(e) => set({ banRejectionMessage: e.target.value })} />
+                  </Row>
+                </Card>
+                {saveBar}
               </form>
-              {templates.length === 0 ? (
-                <p className="muted st-tpl-empty">{t('settings.bans.noTpl')}</p>
-              ) : (
-                <ul className="st-tpl-list">
-                  {templates.map((tpl) => (
-                    <li key={tpl.id}>
-                      <div>
-                        <strong>{tpl.title || tpl.reason}</strong>
-                        <span className="muted">
-                          {tpl.reason}
-                          {tpl.reason ? ' · ' : ''}
-                          {banDurationLabel(tpl.duration_id, t)}
-                        </span>
-                      </div>
-                      <button type="button" className="btn btn-sm" disabled={tplBusy} onClick={() => removeTemplate(tpl.id)}>{t('common.delete')}</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </ModuleCard>
-          </div>
-          </>
-        )}
 
-        {section === 'discord' && isOwner && (
-          <form className="st-stack" onSubmit={save}>
-            <ModuleCard
-              title="Webhook"
-              lead="Start/Stop und optional Player-Drops."
-            >
-              <div className="st-chips">
-                <Toggle checked={!!form.discordEnabled} onChange={(v) => set({ discordEnabled: v })} onLabel="Webhook an" offLabel="Webhook aus" />
-                <Toggle checked={!!form.discordNotifyDrops} onChange={(v) => set({ discordNotifyDrops: v })} onLabel="Disconnects" offLabel="Disconnects aus" />
-              </div>
-              <div className="st-fields st-fields-1">
-                <label className="field"><span>Webhook-URL</span><input value={form.discordWebhook || ''} onChange={(e) => set({ discordWebhook: e.target.value })} /></label>
-                <label className="field"><span>Guild-ID</span><input value={form.discordGuild || ''} onChange={(e) => set({ discordGuild: e.target.value })} /></label>
-                <label className="field"><span>Warnungen-Kanal-ID</span><input value={form.discordWarningsChannel || ''} onChange={(e) => set({ discordWarningsChannel: e.target.value })} placeholder="leer = aus" /></label>
-              </div>
-            </ModuleCard>
-            <ModuleCard title="Bot">
-              <Toggle checked={!!form.discordBotEnabled} onChange={(v) => set({ discordBotEnabled: v })} onLabel="Bot an" offLabel="Bot aus" />
-              <p className="st-meta" style={{ marginTop: 8 }}>
-                {t('settings.discord.intent')}
-                {' '}{t('settings.discord.statusEmbed')}
-              </p>
-              <label className="field" style={{ marginTop: 10 }}>
-                <span>Bot-Token</span>
-                <input type="password" value={form.discordBotToken || ''} onChange={(e) => set({ discordBotToken: e.target.value })} placeholder={form.discordBotConfigured ? 'leer = behalten' : 'Bot-Token'} autoComplete="new-password" />
-              </label>
-              {(form.discordStatusMessageId) && (
-                <p className="st-meta ok">Status-Embed aktiv (Msg {form.discordStatusMessageId})</p>
-              )}
-            </ModuleCard>
-            <ModuleCard wide title="Status Embed JSON" lead="Struktur der Status-Nachricht (Platzhalter wie {{uptime}}).">
-              <textarea
-                className="st-code"
-                rows={10}
-                value={form.discordStatusEmbedJson || ''}
-                onChange={(e) => set({ discordStatusEmbedJson: e.target.value })}
-                spellCheck={false}
-              />
-            </ModuleCard>
-            <ModuleCard wide title="Status Config JSON" lead="Farben, Online-Strings und Buttons.">
-              <textarea
-                className="st-code"
-                rows={10}
-                value={form.discordStatusConfigJson || ''}
-                onChange={(e) => set({ discordStatusConfigJson: e.target.value })}
-                spellCheck={false}
-              />
-            </ModuleCard>
-            <SaveBar
-              extra={(
-                <button type="button" className="btn" onClick={() => api('/api/platform/discord-test', { method: 'POST', body: {} }).then(() => setMsg('Discord-Test gesendet.')).catch((e) => setErr(e.message))}>Webhook testen</button>
-              )}
-            />
-          </form>
-        )}
+              <Card title={t('settings.bans.templates')} lead={t('settings.bans.templatesLead')}>
+                {templates.length === 0 ? (
+                  <p className="muted sx-empty">{t('settings.bans.noTpl')}</p>
+                ) : (
+                  <ul className="sx-list">
+                    {templates.map((tpl) => (
+                      <li key={tpl.id}>
+                        <span className="sx-list-ico"><NavIcon name="ban" /></span>
+                        <div className="sx-list-text">
+                          <b>{tpl.title || tpl.reason}</b>
+                          <span>{tpl.reason}</span>
+                        </div>
+                        <span className="badge">{banDurationLabel(tpl.duration_id, t)}</span>
+                        <button type="button" className="o-icon-btn" disabled={tplBusy} title={t('common.delete')} onClick={() => removeTemplate(tpl.id)}><NavIcon name="x" /></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <form className="sx-tpl-form" onSubmit={addTemplate}>
+                  <input value={tplTitle} onChange={(e) => setTplTitle(e.target.value)} placeholder={t('settings.bans.tplTitlePh')} required maxLength={48} aria-label={t('settings.bans.tplTitle')} />
+                  <input value={tplReason} onChange={(e) => setTplReason(e.target.value)} placeholder={t('settings.bans.reasonPh')} required minLength={3} maxLength={280} aria-label={t('settings.bans.reason')} />
+                  <OrbitSelect
+                    value={tplDuration}
+                    onChange={setTplDuration}
+                    options={[
+                      ...BAN_DURATION_PRESETS.map((p) => ({ value: p.id, label: banDurationLabel(p.id, t) })),
+                      { value: 'custom', label: t('ban.custom') },
+                    ]}
+                  />
+                  {tplDuration === 'custom' && (
+                    <div className="st-custom-dur">
+                      <input type="number" min={0} max={9999} inputMode="numeric" placeholder={t('ban.daysPh')} value={tplDays} onChange={(e) => setTplDays(e.target.value)} aria-label={t('common.days')} />
+                      <input type="text" inputMode="numeric" placeholder={t('ban.hhmmPh')} value={tplHhmm} onChange={(e) => setTplHhmm(e.target.value)} maxLength={5} autoComplete="off" aria-label={t('ban.hhmm')} />
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={tplBusy || !tplTitle.trim() || tplReason.trim().length < 3 || (tplDuration === 'custom' && !customDurationToId(tplDays, tplHhmm).ok)}
+                  >
+                    <NavIcon name="plus" />{t('settings.tplAdd')}
+                  </button>
+                </form>
+              </Card>
 
-        {section === 'game' && isAdmin && (
-          <form className="st-stack" onSubmit={save}>
-            <ModuleCard
-              title={t('settings.game.menuTitle')}
-              lead={t('settings.game.menuLead')}
-            >
-              <div className="st-chips">
-                <Toggle checked={form.gameMenuEnabled !== false} onChange={(v) => set({ gameMenuEnabled: v })} onLabel={t('settings.game.menuOn')} offLabel={t('settings.game.menuOff')} />
-                <Toggle checked={!!form.gameMenuAlignRight} onChange={(v) => set({ gameMenuAlignRight: v })} onLabel="Rechts" offLabel="Links" />
-              </div>
-              <label className="field" style={{ marginTop: 12 }}>
-                <span>Seitenwechsel-Taste</span>
-                <input
-                  value={form.gameMenuPageKey || 'Tab'}
-                  onChange={(e) => set({ gameMenuPageKey: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.ctrlKey || e.metaKey || e.altKey) return;
-                    if (e.key === 'Escape' || e.key === 'Backspace') return;
-                    if (e.key.length === 1 || ['Tab', 'Enter', 'Shift', 'Control', 'Alt'].includes(e.key)) {
-                      e.preventDefault();
-                      set({ gameMenuPageKey: e.key === ' ' ? 'Space' : e.key });
-                    }
-                  }}
-                  placeholder={t('settings.game.keyPh')}
-                />
-              </label>
-            </ModuleCard>
-            <ModuleCard title="Benachrichtigungen" lead="Position der Orbit-Notify und Admin-/Notif-Optionen.">
-              <OrbitSelect
-                label={t('settings.game.notifyPos')}
-                value={form.gameNotifyPos || 'top-left'}
-                onChange={(v) => set({ gameNotifyPos: v })}
-                options={[
-                  { value: 'top-left', label: t('settings.game.notifyTopLeft') },
-                  { value: 'top-right', label: t('settings.game.notifyTopRight') },
-                  { value: 'bottom-left', label: t('settings.game.notifyBottomLeft') },
-                  { value: 'bottom-right', label: t('settings.game.notifyBottomRight') },
-                ]}
-              />
-              <div className="st-chips st-chips-col" style={{ marginTop: 12 }}>
-                <Toggle checked={form.hideAdminInPunishments !== false} onChange={(v) => set({ hideAdminInPunishments: v })} onLabel="Admin in Strafen versteckt" offLabel="Admin in Strafen sichtbar" />
-                <Toggle checked={!!form.hideAdminInMessages} onChange={(v) => set({ hideAdminInMessages: v })} onLabel="Admin in Nachrichten versteckt" offLabel="Admin in Nachrichten sichtbar" />
-                <Toggle checked={!!form.hideAnnouncementNotif} onChange={(v) => set({ hideAnnouncementNotif: v })} onLabel="Announce-Notif aus" offLabel="Announce-Notif an" />
-                <Toggle checked={!!form.hideDmNotif} onChange={(v) => set({ hideDmNotif: v })} onLabel="DM-Notif aus" offLabel="DM-Notif an" />
-                <Toggle checked={!!form.hideWarnNotif} onChange={(v) => set({ hideWarnNotif: v })} onLabel="Warn-Notif aus" offLabel="Warn-Notif an" />
-                <Toggle checked={!!form.hideRestartWarnNotif} onChange={(v) => set({ hideRestartWarnNotif: v })} onLabel="Restart-Warn aus" offLabel="Restart-Warn an" />
-              </div>
-            </ModuleCard>
-            <SaveBar />
-          </form>
-        )}
-
-        {section === 'system' && isOwner && (
-          <div className="st-stack">
-            <ModuleCard wide title="Datenbank sichern" lead="Kopie der Orbit-Panel-DB (Spieler, Bans, Warns, Allowlist).">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={sysBusy}
-                onClick={async () => {
-                  setSysBusy(true);
-                  setErr('');
-                  try {
-                    const d = await api('/api/system/backup-database');
-                    const blob = new Blob([JSON.stringify(d.export, null, 2)], { type: 'application/json' });
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = `orbit-players-${Date.now()}.json`;
-                    a.click();
-                    URL.revokeObjectURL(a.href);
-                    setMsg(`Backup: ${d.file} (${d.bytes} Bytes) + JSON-Download.`);
-                  } catch (e) {
-                    setErr(e.message);
-                  }
-                  setSysBusy(false);
-                }}
-              >
-                Backup herunterladen
-              </button>
-            </ModuleCard>
-            <ModuleCard wide title="Datenbank bereinigen" lead="Unwiderruflich — vorher Backup machen.">
-              <div className="banner warn" style={{ marginBottom: 12 }}>
-                Warnung: diese Aktion ist irreversibel. Zuerst Backup sichern.
-              </div>
-              <FieldRow>
-                {['players', 'bans', 'warns', 'hwids'].map((key) => (
-                  <label key={key} className="field">
-                    <span>{key === 'players' ? t('settings.clean.players') : key === 'bans' ? t('settings.clean.bans') : key === 'warns' ? t('settings.clean.warns') : t('settings.clean.hwids')}</span>
-                    <select
-                      value={cleanForm[key]}
-                      onChange={(e) => setCleanForm({ ...cleanForm, [key]: e.target.value })}
+              {isOwner && (
+                <Card title={t('settings.allowlist.revoke')} lead={t('settings.allowlist.revokeLead')} tone="warn">
+                  <Row label="Alle Allowlist-Einträge entfernen" hint="Spieler müssen danach neu freigeschaltet werden.">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      disabled={sysBusy}
+                      onClick={() => confirmAction(t('settings.allowlist.revokeConfirm'), async () => {
+                        const d = await api('/api/system/revoke-allowlists', { method: 'POST', body: { confirm: true, olderThanDays: 'all' } });
+                        setMsg(t('settings.allowlist.revoked', { n: d.removed }));
+                      })}
                     >
+                      Widerrufen
+                    </button>
+                  </Row>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* ── Ingame-Menü ── */}
+          {section === 'game' && isAdmin && (
+            <form className="sx-stack" onSubmit={save}>
+              <Card title="Menü" lead={t('settings.game.menuLead')}>
+                <Row label="Ingame-Menü aktiv" hint="/orbit bzw. /orbitmenu im Spiel">
+                  <Switch label="Ingame-Menü" checked={form.gameMenuEnabled !== false} onChange={(v) => set({ gameMenuEnabled: v })} />
+                </Row>
+                <Row label="Position">
+                  <Seg value={form.gameMenuAlignRight ? 'right' : 'left'} onChange={(v) => set({ gameMenuAlignRight: v === 'right' })} options={[{ value: 'left', label: 'Links' }, { value: 'right', label: 'Rechts' }]} />
+                </Row>
+                <Row label="Seitenwechsel-Taste" hint="Feld anklicken und Taste drücken.">
+                  <input
+                    className="sx-key"
+                    value={form.gameMenuPageKey || 'Tab'}
+                    onChange={(e) => set({ gameMenuPageKey: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.ctrlKey || e.metaKey || e.altKey) return;
+                      if (e.key === 'Escape' || e.key === 'Backspace') return;
+                      if (e.key.length === 1 || ['Tab', 'Enter', 'Shift', 'Control', 'Alt'].includes(e.key)) {
+                        e.preventDefault();
+                        set({ gameMenuPageKey: e.key === ' ' ? 'Space' : e.key });
+                      }
+                    }}
+                    placeholder={t('settings.game.keyPh')}
+                  />
+                </Row>
+              </Card>
+              <Card title="Benachrichtigungen" lead="Was Spieler im Spiel angezeigt bekommen.">
+                <Row label={t('settings.game.notifyPos')}>
+                  <select value={form.gameNotifyPos || 'top-left'} onChange={(e) => set({ gameNotifyPos: e.target.value })}>
+                    <option value="top-left">{t('settings.game.notifyTopLeft')}</option>
+                    <option value="top-right">{t('settings.game.notifyTopRight')}</option>
+                    <option value="bottom-left">{t('settings.game.notifyBottomLeft')}</option>
+                    <option value="bottom-right">{t('settings.game.notifyBottomRight')}</option>
+                  </select>
+                </Row>
+                {[
+                  ['hideAnnouncementNotif', 'Ankündigungen anzeigen'],
+                  ['hideDmNotif', 'Direktnachrichten anzeigen'],
+                  ['hideWarnNotif', 'Verwarnungen anzeigen'],
+                  ['hideRestartWarnNotif', 'Restart-Warnungen anzeigen'],
+                ].map(([key, label]) => (
+                  <Row key={key} label={label}>
+                    <Switch label={label} checked={!form[key]} onChange={(v) => set({ [key]: !v })} />
+                  </Row>
+                ))}
+              </Card>
+              <Card title="Admin-Namen" lead="Ob Spieler sehen, welcher Admin gehandelt hat.">
+                <Row label="Bei Strafen anzeigen" hint="Kick, Warn, Ban">
+                  <Switch label="Bei Strafen anzeigen" checked={form.hideAdminInPunishments === false} onChange={(v) => set({ hideAdminInPunishments: !v })} />
+                </Row>
+                <Row label="Bei Nachrichten anzeigen" hint="Ankündigungen und DMs">
+                  <Switch label="Bei Nachrichten anzeigen" checked={!form.hideAdminInMessages} onChange={(v) => set({ hideAdminInMessages: !v })} />
+                </Row>
+              </Card>
+              {saveBar}
+            </form>
+          )}
+
+          {/* ── Discord ── */}
+          {section === 'discord' && isOwner && (
+            <form className="sx-stack" onSubmit={save}>
+              <Card
+                title="Webhook"
+                lead="Meldungen bei Start, Stop und Restart."
+                actions={<button type="button" className="btn btn-sm" onClick={() => api('/api/platform/discord-test', { method: 'POST', body: {} }).then(() => setMsg('Discord-Test gesendet.')).catch((e) => setErr(e.message))}>Testnachricht</button>}
+              >
+                <Row label="Webhook aktiv">
+                  <Switch label="Webhook" checked={!!form.discordEnabled} onChange={(v) => set({ discordEnabled: v })} />
+                </Row>
+                <Row label="Verbindungsabbrüche melden" hint="Player-Drops (Crashes, Timeouts) posten.">
+                  <Switch label="Drops melden" checked={!!form.discordNotifyDrops} onChange={(v) => set({ discordNotifyDrops: v })} />
+                </Row>
+                <Row label="Webhook-URL" stack>
+                  <input value={form.discordWebhook || ''} onChange={(e) => set({ discordWebhook: e.target.value })} placeholder="https://discord.com/api/webhooks/…" />
+                </Row>
+              </Card>
+              <Card title="Status-Bot" lead={t('settings.discord.statusEmbed')}>
+                <Row label="Bot aktiv" hint={t('settings.discord.intent')}>
+                  <Switch label="Bot" checked={!!form.discordBotEnabled} onChange={(v) => set({ discordBotEnabled: v })} />
+                </Row>
+                <Row label="Bot-Token" hint={form.discordBotConfigured ? 'Gesetzt — leer lassen, um ihn zu behalten.' : 'Aus dem Discord Developer Portal.'}>
+                  <input type="password" value={form.discordBotToken || ''} onChange={(e) => set({ discordBotToken: e.target.value })} autoComplete="new-password" />
+                </Row>
+                <Row label="Server-ID (Guild)">
+                  <input className="mono" value={form.discordGuild || ''} onChange={(e) => set({ discordGuild: e.target.value })} />
+                </Row>
+                <Row label="Warnungs-Kanal" hint="Kanal-ID für Restart-Warnungen — leer = aus">
+                  <input className="mono" value={form.discordWarningsChannel || ''} onChange={(e) => set({ discordWarningsChannel: e.target.value })} />
+                </Row>
+                {form.discordStatusMessageId ? (
+                  <Row label="Status-Embed"><span className="badge ok">Aktiv</span></Row>
+                ) : null}
+              </Card>
+              <details className="sx-adv">
+                <summary><NavIcon name="chevron" />Erweitert: Status-Embed anpassen (JSON)</summary>
+                <Card title="Embed-Struktur" lead="Platzhalter wie {{uptime}} sind erlaubt.">
+                  <textarea className="st-code" rows={10} value={form.discordStatusEmbedJson || ''} onChange={(e) => set({ discordStatusEmbedJson: e.target.value })} spellCheck={false} />
+                </Card>
+                <Card title="Farben & Buttons">
+                  <textarea className="st-code" rows={10} value={form.discordStatusConfigJson || ''} onChange={(e) => set({ discordStatusConfigJson: e.target.value })} spellCheck={false} />
+                </Card>
+              </details>
+              {saveBar}
+            </form>
+          )}
+
+          {/* ── Backup & Wartung ── */}
+          {section === 'system' && isOwner && (
+            <div className="sx-stack">
+              <Card title="Backup" lead="Orbit-Panel-Datenbank: Spieler, Bans, Warns, Allowlist.">
+                <Row label="Backup erstellen" hint="Speichert eine Kopie auf dem Server und lädt sie als JSON herunter.">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    disabled={sysBusy}
+                    onClick={async () => {
+                      setSysBusy(true);
+                      try {
+                        const d = await api('/api/system/backup-database');
+                        const blob = new Blob([JSON.stringify(d.export, null, 2)], { type: 'application/json' });
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = `orbit-players-${Date.now()}.json`;
+                        a.click();
+                        URL.revokeObjectURL(a.href);
+                        setMsg(`Backup gespeichert: ${d.file}`);
+                      } catch (e) {
+                        setErr(e.message);
+                      }
+                      setSysBusy(false);
+                    }}
+                  >
+                    Backup herunterladen
+                  </button>
+                </Row>
+              </Card>
+              <Card title="Datenbank bereinigen" lead="Alte Einträge entfernen. Nicht umkehrbar — vorher Backup erstellen." tone="warn">
+                {['players', 'bans', 'warns', 'hwids'].map((key) => (
+                  <Row key={key} label={t(`settings.clean.${key}`)}>
+                    <select value={cleanForm[key]} onChange={(e) => setCleanForm({ ...cleanForm, [key]: e.target.value })}>
                       {(cleanOpts?.[key] || [{ value: cleanForm[key], label: cleanForm[key] }]).map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
-                  </label>
+                  </Row>
                 ))}
-              </FieldRow>
-              <button
-                type="button"
-                className="btn btn-danger"
-                disabled={sysBusy}
-                onClick={async () => {
-                  if (!window.confirm('Datenbank wirklich bereinigen?')) return;
-                  setSysBusy(true);
-                  setErr('');
-                  try {
-                    const d = await api('/api/system/clean-database', {
-                      method: 'POST',
-                      body: { confirm: true, ...cleanForm },
-                    });
-                    setMsg(`Bereinigt: ${JSON.stringify(d.cleaned)}`);
-                  } catch (e) {
-                    setErr(e.message);
-                  }
-                  setSysBusy(false);
-                }}
-              >
-                Datenbank bereinigen
-              </button>
-            </ModuleCard>
-            <ModuleCard title={t('settings.allowlist.revoke')} lead={t('settings.allowlist.revokeLead')}>
-              <button
-                type="button"
-                className="btn"
-                disabled={sysBusy}
-                onClick={async () => {
-                  if (!window.confirm(t('settings.allowlist.revokeConfirm'))) return;
-                  setSysBusy(true);
-                  try {
-                    const d = await api('/api/system/revoke-allowlists', {
-                      method: 'POST',
-                      body: { confirm: true, olderThanDays: 'all' },
-                    });
-                    setMsg(t('settings.allowlist.revoked', { n: d.removed }));
-                  } catch (e) {
-                    setErr(e.message);
-                  }
-                  setSysBusy(false);
-                }}
-              >
-                Alle Allowlists widerrufen
-              </button>
-            </ModuleCard>
-          </div>
-        )}
-
-        {section === 'appearance' && (
-          <div className="st-stack">
-            <ModuleCard title={t('settings.appearance.title')} lead={t('settings.appearance.lead')}>
-              <SegControl
-                label="Sidebar"
-                value={prefs.sidebarCollapsed ? 'compact' : 'full'}
-                onChange={(v) => setAppearance({ sidebarCollapsed: v === 'compact' })}
-                options={[
-                  { value: 'full', label: 'Ausgeklappt', hint: 'Icons + Text' },
-                  { value: 'compact', label: 'Kompakt', hint: 'Nur Icons' },
-                ]}
-              />
-              <SegControl
-                label="Schema"
-                value={prefs.theme}
-                onChange={(v) => setAppearance({ theme: v })}
-                options={[
-                  { value: 'dark', label: 'Dunkel' },
-                  { value: 'light', label: 'Hell' },
-                ]}
-              />
-              <div className="st-row st-row-wrap">
-                <span className="st-row-label">Akzent</span>
-                <div className="st-accents" role="group" aria-label="Akzentfarbe">
-                  {Object.values(ACCENT_PRESETS).map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className={`st-accent${prefs.accent === c.id ? ' active' : ''}`}
-                      style={{ ['--swatch']: c.hex, ['--swatch-b']: c.hex2 }}
-                      title={c.label}
-                      aria-label={c.label}
-                      aria-pressed={prefs.accent === c.id}
-                      onClick={() => setAppearance({ accent: c.id })}
-                    >
-                      <i />
-                      <span>{c.label}</span>
-                    </button>
-                  ))}
+                <div className="sx-card-foot">
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    disabled={sysBusy}
+                    onClick={() => confirmAction('Datenbank wirklich bereinigen? Das kann nicht rückgängig gemacht werden.', async () => {
+                      const d = await api('/api/system/clean-database', { method: 'POST', body: { confirm: true, ...cleanForm } });
+                      setMsg(`Bereinigt: ${Object.entries(d.cleaned || {}).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+                    })}
+                  >
+                    Jetzt bereinigen
+                  </button>
                 </div>
-              </div>
-            </ModuleCard>
-            <ModuleCard title="Konsolen-Filter" lead="Was in der Live-Konsole sichtbar ist.">
-              <div className="st-chips" role="group" aria-label="Konsolen-Filter">
-                {[
-                  { key: 'showInfo', label: 'Infos' },
-                  { key: 'showWarn', label: 'Warnings' },
-                  { key: 'showBad', label: 'Errors' },
-                  { key: 'showOk', label: 'OK' },
-                  { key: 'hideAssetSpam', label: 'Asset-Spam aus' },
-                ].map((t) => {
-                  const on = prefs.console?.[t.key] !== false;
-                  return (
-                    <label key={t.key} className={`st-chip${on ? ' on' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        onChange={(e) => setAppearance({ console: { [t.key]: e.target.checked } })}
-                      />
-                      {t.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </ModuleCard>
-          </div>
-        )}
+              </Card>
+            </div>
+          )}
 
-        {section === 'host' && isOwner && (
-          <div className="st-stack">
-            <ModuleCard wide title="Host & Instanzen" lead="FX-Builds, weitere Server und Prod.">
-              {form.orbitServerName ? (
-                <p className="st-meta">
-                  Aktiv: <b>{form.orbitServerName}</b>
-                  {' · '}
-                  <span className="mono">{form.fxDataPath}</span>
-                </p>
-              ) : null}
-              <SettingsHostPanel initialTab={hostTab} onMessage={setMsg} onError={setErr} />
-            </ModuleCard>
-          </div>
-        )}
-
-        {section === 'account' && (
-          <div className="st-stack">
-            <ModuleCard title={t('settings.account.password')}>
-              <form onSubmit={password}>
-                <div className="st-fields st-fields-1">
-                  <label className="field"><span>Aktuell</span><input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} /></label>
-                  <label className="field"><span>Neu</span><input type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /></label>
-                </div>
-                <button className="btn btn-primary" type="submit" style={{ marginTop: 12 }}>{t('settings.account.changePw')}</button>
-              </form>
-            </ModuleCard>
-            <ModuleCard title={t('settings.account.cfx')} lead={t('settings.account.cfxLead')}>
-              {user.cfxName ? (
-                <div className="st-inline">
-                  <b>{user.cfxName}</b>
-                  <button className="btn btn-sm" type="button" onClick={() => api('/api/auth/cfx/unlink', { method: 'POST', body: {} }).then(() => { onUser({ ...user, cfxName: '' }); setMsg('Cfx.re getrennt.'); }).catch((e) => setErr(e.message))}>Trennen</button>
-                </div>
-              ) : (
-                <a className="btn cfx" href="/api/auth/cfx/start?mode=link">Mit Cfx.re verbinden</a>
-              )}
-            </ModuleCard>
-            <ModuleCard title={t('settings.account.totp')}>
-              {!totp ? (
-                <button className="btn" type="button" onClick={() => api('/api/auth/totp/setup', { method: 'POST', body: {} }).then(setTotp)}>Einrichten</button>
-              ) : (
-                <>
-                  <p className="mono">{totp.secret}</p>
-                  <div className="st-inline">
-                    <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" />
-                    <button className="btn btn-primary" type="button" onClick={() => api('/api/auth/totp/enable', { method: 'POST', body: { code } }).then(() => { setMsg('2FA aktiv.'); onUser({ ...user, totp: true }); }).catch((e) => setErr(e.message))}>Aktivieren</button>
-                  </div>
-                </>
-              )}
-            </ModuleCard>
-            <ModuleCard title={t('settings.account.sessions')}>
-              <ul className="st-sessions">
-                {sessions.map((s) => (
-                  <li key={s.id}>
-                    <span>{s.ip} · {fmtFull(s.last_seen)}{s.current ? ' · diese' : ''}</span>
-                    {!s.current && (
-                      <button className="btn btn-sm" type="button" onClick={() => api(`/api/sessions/${s.id}`, { method: 'DELETE' }).then(load)}>Beenden</button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </ModuleCard>
-          </div>
-        )}
-
-        {section === 'danger' && isOwner && (
-          <div className="st-stack">
-            <ModuleCard title={t('settings.danger.reset')} lead={t('settings.danger.resetLead')}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={resetBusy}
-                onClick={async () => {
-                  if (!window.confirm(t('settings.danger.resetConfirm1'))) return;
-                  if (!window.confirm(t('settings.danger.resetConfirm2'))) return;
-                  setResetBusy(true);
-                  setErr('');
-                  try {
-                    const res = await api('/api/settings/reset-setup', {
-                      method: 'POST',
-                      body: { confirm: true, wipe: true },
-                    });
-                    setMsg(t('settings.danger.resetMsg', { n: (res.deleted || []).length }));
-                    onSetupReset?.({ redirect: '/setup', wipe: true });
-                  } catch (e) {
-                    setErr(e.message || t('settings.danger.resetFail'));
-                  } finally {
-                    setResetBusy(false);
-                  }
-                }}
-              >
-                {resetBusy ? t('settings.danger.resetBusy') : t('settings.danger.resetBtn')}
-              </button>
-            </ModuleCard>
-            <ModuleCard title="Orbit deinstallieren" lead="Panel, Dienst und Installation weg.">
-              <button
-                type="button"
-                className="btn btn-danger"
-                disabled={resetBusy}
-                onClick={async () => {
-                  const phrase = window.prompt(t('settings.danger.uninstallPrompt'));
-                  if (phrase == null) return;
-                  if (String(phrase).trim().toUpperCase() !== t('settings.danger.uninstallPhrase')) {
-                    setErr('Abgebrochen — Phrase falsch.');
-                    return;
-                  }
-                  if (!window.confirm('Orbit jetzt unwiderruflich deinstallieren?')) return;
-                  setResetBusy(true);
-                  setErr('');
-                  try {
-                    const res = await api('/api/settings/uninstall', {
-                      method: 'POST',
-                      body: { confirmPhrase: t('settings.danger.uninstallPhrase') },
-                    });
-                    setMsg(res.message || t('settings.danger.uninstallMsg'));
-                    window.setTimeout(() => { window.location.href = 'about:blank'; }, 2500);
-                  } catch (e) {
-                    setErr(e.message || 'Deinstallation fehlgeschlagen');
-                    setResetBusy(false);
-                  }
-                }}
-              >
-                {resetBusy ? '…' : 'Orbit komplett deinstallieren'}
-              </button>
-            </ModuleCard>
-          </div>
-        )}
+          {/* ── Gefahrenzone ── */}
+          {section === 'danger' && isOwner && (
+            <div className="sx-stack">
+              <Card title="Gefahrenzone" lead="Diese Aktionen lassen sich nicht rückgängig machen." tone="bad">
+                <Row label={t('settings.danger.reset')} hint={t('settings.danger.resetLead')}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    disabled={resetBusy}
+                    onClick={async () => {
+                      if (!window.confirm(t('settings.danger.resetConfirm1'))) return;
+                      if (!window.confirm(t('settings.danger.resetConfirm2'))) return;
+                      setResetBusy(true);
+                      try {
+                        const res = await api('/api/settings/reset-setup', { method: 'POST', body: { confirm: true, wipe: true } });
+                        setMsg(t('settings.danger.resetMsg', { n: (res.deleted || []).length }));
+                        onSetupReset?.({ redirect: '/setup', wipe: true });
+                      } catch (e) {
+                        setErr(e.message || t('settings.danger.resetFail'));
+                      } finally {
+                        setResetBusy(false);
+                      }
+                    }}
+                  >
+                    {resetBusy ? t('settings.danger.resetBusy') : 'Zurücksetzen'}
+                  </button>
+                </Row>
+                <Row label="Orbit deinstallieren" hint="Entfernt Panel, Dienst und Installation vollständig.">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    disabled={resetBusy}
+                    onClick={async () => {
+                      const phrase = window.prompt(t('settings.danger.uninstallPrompt'));
+                      if (phrase == null) return;
+                      if (String(phrase).trim().toUpperCase() !== t('settings.danger.uninstallPhrase')) {
+                        setErr('Abgebrochen — Phrase falsch.');
+                        return;
+                      }
+                      if (!window.confirm('Orbit jetzt unwiderruflich deinstallieren?')) return;
+                      setResetBusy(true);
+                      try {
+                        const res = await api('/api/settings/uninstall', { method: 'POST', body: { confirmPhrase: t('settings.danger.uninstallPhrase') } });
+                        setMsg(res.message || t('settings.danger.uninstallMsg'));
+                        window.setTimeout(() => { window.location.href = 'about:blank'; }, 2500);
+                      } catch (e) {
+                        setErr(e.message || 'Deinstallation fehlgeschlagen');
+                        setResetBusy(false);
+                      }
+                    }}
+                  >
+                    {resetBusy ? '…' : 'Deinstallieren'}
+                  </button>
+                </Row>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </Page>
