@@ -1,1 +1,1 @@
-export { default } from '../workspace/Workspace.jsx';
+export { default } from '../shell/Shell.jsx';

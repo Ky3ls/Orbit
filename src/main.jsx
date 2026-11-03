@@ -1,16 +1,15 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import '@fontsource-variable/outfit';
-import '@fontsource/syne/700.css';
-import '@fontsource/syne/800.css';
-import '@fontsource/jetbrains-mono/400.css';
-import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 import { initAppearance } from './appearance.js';
 import { I18nProvider } from './i18n/I18nProvider.jsx';
 import { applyDocumentLang, readStoredLang } from './i18n/core.js';
 import App from './App.jsx';
-import './styles.css';
+import './theme/tokens.css';
+import './theme/base.css';
+import './theme/components.css';
 
 if (typeof window !== 'undefined') {
   const { protocol, hostname } = window.location;
@@ -21,14 +20,9 @@ if (typeof window !== 'undefined') {
     window.location.replace(window.location.href.replace(/^http:/i, 'https:'));
   }
 }
-import './theme/tokens.css';
-import './workspace/workspace.css';
-import './workspace/appearance.css';
-import './cockpit/cockpit.css';
 import './pages/settings.css';
 import './pages/cfg-editor.css';
 import './styles-live-console.css';
-import './styles-responsive.css';
 
 initAppearance();
 applyDocumentLang(readStoredLang() || 'de');

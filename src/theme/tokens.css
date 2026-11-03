@@ -1,102 +1,120 @@
-/* Orbit — Schwarz + Orange (global) */
+/* ═══ Orbit Nebula — Design-Tokens (Dark default, Light via data-theme) ═══ */
 :root {
-  --bg: #000000;
-  --bg-2: #0a0a0a;
-  --bg-elevated: #111111;
-  --card: #0d0d0d;
-  --glass: rgba(13, 13, 13, 0.92);
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(var(--accent-rgb), 0.45);
-  --text: #f5f5f5;
-  --muted: #9a9a9a;
-  --faint: #5c5c5c;
-  --accent: #ff7a1a;
-  --accent-2: #ff9a4d;
-  --accent-rgb: 255, 122, 26;
+  /* Flächen */
+  --bg: #07080d;
+  --bg-2: #0b0d14;
+  --bg-elevated: #121522;
+  --surface: #0e1019;
+  --surface-2: #141725;
+  --surface-3: #1b1f31;
+  --card: var(--surface);
+  --glass: rgba(14, 16, 25, 0.78);
+  --glass-strong: rgba(18, 21, 34, 0.94);
+  --surface-inset: #0a0c13;
+  --code-bg: #080a11;
+  --code-fg: #dfe3ff;
+
+  /* Linien */
+  --line: rgba(148, 160, 255, 0.085);
+  --line-2: rgba(148, 160, 255, 0.15);
+  --line-strong: rgba(var(--accent-rgb), 0.5);
+
+  /* Text */
+  --text: #eef0ff;
+  --text-2: #c7cbe6;
+  --muted: #8b92b4;
+  --faint: #575d7c;
+
+  /* Akzent (per Preset überschrieben) */
+  --accent: #7c6cff;
+  --accent-2: #a597ff;
+  --accent-rgb: 124, 108, 255;
   --accent-dim: rgba(var(--accent-rgb), 0.14);
-  --accent-ink: var(--accent);
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --bad: #f87171;
-  --info: #60a5fa;
-  --shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
-  --glow: none;
-  --focus-ring: 0 0 0 2px rgba(var(--accent-rgb), 0.25);
-  --chart-grid: rgba(255, 255, 255, 0.06);
-  --chart-axis: rgba(255, 255, 255, 0.08);
-  --chart-plot-bg: var(--bg-2);
-  --surface-inset: var(--bg-2);
-  --code-bg: #050505;
-  --code-fg: #e8e8e8;
+  --accent-ink: var(--accent-2);
+  --accent-fg: #ffffff;
+  --brand-a: var(--accent);
+  --brand-b: #3fd0ff;
+  --brand-grad: linear-gradient(135deg, var(--brand-a) 0%, var(--brand-b) 100%);
+
+  /* Status */
+  --ok: #2fe0a0;
+  --ok-rgb: 47, 224, 160;
+  --warn: #ffc25c;
+  --warn-rgb: 255, 194, 92;
+  --bad: #ff5a7a;
+  --bad-rgb: 255, 90, 122;
+  --info: #5ab8ff;
+  --info-rgb: 90, 184, 255;
+
+  /* Charts */
+  --chart-grid: rgba(148, 160, 255, 0.07);
+  --chart-axis: rgba(148, 160, 255, 0.12);
+  --chart-plot-bg: transparent;
+
+  /* Form */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
   --radius: 12px;
   --radius-lg: 16px;
-  --font: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
-  --display: Syne, var(--font);
-  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --radius-xl: 22px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.65);
+  --shadow-pop: 0 24px 70px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--line-2);
+  --glow: none;
+  --focus-ring: 0 0 0 3px rgba(var(--accent-rgb), 0.3);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Typo */
+  --font: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: var(--font);
+  --mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Shell */
+  --sidebar-w: 256px;
+  --sidebar-w-collapsed: 76px;
+  --topbar-h: 64px;
+
   color-scheme: dark;
 }
 
-::selection {
-  background: rgba(var(--accent-rgb), 0.35);
-}
+:root[data-theme='light'] {
+  --bg: #f3f4f9;
+  --bg-2: #eceef6;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f6f7fc;
+  --surface-3: #eceef7;
+  --glass: rgba(255, 255, 255, 0.8);
+  --glass-strong: rgba(255, 255, 255, 0.96);
+  --surface-inset: #f4f5fa;
+  --code-bg: #f7f8fc;
+  --code-fg: #1d2140;
 
-.aurora i {
-  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.12), transparent 72%) !important;
-}
-.aurora i:nth-child(2) {
-  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.06), transparent 70%) !important;
-}
+  --line: rgba(24, 30, 80, 0.08);
+  --line-2: rgba(24, 30, 80, 0.14);
 
-.mark {
-  background: linear-gradient(160deg, rgba(var(--accent-rgb), 0.22), rgba(255, 255, 255, 0.03));
-  border-color: rgba(var(--accent-rgb), 0.25);
-  box-shadow: none;
-  color: var(--accent);
-}
+  --text: #11132a;
+  --text-2: #2f3456;
+  --muted: #5d6385;
+  --faint: #9298b5;
 
-.mark svg {
-  color: inherit;
-  overflow: visible;
-}
-.mark svg .mk-ring {
-  fill: none !important;
-  stroke: currentColor !important;
-}
-.mark svg .mk-ring-dim {
-  opacity: 0.42;
-}
-.mark svg .mk-core,
-.mark svg .mk-sat {
-  fill: currentColor !important;
-  stroke: none !important;
-}
+  --brand-b: #0ea5e9;
 
-.btn-primary,
-.btn-primary:hover,
-.btn-primary:focus,
-.btn-primary:focus-visible,
-.btn-primary:active {
-  background: var(--accent) !important;
-  border: 1px solid var(--accent) !important;
-  color: #0a0a0a !important;
-  font-weight: 700;
-  box-shadow: none !important;
-  filter: none !important;
-  text-shadow: none !important;
-}
-.btn-primary:hover,
-.btn-primary:focus-visible {
-  background: var(--accent-2) !important;
-  border-color: var(--accent-2) !important;
-}
-.btn-primary::after,
-.btn-primary::before {
-  content: none !important;
-  animation: none !important;
-  box-shadow: none !important;
-  filter: none !important;
-}
+  --ok: #0f9f6e;
+  --ok-rgb: 15, 159, 110;
+  --warn: #b86e00;
+  --warn-rgb: 184, 110, 0;
+  --bad: #e0294f;
+  --bad-rgb: 224, 41, 79;
+  --info: #1d7fe0;
+  --info-rgb: 29, 127, 224;
 
-.o-metric-bar {
-  background: linear-gradient(90deg, var(--accent), var(--accent-2)) !important;
+  --chart-grid: rgba(24, 30, 80, 0.07);
+  --chart-axis: rgba(24, 30, 80, 0.12);
+
+  --shadow-sm: 0 1px 2px rgba(17, 19, 42, 0.06);
+  --shadow: 0 12px 34px -14px rgba(17, 19, 42, 0.2);
+  --shadow-pop: 0 22px 60px -12px rgba(17, 19, 42, 0.26), 0 0 0 1px var(--line-2);
+
+  color-scheme: light;
 }

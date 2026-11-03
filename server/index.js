@@ -985,7 +985,7 @@ async function handleApi(req, res, url) {
     if (body && typeof body === 'object' && body.accent !== undefined) {
       try {
         const { ACCENT_PRESETS } = await import('../src/prefsShared.js');
-        const a = ACCENT_PRESETS[prefs.accent] || ACCENT_PRESETS.orange;
+        const a = ACCENT_PRESETS[prefs.accent] || ACCENT_PRESETS.nebula;
         const settings = settingMap(db);
         if (fxConsoleReady(settings)) {
           const row = db.prepare('SELECT ingame_license, cfx_id FROM users WHERE id = ?').get(me.id);

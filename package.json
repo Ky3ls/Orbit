@@ -7,9 +7,8 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js"
   },
   "dependencies": {
-    "@fontsource-variable/outfit": "^5.2.8",
-    "@fontsource/jetbrains-mono": "^5.2.8",
-    "@fontsource/syne": "^5.3.0",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "discord.js": "^14.27.0",
     "mysql2": "^3.14.0",
     "rcon-client": "^4.2.5",

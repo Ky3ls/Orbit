@@ -101,7 +101,7 @@
 
 .sch-stat strong {
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--accent-ink, var(--accent));
   line-height: 1.15;
 }
@@ -256,7 +256,7 @@
 .sch-card-head h2 {
   margin: 0 0 3px;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .sch-card-head p {
@@ -302,7 +302,7 @@
 .sch-preset b {
   font-variant-numeric: tabular-nums;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--accent-ink, var(--accent));
   line-height: 1.2;
 }
@@ -423,7 +423,7 @@
 
 .sch-job-time b {
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1;

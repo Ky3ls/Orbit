@@ -14,18 +14,21 @@
 }
 
 .cfg-page .ws-split {
-  min-height: calc(100dvh - 150px);
+  min-height: calc(100dvh - 250px);
   flex: 1;
+  gap: 0;
+  align-items: stretch;
   overflow: hidden;
   margin: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
 .cfg-page .ws-split-aside {
+  position: static;
   padding: 0;
-  background: var(--bg-2);
+  background: var(--surface-2);
   border-right: 1px solid var(--line);
 }
 
@@ -47,10 +50,10 @@
 
 .cfg-side-title {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .cfg-create-form {

@@ -47,7 +47,7 @@ export function getAppearanceUserId() {
 }
 
 export function applyAccentVars(accentId, root = document.documentElement) {
-  const a = ACCENT_PRESETS[accentId] || ACCENT_PRESETS.orange;
+  const a = ACCENT_PRESETS[accentId] || ACCENT_PRESETS.nebula;
   const light = root.dataset.theme === 'light';
   const hex = light && a.lightHex ? a.lightHex : a.hex;
   const hex2 = light && a.lightHex2 ? a.lightHex2 : a.hex2;
@@ -56,9 +56,10 @@ export function applyAccentVars(accentId, root = document.documentElement) {
   root.style.setProperty('--accent-2', hex2);
   root.style.setProperty('--accent-rgb', rgb);
   root.style.setProperty('--accent-dim', `rgba(${rgb}, 0.14)`);
-  root.style.setProperty('--line-strong', `rgba(${rgb}, 0.45)`);
-  /* Text-Akzent (Presets/Stats/Job-Zeiten): folgt Accent inkl. Light-Kontrast */
-  root.style.setProperty('--accent-ink', hex);
+  root.style.setProperty('--line-strong', `rgba(${rgb}, 0.5)`);
+  root.style.setProperty('--brand-b', light && a.lightBrandB ? a.lightBrandB : a.brandB);
+  /* Text-Akzent: im Dark etwas heller für Lesbarkeit, im Light die kräftige Variante */
+  root.style.setProperty('--accent-ink', light ? hex : hex2);
   root.dataset.accent = a.id;
 }
 
@@ -70,7 +71,7 @@ export function applyAppearance(prefs = readAppearance()) {
   root.dataset.sidebar = p.sidebarCollapsed ? 'collapsed' : 'expanded';
   applyAccentVars(p.accent, root);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', p.theme === 'light' ? '#f2f5f7' : '#000000');
+  if (meta) meta.setAttribute('content', p.theme === 'light' ? '#f3f4f9' : '#07080d');
 }
 
 export function initAppearance() {

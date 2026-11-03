@@ -817,6 +817,7 @@ export default function Players({ user }) {
               }}
             >
               <div className="pl-card-top">
+                <span className="pl-card-avatar" aria-hidden="true">{String(row.name || '?').slice(0, 1).toUpperCase()}</span>
                 <div className="pl-card-identity">
                   <strong className="pl-card-name">{row.name}</strong>
                   <div className="pl-card-meta">
