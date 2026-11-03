@@ -910,3 +910,22 @@ input[type='file'] { padding: 7px; }
   .ws-split { grid-template-columns: 1fr; }
   .ws-split-aside { position: static; }
 }
+
+/* ── Seitenpanel (Drawer) ── */
+.drawer-back.modal-back { place-items: stretch end; padding: 0; }
+.drawer {
+  width: min(var(--drawer-w, 600px), 100vw);
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line-2);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  animation: drawer-in 0.28s var(--ease) both;
+}
+@keyframes drawer-in { from { transform: translate3d(28px, 0, 0); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 720px) {
+  .drawer-back.modal-back { place-items: end stretch; }
+  .drawer { width: 100%; height: 92dvh; border-left: 0; border-top: 1px solid var(--line-2); border-radius: 20px 20px 0 0; }
+}

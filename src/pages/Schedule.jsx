@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { Badge, Empty, Page, PageHeader } from '../components/Ui.jsx';
+import { Modal, Page, PageHeader, useNow } from '../components/Ui.jsx';
+import { toast } from '../components/toast.jsx';
+import { NavIcon } from '../layout/icons.jsx';
 import './schedule.css';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
@@ -55,7 +57,9 @@ export default function Schedule() {
   const [hhmm, setHhmm] = useState('06:00');
   const [retention, setRetention] = useState(5);
   const [err, setErr] = useState('');
-  const [msg, setMsg] = useState('');
+  const [, setMsgState] = useState('');
+  const setMsg = useCallback((m) => { setMsgState(m); if (m) toast.ok(m); }, []);
+  const [createOpen, setCreateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [runBusy, setRunBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -118,10 +122,13 @@ export default function Schedule() {
       setLabel(defaultLabel());
       loadJobs();
       setMsg(t('sch.created'));
+      setBusy(false);
+      return true;
     } catch (error) {
       setErr(error.message);
     }
     setBusy(false);
+    throw new Error('create failed');
   }
 
   async function toggle(job) {
@@ -212,184 +219,138 @@ export default function Schedule() {
     setUploadBusy(false);
   }
 
+  const now = useNow(30_000);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const KIND_META = {
+    restart: { icon: 'restart', label: 'Neustart', tone: 'accent' },
+    backup_server: { icon: 'folder', label: 'Server-Backup', tone: 'info' },
+    backup_database: { icon: 'db', label: 'DB-Backup', tone: 'ok' },
+  };
+  const toMin = (hm) => { const [h, m] = String(hm || '0:0').split(':').map(Number); return h * 60 + m; };
+  const allOn = jobs.filter((j) => j.enabled);
+  const nextAny = allOn.length
+    ? allOn.slice().sort((x, y) => ((toMin(x.hhmm) - nowMin + 1440) % 1440) - ((toMin(y.hhmm) - nowMin + 1440) % 1440))[0]
+    : null;
+  const countFor = (kind) => jobs.filter((j) => jobKind(j) === kind).length;
+
   return (
-    <Page className="sch-page">
+    <Page className="sch-page sch2">
       <PageHeader
         eyebrow={t('sch.eyebrow')}
         title={t('page.schedule')}
-        description={t(isBackup ? 'sch.descBackup' : 'sch.desc')}
+        description="Neustarts und Backups, die Orbit täglich automatisch ausführt."
+        actions={(
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => { setCreateOpen(true); setErr(''); }}>
+            <NavIcon name="plus" />Neue Automation
+          </button>
+        )}
       />
 
-      <div className="sch-tabs" role="tablist" aria-label={t('page.schedule')}>
+      {err && !createOpen ? <div className="err">{err}</div> : null}
+
+      {/* ── Tagesplan ── */}
+      <section className="sch2-day card">
+        <div className="sch2-day-head">
+          <div>
+            <span className="sch2-label">Nächster Lauf</span>
+            {nextAny ? (
+              <div className="sch2-next">
+                <strong className="mono">{nextAny.hhmm}</strong>
+                <span>{nextAny.label}</span>
+                <span className="badge accent">{nextRunHint(nextAny.hhmm, t)}</span>
+              </div>
+            ) : <div className="sch2-next"><strong>—</strong><span className="muted">Keine aktive Automation</span></div>}
+          </div>
+          <div className="sch2-legend">
+            {Object.entries(KIND_META).map(([k, m]) => (
+              <span key={k} className={`tone-${m.tone}`}><i />{m.label}</span>
+            ))}
+          </div>
+        </div>
+        <div className="sch2-track" aria-label="Tagesplan">
+          {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => (
+            <span key={h} className="sch2-tick" style={{ left: `${(h / 24) * 100}%` }}><em>{String(h).padStart(2, '0')}:00</em></span>
+          ))}
+          <span className="sch2-now" style={{ left: `${(nowMin / 1440) * 100}%` }}><em>Jetzt</em></span>
+          {jobs.map((j) => {
+            const m = KIND_META[jobKind(j)];
+            return (
+              <button
+                key={j.id}
+                type="button"
+                className={`sch2-mark tone-${m.tone}${j.enabled ? '' : ' off'}`}
+                style={{ left: `${(toMin(j.hhmm) / 1440) * 100}%` }}
+                title={`${j.hhmm} · ${j.label}${j.enabled ? '' : ' (pausiert)'}`}
+                onClick={() => setTab(TABS.find((x) => x.kind === jobKind(j))?.id || 'restart')}
+              >
+                <NavIcon name={m.icon} />
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Tabs ── */}
+      <div className="seg sch2-tabs" role="tablist" aria-label={t('page.schedule')}>
         {TABS.map((item) => (
           <button
             key={item.id}
             type="button"
             role="tab"
             aria-selected={tab === item.id}
-            className={`sch-tab${tab === item.id ? ' is-active' : ''}`}
+            className={tab === item.id ? 'active' : ''}
             onClick={() => { setTab(item.id); setErr(''); setMsg(''); }}
           >
+            <NavIcon name={KIND_META[item.kind].icon} />
             {t(item.labelKey)}
+            <span className="res-seg-n">{countFor(item.kind)}</span>
           </button>
         ))}
       </div>
 
-      {err ? <div className="err sch-err">{err}</div> : null}
-      {msg ? <div className="sch-ok">{msg}</div> : null}
-
-      <div className="sch-stats" aria-label={t('common.overview')}>
-        <div className="sch-stat">
-          <span>{t('sch.active')}</span>
-          <strong>{active}</strong>
-        </div>
-        <div className="sch-stat">
-          <span>{t('sch.total')}</span>
-          <strong>{tabJobs.length}</strong>
-        </div>
-        {isBackup ? (
-          <div className="sch-stat">
-            <span>{t('sch.backupCount')}</span>
-            <strong>{backups.length}</strong>
-          </div>
-        ) : null}
-        <div className="sch-stat sch-stat-wide">
-          <span>{t('sch.next')}</span>
-          <strong>
-            {upcoming
-              ? `${upcoming.hhmm} · ${upcoming.label}`
-              : '—'}
-          </strong>
-          {upcoming ? <small>{nextRunHint(upcoming.hhmm, t)}</small> : null}
-        </div>
-      </div>
-
-      <div className={`sch-layout${isBackup ? ' sch-layout-backup' : ''}`}>
-        <section className="sch-card sch-create" aria-labelledby="sch-create-title">
-          <header className="sch-card-head">
-            <h2 id="sch-create-title">{t('sch.createTitle')}</h2>
-            <p>{t(isBackup ? 'sch.createLeadBackup' : 'sch.createLead')}</p>
-          </header>
-
-          {!isBackup ? (
-            <div className="sch-presets" role="group" aria-label={t('sch.presets')}>
-              {PRESET_DEFS.map((p) => (
-                <button
-                  key={p.hhmm + p.labelKey}
-                  type="button"
-                  className={`sch-preset${hhmm === p.hhmm ? ' is-selected' : ''}`}
-                  aria-pressed={hhmm === p.hhmm}
-                  onClick={() => applyPreset(p)}
-                >
-                  <b>{p.hhmm}</b>
-                  <span>{t(p.labelKey)}</span>
-                </button>
-              ))}
+      <div className={`sch2-grid${isBackup ? ' with-files' : ''}`}>
+        <section className="sch2-card card">
+          <header className="sch2-card-head">
+            <div>
+              <h2>{t('sch.listTitle')}</h2>
+              <p>{tabJobs.length ? `${active} von ${tabJobs.length} aktiv` : 'Noch nichts geplant'}</p>
             </div>
-          ) : null}
-
-          <form className={`sch-form${isBackup ? ' sch-form-backup' : ''}`} onSubmit={add}>
-            <label className="sch-field">
-              <span>{t('sch.label')}</span>
-              <input
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder={t('sch.labelPh')}
-                required
-                minLength={2}
-              />
-            </label>
-            <label className="sch-field sch-field-time">
-              <span>{t('sch.time')}</span>
-              <input
-                type="time"
-                value={hhmm}
-                onChange={(e) => setHhmm(e.target.value)}
-                required
-              />
-            </label>
-            {isBackup ? (
-              <label className="sch-field sch-field-ret">
-                <span>{t('sch.retention')}</span>
-                <select value={retention} onChange={(e) => setRetention(Number(e.target.value))}>
-                  <option value={5}>{t('sch.retentionN', { n: 5 })}</option>
-                  <option value={10}>{t('sch.retentionN', { n: 10 })}</option>
-                </select>
-              </label>
-            ) : null}
-            <button
-              className="btn btn-primary sch-submit"
-              type="submit"
-              disabled={busy || label.trim().length < 2}
-            >
-              {busy ? '…' : t('sch.submit')}
-            </button>
-          </form>
-
-          {isBackup ? (
-            <div className="sch-quick">
-              <button
-                type="button"
-                className="btn btn-sm"
-                disabled={runBusy}
-                onClick={runNow}
-              >
-                {runBusy ? '…' : t('sch.runNow')}
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
-                disabled={uploadBusy}
-                onClick={() => fileRef.current?.click()}
-              >
-                {uploadBusy ? '…' : t('sch.upload')}
-              </button>
-              <input
-                ref={fileRef}
-                type="file"
-                className="sch-file"
-                accept={activeTab.type === 'database' ? '.sql,.sql.gz,.gz' : '.tar.gz,.tgz,.tar,.zip'}
-                onChange={onUpload}
-              />
-              <p className="sch-hint">{t(activeTab.type === 'database' ? 'sch.hintDb' : 'sch.hintServer')}</p>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="sch-card sch-list" aria-labelledby="sch-list-title">
-          <header className="sch-card-head">
-            <h2 id="sch-list-title">{t('sch.listTitle')}</h2>
-            <p>{tabJobs.length ? t('sch.listSummary', { active, total: tabJobs.length }) : t('sch.listEmpty')}</p>
           </header>
-
           {tabJobs.length === 0 ? (
-            <Empty
-              title={t('sch.emptyTitle')}
-              text={t(isBackup ? 'sch.emptyTextBackup' : 'sch.emptyText')}
-            />
+            <div className="sch2-empty">
+              <NavIcon name={KIND_META[activeTab.kind].icon} />
+              <b>{t('sch.emptyTitle')}</b>
+              <span>{t(isBackup ? 'sch.emptyTextBackup' : 'sch.emptyText')}</span>
+              <button type="button" className="btn btn-sm" onClick={() => setCreateOpen(true)}><NavIcon name="plus" />Automation anlegen</button>
+            </div>
           ) : (
-            <ul className="sch-jobs">
-              {tabJobs.map((job) => (
-                <li key={job.id} className={`sch-job${job.enabled ? ' is-on' : ''}`}>
-                  <div className="sch-job-time" aria-hidden="true">
-                    <b>{job.hhmm}</b>
-                    {job.enabled ? <small>{nextRunHint(job.hhmm, t)}</small> : <small>{t('common.paused')}</small>}
+            <ul className="sch2-jobs">
+              {tabJobs.slice().sort((x, y) => String(x.hhmm).localeCompare(String(y.hhmm))).map((job) => (
+                <li key={job.id} className={job.enabled ? 'on' : ''}>
+                  <span className="sch2-time mono">{job.hhmm}</span>
+                  <div className="sch2-job-text">
+                    <b>{job.label}</b>
+                    <span>
+                      {job.enabled ? `Täglich · nächster Lauf ${nextRunHint(job.hhmm, t)}` : 'Pausiert'}
+                      {isBackup ? ` · behält ${job.retention || 5} Sicherungen` : ''}
+                    </span>
                   </div>
-                  <div className="sch-job-body">
-                    <strong>{job.label}</strong>
-                    <Badge tone={job.enabled ? 'ok' : ''}>{job.enabled ? t('sch.badgeOn') : t('sch.badgeOff')}</Badge>
-                    {isBackup ? (
-                      <span className="sch-ret-chip">{t('sch.retentionN', { n: job.retention || 5 })}</span>
-                    ) : null}
-                  </div>
-                  <div className="sch-job-actions">
-                    <button type="button" className="btn btn-sm" onClick={() => toggle(job)}>
-                      {job.enabled ? t('sch.pause') : t('sch.enable')}
-                    </button>
-                    <button type="button" className="btn btn-sm btn-danger" onClick={() => remove(job)}>
-                      {t('common.delete')}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={!!job.enabled}
+                    aria-label={job.enabled ? t('sch.pause') : t('sch.enable')}
+                    className={`switch${job.enabled ? ' on' : ''}`}
+                    onClick={() => toggle(job)}
+                  />
+                  <button
+                    type="button"
+                    className="o-icon-btn"
+                    title={t('common.delete')}
+                    onClick={() => { if (window.confirm(`„${job.label}“ löschen?`)) remove(job); }}
+                  >
+                    <NavIcon name="x" />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -397,30 +358,44 @@ export default function Schedule() {
         </section>
 
         {isBackup ? (
-          <section className="sch-card sch-files" aria-labelledby="sch-files-title">
-            <header className="sch-card-head">
-              <h2 id="sch-files-title">{t('sch.filesTitle')}</h2>
-              <p>{backups.length ? t('sch.filesSummary', { n: backups.length }) : t('sch.filesEmpty')}</p>
+          <section className="sch2-card card">
+            <header className="sch2-card-head">
+              <div>
+                <h2>{t('sch.filesTitle')}</h2>
+                <p>{backups.length ? `${backups.length} Sicherungen` : 'Noch keine Sicherung'}</p>
+              </div>
+              <div className="sch2-card-actions">
+                <button type="button" className="btn btn-sm" disabled={uploadBusy} onClick={() => fileRef.current?.click()}>
+                  <NavIcon name="arrowRight" />{uploadBusy ? 'Lädt…' : t('sch.upload')}
+                </button>
+                <button type="button" className="btn btn-sm btn-primary" disabled={runBusy} onClick={runNow}>
+                  <NavIcon name="db" />{runBusy ? 'Sichert…' : t('sch.runNow')}
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  className="sch-file"
+                  accept={activeTab.type === 'database' ? '.sql,.sql.gz,.gz' : '.tar.gz,.tgz,.tar,.zip'}
+                  onChange={onUpload}
+                />
+              </div>
             </header>
-
             {backups.length === 0 ? (
-              <Empty title={t('sch.filesEmptyTitle')} text={t('sch.filesEmptyText')} />
+              <div className="sch2-empty">
+                <NavIcon name="folder" />
+                <span>{t(activeTab.type === 'database' ? 'sch.hintDb' : 'sch.hintServer')}</span>
+              </div>
             ) : (
-              <ul className="sch-files-list">
+              <ul className="sch2-files">
                 {backups.map((item) => (
-                  <li key={item.id} className="sch-file-row">
-                    <div className="sch-file-meta">
-                      <strong title={item.name}>{item.name}</strong>
+                  <li key={item.id}>
+                    <span className="sch2-file-ico"><NavIcon name={activeTab.type === 'database' ? 'db' : 'folder'} /></span>
+                    <div className="sch2-job-text">
+                      <b title={item.name}>{item.name}</b>
                       <span>{formatWhen(item.created)} · {item.sizeLabel || item.size}</span>
                     </div>
-                    <div className="sch-job-actions">
-                      <button type="button" className="btn btn-sm" onClick={() => downloadBackup(item)}>
-                        {t('sch.download')}
-                      </button>
-                      <button type="button" className="btn btn-sm btn-danger" onClick={() => deleteBackupItem(item)}>
-                        {t('common.delete')}
-                      </button>
-                    </div>
+                    <button type="button" className="o-icon-btn" title={t('sch.download')} onClick={() => downloadBackup(item)}><NavIcon name="external" /></button>
+                    <button type="button" className="o-icon-btn" title={t('common.delete')} onClick={() => { if (window.confirm(`${item.name} löschen?`)) deleteBackupItem(item); }}><NavIcon name="x" /></button>
                   </li>
                 ))}
               </ul>
@@ -428,6 +403,59 @@ export default function Schedule() {
           </section>
         ) : null}
       </div>
+
+      {createOpen && (
+        <Modal title="Neue Automation" onClose={() => setCreateOpen(false)}>
+          <form className="sch2-form" onSubmit={(e) => { add(e).then(() => setCreateOpen(false)).catch(() => {}); }}>
+            {err ? <div className="err">{err}</div> : null}
+            <div className="sch2-kinds" role="radiogroup" aria-label="Typ">
+              {TABS.map((item) => {
+                const m = KIND_META[item.kind];
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={tab === item.id}
+                    className={`sch2-kind tone-${m.tone}${tab === item.id ? ' active' : ''}`}
+                    onClick={() => setTab(item.id)}
+                  >
+                    <NavIcon name={m.icon} />
+                    <b>{t(item.labelKey)}</b>
+                  </button>
+                );
+              })}
+            </div>
+            <label className="field">
+              <span>{t('sch.label')}</span>
+              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('sch.labelPh')} required minLength={2} />
+            </label>
+            <div className="field">
+              <span>{t('sch.time')}</span>
+              <div className="sch2-timerow">
+                <input type="time" value={hhmm} onChange={(e) => setHhmm(e.target.value)} required />
+                {PRESET_DEFS.map((pr) => (
+                  <button key={pr.hhmm} type="button" className={`pp-chip${hhmm === pr.hhmm ? ' active-acc' : ''}`} onClick={() => applyPreset(pr)}>{pr.hhmm}</button>
+                ))}
+              </div>
+            </div>
+            {isBackup ? (
+              <label className="field">
+                <span>{t('sch.retention')}</span>
+                <select value={retention} onChange={(e) => setRetention(Number(e.target.value))}>
+                  <option value={5}>{t('sch.retentionN', { n: 5 })}</option>
+                  <option value={10}>{t('sch.retentionN', { n: 10 })}</option>
+                </select>
+              </label>
+            ) : null}
+            <p className="muted sch2-formhint">Läuft täglich um {hhmm || '—'} Uhr{hhmm ? ` — erstmals ${nextRunHint(hhmm, t)}` : ''}.</p>
+            <div className="sch2-formfoot">
+              <button type="button" className="btn" onClick={() => setCreateOpen(false)}>{t('common.cancel')}</button>
+              <button className="btn btn-primary" type="submit" disabled={busy || label.trim().length < 2}>{busy ? '…' : t('sch.submit')}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </Page>
   );
 }

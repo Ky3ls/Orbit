@@ -476,7 +476,18 @@ export default function Admins({ user: me }) {
         eyebrow={t('team.eyebrow')}
         title={t('page.admins')}
         description={t('team.desc')}
+        actions={(
+          <button type="button" className="btn btn-primary btn-sm" onClick={openCreate}>
+            <PlusIcon />Mitglied hinzufügen
+          </button>
+        )}
       />
+      <div className="tm-kpis">
+        <div><span>Mitglieder</span><b>{members.length}</b></div>
+        <div><span>Admins</span><b>{members.filter((m) => m.role === 'owner' || m.role === 'admin').length}</b></div>
+        <div className={members.some((m) => !m.totp_enabled) ? 'warn' : 'ok'}><span>Mit 2FA</span><b>{members.filter((m) => m.totp_enabled).length}<small> / {members.length}</small></b></div>
+        <div><span>Heute aktiv</span><b>{members.filter((m) => m.last_login && Date.now() - m.last_login < 86_400_000).length}</b></div>
+      </div>
       {err && !formOpen && !tplOpen && !createdCreds && <div className="err">{err}</div>}
 
       <div className="tm-grid">
@@ -486,93 +497,49 @@ export default function Admins({ user: me }) {
               <h3>{t('team.membersCount', { n: members.length })}</h3>
               <p className="muted">{t('team.membersHint')}</p>
             </div>
-            <div className="tm-tpl-actions">
-              <button
-                type="button"
-                className="tm-icon-btn"
-                title={t('team.newUser')}
-                aria-label={t('team.newUser')}
-                onClick={openCreate}
-              >
-                <PlusIcon />
-              </button>
-            </div>
           </div>
           {members.length === 0 ? (
             <Empty title={t('team.empty')} text={t('team.emptyText')} />
           ) : (
-            <div className="tm-list">
+            <div className="tm-table">
+              <div className="tm-thead">
+                <span>Mitglied</span>
+                <span>Rolle</span>
+                <span>Sicherheit</span>
+                <span>Zuletzt aktiv</span>
+                <span />
+              </div>
               {members.map((user) => {
                 const isSelf = me && Number(me.id) === Number(user.id);
                 const preview = permPreview(user);
                 const canManage = !isSelf && user.role !== 'owner';
                 return (
-                  <article
-                    key={user.id}
-                    className={`tm-tile${user.disabled ? ' off' : ''}${user.role === 'owner' ? ' is-owner' : ''}`}
-                  >
-                    <span className="tm-avatar" aria-hidden="true">{String(user.username || '?').slice(0, 2).toUpperCase()}</span>
-                    <div className="tm-tile-main">
-                      <div className="tm-tile-top">
-                        <strong className="tm-tile-name">{user.username}</strong>
-                        <span className={`tm-role-tag${user.role === 'owner' ? ' owner' : ''}${user.disabled ? ' bad' : ''}`}>
-                          {roleBadge(user)}
-                        </span>
-                      </div>
-
-                      <div className="tm-tile-facts">
-                        <span className={user.totp_enabled ? 'on' : ''}>{user.totp_enabled ? '2FA aktiv' : 'Ohne 2FA'}</span>
-                        <span>{user.last_login ? `Zuletzt aktiv ${fmtFull(user.last_login)}` : 'Noch nie angemeldet'}</span>
-                        {isSelf ? <span className="me">Du</span> : null}
-                      </div>
-                      {(user.cfx_name || user.cfx_id || user.discord_id) && (
-                        <div className="tm-tile-meta">
-                          {(user.cfx_name || user.cfx_id) && (
-                            <span className="mono" title={t('team.cfx')}>
-                              {user.cfx_name || `fivem:${user.cfx_id}`}
-                            </span>
-                          )}
-                          {user.discord_id && (
-                            <span className="mono" title={t('team.discord')}>
-                              {user.discord_id}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {preview.length > 0 && (
-                        <div className="tm-card-perms">
-                          {preview.map((g) => (
-                            <span key={g.id} className="tm-perm-pill">
-                              {g.label}
-                              <em>{g.n}/{g.total}</em>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="tm-tile-actions">
+                  <div key={user.id} className={`tm-tr${user.disabled ? ' off' : ''}${user.role === 'owner' ? ' is-owner' : ''}`}>
+                    <span className="tm-c-user">
+                      <span className="tm-avatar" aria-hidden="true">{String(user.username || '?').slice(0, 2).toUpperCase()}</span>
+                      <span className="tm-c-name">
+                        <b>{user.username}{isSelf ? <em> · Du</em> : null}</b>
+                        <small className="mono">
+                          {[user.cfx_name || (user.cfx_id ? `fivem:${user.cfx_id}` : ''), user.discord_id ? `discord:${user.discord_id}` : ''].filter(Boolean).join(' · ') || 'Nicht verknüpft'}
+                        </small>
+                      </span>
+                    </span>
+                    <span className="tm-c-role">
+                      <span className={`badge${user.role === 'owner' ? ' accent' : user.disabled ? ' bad' : ''}`}>{roleBadge(user)}</span>
+                      {preview.length > 0 && <small>{preview.map((g) => g.label).slice(0, 3).join(', ')}{preview.length > 3 ? ` +${preview.length - 3}` : ''}</small>}
+                    </span>
+                    <span className={`tm-c-sec${user.totp_enabled ? ' on' : ''}`}><i />{user.totp_enabled ? '2FA aktiv' : 'Ohne 2FA'}</span>
+                    <span className="tm-c-last">{user.last_login ? fmtFull(user.last_login) : 'Nie'}</span>
+                    <span className="tm-c-acts">
                       {canManage ? (
                         <>
-                          <button
-                            type="button"
-                            className="tm-icon-btn"
-                            title={t('common.edit')}
-                            aria-label={t('common.edit')}
-                            onClick={() => openEdit(user)}
-                          >
-                            <PencilIcon />
-                          </button>
+                          <button type="button" className="tm-icon-btn" title={t('common.edit')} aria-label={t('common.edit')} onClick={() => openEdit(user)}><PencilIcon /></button>
                           <button
                             type="button"
                             className={`tm-icon-btn${user.disabled ? ' is-on' : ''}`}
                             title={user.disabled ? t('team.enable') : t('team.lock')}
                             aria-label={user.disabled ? t('team.enable') : t('team.lock')}
-                            onClick={() => api(`/api/admins/${user.id}`, {
-                              method: 'PATCH',
-                              body: { disabled: !user.disabled },
-                            }).then(load).catch((e) => setErr(e.message))}
+                            onClick={() => api(`/api/admins/${user.id}`, { method: 'PATCH', body: { disabled: !user.disabled } }).then(load).catch((e) => setErr(e.message))}
                           >
                             <XIcon />
                           </button>
@@ -583,27 +550,17 @@ export default function Admins({ user: me }) {
                             aria-label={t('common.remove')}
                             onClick={() => {
                               if (!window.confirm(t('team.deleteConfirm', { name: user.username }))) return;
-                              api(`/api/admins/${user.id}`, { method: 'DELETE' })
-                                .then(load)
-                                .catch((e) => setErr(e.message));
+                              api(`/api/admins/${user.id}`, { method: 'DELETE' }).then(load).catch((e) => setErr(e.message));
                             }}
                           >
                             <TrashIcon />
                           </button>
                         </>
                       ) : (
-                        <button
-                          type="button"
-                          className="tm-icon-btn"
-                          title={t('team.yourAccount')}
-                          aria-label={t('team.yourAccount')}
-                          onClick={() => navigate('/settings?section=account')}
-                        >
-                          <PencilIcon />
-                        </button>
+                        <button type="button" className="tm-icon-btn" title={t('team.yourAccount')} aria-label={t('team.yourAccount')} onClick={() => navigate('/settings?section=account')}><PencilIcon /></button>
                       )}
-                    </div>
-                  </article>
+                    </span>
+                  </div>
                 );
               })}
             </div>

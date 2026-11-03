@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { Empty, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import { Empty, Page, PageHeader } from '../components/Ui.jsx';
 import './audit.css';
 import { toBcp47 } from '../i18n/core.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
@@ -88,51 +88,77 @@ export default function ServerLog() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  const TILES = [
+    { id: 'bad', label: 'Fehler', icon: 'x', tone: 'bad' },
+    { id: 'warn', label: 'Warnungen', icon: 'bolt', tone: 'warn' },
+    { id: 'ok', label: 'Erfolgreich', icon: 'check', tone: 'ok' },
+    { id: 'info', label: 'Info', icon: 'sparkle', tone: 'info' },
+  ];
+  const needleRaw = q.trim();
+  const mark = (text) => {
+    if (!needleRaw) return text;
+    const i = text.toLowerCase().indexOf(needleRaw.toLowerCase());
+    if (i < 0) return text;
+    return <>{text.slice(0, i)}<mark>{text.slice(i, i + needleRaw.length)}</mark>{text.slice(i + needleRaw.length)}</>;
+  };
+
   return (
-    <Page className="slog-page">
+    <Page className="slog-page lg-page">
       <PageHeader
         eyebrow={t('slog.eyebrow')}
         title={t('page.serverLog')}
-        description={t('slog.desc')}
+        description="Ausgabe der FiveM-Konsole: Starts, Resources, Joins und Fehler."
         actions={(
-          <>
-            <button type="button" className="btn btn-sm" onClick={download} disabled={!view.length}>
-              <NavIcon name="external" />{t('slog2.download')}
-            </button>
-            <button type="button" className={`btn btn-sm${paused ? ' btn-primary' : ''}`} onClick={() => setPaused((p) => !p)}>
-              <NavIcon name={paused ? 'play' : 'stop'} />{paused ? t('common.resume') : t('common.pause')}
-            </button>
-          </>
+          <button type="button" className="btn btn-sm" onClick={download} disabled={!view.length}>
+            <NavIcon name="external" />{t('slog2.download')}
+          </button>
         )}
       />
-      <div className="audit-toolbar">
-        <div className="seg slog-levels" role="tablist">
-          {LEVELS.map((lv) => (
-            <button key={lv} type="button" role="tab" aria-selected={level === lv} className={`${level === lv ? 'active' : ''} lv-${lv}`} onClick={() => setLevel(lv)}>
-              {lv !== 'all' ? <i className="slog-dot" /> : null}
-              {t(`slog2.level.${lv}`)}<span className="res-seg-n">{counts[lv] || 0}</span>
-            </button>
-          ))}
-        </div>
-        <input className="search audit-search" placeholder={t('common.filter')} value={q} onChange={(e) => setQ(e.target.value)} />
-        {paused ? <span className="badge warn">{t('slog2.paused')}</span> : <span className="badge ok">Live</span>}
+
+      <div className="lg-tiles">
+        {TILES.map((tile) => (
+          <button
+            key={tile.id}
+            type="button"
+            className={`lg-tile tone-${tile.tone}${level === tile.id ? ' active' : ''}`}
+            onClick={() => setLevel(level === tile.id ? 'all' : tile.id)}
+            aria-pressed={level === tile.id}
+          >
+            <span className="lg-tile-ico"><NavIcon name={tile.icon} /></span>
+            <span className="lg-tile-text"><b>{counts[tile.id] || 0}</b><span>{tile.label}</span></span>
+          </button>
+        ))}
       </div>
+
       {err && <div className="err">{err}</div>}
-      <PanelCard padded={false}>
+
+      <section className="lg-win card">
+        <header className="lg-win-head">
+          <span className={`lg-live${paused ? ' paused' : ''}`}><i />{paused ? t('slog2.paused') : 'Live'}</span>
+          <span className="lg-win-count">{level === 'all' ? `${view.length} Zeilen` : `${view.length} ${TILES.find((x) => x.id === level)?.label}`}{level !== 'all' ? <button type="button" className="lg-clear" onClick={() => setLevel('all')}>Filter aufheben</button> : null}</span>
+          <div className="lg-search">
+            <NavIcon name="search" />
+            <input placeholder="Im Log suchen…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <button type="button" className={`btn btn-sm${paused ? ' btn-primary' : ''}`} onClick={() => setPaused((v) => !v)}>
+            <NavIcon name={paused ? 'play' : 'stop'} />{paused ? t('common.resume') : t('common.pause')}
+          </button>
+        </header>
         {view.length === 0 ? (
-          <Empty title={t('slog.empty')} text={t('slog.emptyText')} />
+          <Empty title={t('slog.empty')} text={lines.length ? 'Keine Zeilen für diesen Filter.' : t('slog.emptyText')} />
         ) : (
-          <div className="fx-log" ref={boxRef}>
-            {view.map((line) => (
-              <div key={line.id} className={`fx-log-line lvl-${line.level || 'info'}`}>
+          <div className="lg-body" ref={boxRef}>
+            {view.map((line, idx) => (
+              <div key={line.id} className={`lg-line lvl-${line.level || 'info'}`}>
+                <span className="lg-n">{idx + 1}</span>
                 <time>{fmtLineTime(line.t)}</time>
-                <span className="fx-log-lvl">{line.level}</span>
-                <code>{line.text}</code>
+                <span className="lg-lvl">{({ bad: 'ERR', warn: 'WARN', ok: 'OK', info: 'INFO' })[line.level || 'info'] || line.level}</span>
+                <code>{mark(line.text)}</code>
               </div>
             ))}
           </div>
         )}
-      </PanelCard>
+      </section>
     </Page>
   );
 }

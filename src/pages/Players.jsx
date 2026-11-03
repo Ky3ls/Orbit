@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, sameJson } from '../api.js';
 import { fmtFull, fmtPlaytime } from '../format.js';
-import { Badge, Empty, Modal, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import { Badge, Empty, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
 import Sparkline from '../components/Sparkline.jsx';
+import Drawer from '../components/Drawer.jsx';
+import { toast } from '../components/toast.jsx';
 import { NavIcon } from '../layout/icons.jsx';
 import PlayerIdentifiers from '../components/PlayerIdentifiers.jsx';
 import {
@@ -831,179 +833,165 @@ export default function Players({ user }) {
       )}
 
       {pick && p && (
-        <Modal
-          title={t('players.modal')}
+        <Drawer
+          label={p.name}
+          width={620}
           onClose={() => {
             flushNoteSave();
             setPick(null);
             setDetail(null);
             setErr('');
           }}
-          wide
-          aside={tab === 'ban' && !isBanned ? (
-            <aside className="pl-ban-aside" aria-label={t('players.banAside')}>
-              <div className="pl-ban-aside-block">
-                <h4 className="pl-ban-aside-title">{t('common.templates')}</h4>
-                <div className="pl-ban-tags" role="listbox" aria-label={t('players.banTemplates')}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={!templateId}
-                    className={`pl-ban-tag${!templateId ? ' active' : ''}`}
-                    onClick={() => applyTemplate('')}
-                  >
-                    {t('players.noTemplate')}
-                  </button>
-                  {templateList.map((tpl) => (
-                    <button
-                      key={tpl.id}
-                      type="button"
-                      role="option"
-                      aria-selected={templateId === tpl.id}
-                      className={`pl-ban-tag${templateId === tpl.id ? ' active' : ''}`}
-                      onClick={() => applyTemplate(tpl.id, tpl)}
-                      title={tpl.reason || tpl.label}
-                    >
-                      {tpl.label}
-                    </button>
-                  ))}
-                  {templateList.length === 0 && (
-                    <p className="pl-ban-aside-empty">{t('players.noTemplates')}</p>
-                  )}
-                </div>
-              </div>
-              <div className="pl-ban-aside-block">
-                <h4 className="pl-ban-aside-title">{t('common.duration')}</h4>
-                <div className="pl-ban-aside-list" role="listbox" aria-label={t('players.banDuration')}>
-                  {durationList.map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      role="option"
-                      aria-selected={durationId === d.id}
-                      className={`pl-ban-aside-item${durationId === d.id ? ' active' : ''}`}
-                      onClick={() => { setDurationId(d.id); setTemplateId(''); }}
-                    >
-                      <span className="pl-ban-aside-item-label">{d.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </aside>
-          ) : null}
         >
-          <div className="pl-sheet">
-            <header className="pl-hero">
-              <div className="pl-hero-mark" aria-hidden="true">{initial}</div>
-              <div className="pl-hero-copy">
-                <div className="pl-hero-row">
-                  <h2>{p.name}</h2>
+          <header className="pp-head">
+            <div className="pp-top">
+              <span className={`pp-avatar${p.online ? ' on' : ''}${isBanned ? ' banned' : ''}`} aria-hidden="true">{initial}</span>
+              <div className="pp-title">
+                <h2>{p.name}</h2>
+                <div className="pp-sub">
                   {p.online
-                    ? <span className="pl-live">{t('players.liveId', { id: p.serverId })}</span>
-                    : <span className="pl-off">{t('status.offline')}</span>}
-                  {isBanned && <span className="pl-banned-badge">{t('players.banned')}</span>}
+                    ? <span className="pp-state on"><i />Online · #{p.serverId}</span>
+                    : <span className="pp-state"><i />Offline · zuletzt {fmtFull(p.last_seen)}</span>}
+                  {isBanned && <span className="badge bad">Gebannt</span>}
+                  {p.whitelisted && <span className="badge ok">Allowlist</span>}
                 </div>
-                <p className="pl-hero-sub">
-                  {p.online ? t('players.session', { ping: p.ping ?? 0, session: fmtPlaytime(p.session_ms || detail?.player?.session_ms) }) : t('players.lastSeen', { when: fmtFull(p.last_seen) })}
-                  {' · '}
-                  {t('players.totalPlay', { play: fmtPlaytime(p.play_ms) })}
-                </p>
               </div>
               <button
                 type="button"
-                className={`pl-allow${p.whitelisted ? ' on' : ''}`}
-                disabled={busy || !canWlWrite}
-                onClick={toggleWl}
+                className="pp-close"
+                aria-label={t('common.close')}
+                onClick={() => { flushNoteSave(); setPick(null); setDetail(null); setErr(''); }}
               >
-                {p.whitelisted ? t('players.onAllowlist') : t('players.toAllowlist')}
+                <NavIcon name="x" />
               </button>
-            </header>
+            </div>
+            <div className="pp-actions">
+              <button type="button" className={`btn btn-sm${p.whitelisted ? ' pp-on' : ''}`} disabled={busy || !canWlWrite} onClick={toggleWl}>
+                <NavIcon name={p.whitelisted ? 'check' : 'plus'} />
+                {p.whitelisted ? 'Auf Allowlist' : 'Zur Allowlist'}
+              </button>
+              {!isBanned && (
+                <button type="button" className="btn btn-sm btn-danger" onClick={() => { flushNoteSave(); setTab('ban'); }}>
+                  <NavIcon name="ban" />Bannen
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => { navigator.clipboard?.writeText(p.identifier).then(() => toast.ok('License kopiert')).catch(() => {}); }}
+              >
+                <NavIcon name="copy" />License kopieren
+              </button>
+            </div>
+          </header>
 
+          <div className="pp-scroll">
             {isBanned && activeBan && (
-              <div className="pl-ban-banner" role="status">
-                <div>
-                  <strong>{t('players.activeBan')}</strong>
+              <div className="pp-ban" role="status">
+                <span className="pp-ban-ico"><NavIcon name="ban" /></span>
+                <div className="pp-ban-text">
+                  <b>{t('players.activeBan')}</b>
                   <p>{activeBan.reason || '—'}</p>
                   <small>
-                    {activeBan.author ? `${activeBan.author} · ` : ''}
-                    {activeBan.expires
-                      ? t('players.banUntil', { when: fmtFull(activeBan.expires) })
-                      : t('common.permanent')}
+                    {activeBan.author ? `von ${activeBan.author} · ` : ''}
+                    {activeBan.expires ? t('players.banUntil', { when: fmtFull(activeBan.expires) }) : t('common.permanent')}
                   </small>
                 </div>
                 {canRevoke && (
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    disabled={busy}
-                    onClick={() => revokeBan(activeBan.id)}
-                  >
+                  <button type="button" className="btn btn-sm" disabled={busy} onClick={() => revokeBan(activeBan.id)}>
                     {t('players.revokeBan')}
                   </button>
                 )}
               </div>
             )}
 
-            <div className="pl-rail" aria-hidden="true">
-              <div><small>{t('players.joined')}</small><strong>{fmtFull(p.first_seen)}</strong></div>
-              <div><small>Bans</small><strong>{p.bans ?? 0}</strong></div>
-              <div><small>Warns</small><strong>{p.warns ?? 0}</strong></div>
-              <div><small>IDs</small><strong>{ids.length}</strong></div>
+            <dl className="pp-stats">
+              <div><dt>Spielzeit</dt><dd>{fmtPlaytime(p.play_ms)}</dd></div>
+              <div><dt>{p.online ? 'Ping' : 'Beigetreten'}</dt><dd>{p.online ? `${p.ping ?? '–'} ms` : (p.first_seen ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric' }).format(p.first_seen) : '–')}</dd></div>
+              <div className={p.bans ? 'bad' : ''}><dt>Bans</dt><dd>{p.bans ?? 0}</dd></div>
+              <div className={p.warns ? 'warn' : ''}><dt>Warns</dt><dd>{p.warns ?? 0}</dd></div>
+            </dl>
+
+            <div className="pp-tabs" role="tablist" aria-label={t('players.viewAria')}>
+              {SECTIONS.map((sec) => {
+                const n = sec.id === 'ids' ? ids.length
+                  : sec.id === 'history' ? ((detail?.history?.bans || []).length + (detail?.history?.warns || []).length)
+                    : null;
+                return (
+                  <button
+                    key={sec.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === sec.id}
+                    className={`${tab === sec.id ? 'active' : ''}${sec.id === 'ban' ? ' danger' : ''}`}
+                    onClick={() => { if (sec.id !== tab) flushNoteSave(); setTab(sec.id); }}
+                  >
+                    {t(sec.labelKey)}
+                    {n ? <span className="pp-tab-n">{n}</span> : null}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="pl-seg" role="tablist" aria-label={t('players.viewAria')}>
-              {SECTIONS.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === s.id}
-                  className={tab === s.id ? 'active' : ''}
-                  onClick={() => {
-                    if (s.id !== tab) flushNoteSave();
-                    setTab(s.id);
-                  }}
-                >
-                  {t(s.labelKey)}
-                </button>
-              ))}
-            </div>
+            {err && <div className="err">{err}</div>}
 
-            {err && <div className="err" style={{ marginBottom: 10 }}>{err}</div>}
-
-            <div className="pl-body">
+            <div className="pp-body">
               {tab === 'info' && (
-                <div className="pl-panel">
-                  <label className="field">
-                    <span className="pl-note-label">
-                      <span>{t('players.note')}</span>
-                      {noteErr && (
-                        <span className="pl-note-status is-err" role="alert">{noteErr}</span>
-                      )}
-                    </span>
+                <>
+                  <section className="pp-card">
+                    <header>
+                      <h3>Moderation</h3>
+                      {!p.online && <span className="pp-hint">Nur wenn der Spieler online ist</span>}
+                    </header>
+                    <input
+                      className="pp-reason"
+                      placeholder={t('players.actionPh')}
+                      value={actionReason}
+                      onChange={(e) => setActionReason(e.target.value)}
+                      disabled={!p.online}
+                    />
+                    <div className="pp-mod-btns">
+                      <button type="button" className="pp-mod" disabled={!p.online || busy} onClick={() => act('message')}>
+                        <NavIcon name="megaphone" /><b>Nachricht</b><small>Direktnachricht</small>
+                      </button>
+                      <button type="button" className="pp-mod warn" disabled={!p.online || busy} onClick={() => act('warn')}>
+                        <NavIcon name="bolt" /><b>Verwarnen</b><small>Wird gespeichert</small>
+                      </button>
+                      <button type="button" className="pp-mod bad" disabled={!p.online || busy} onClick={() => act('kick')}>
+                        <NavIcon name="logout" /><b>Kicken</b><small>Vom Server werfen</small>
+                      </button>
+                    </div>
+                  </section>
+                  <section className="pp-card">
+                    <header>
+                      <h3>{t('players.note')}</h3>
+                      {noteErr ? <span className="pp-hint bad" role="alert">{noteErr}</span> : <span className="pp-hint">Speichert automatisch · nur für Admins</span>}
+                    </header>
                     <textarea
-                      rows={4}
+                      rows={5}
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
                       onBlur={() => flushNoteSave()}
                       placeholder={t('players.notePh')}
                     />
-                  </label>
-                </div>
+                  </section>
+                </>
               )}
 
               {tab === 'ids' && (
                 ids.length === 0 ? (
                   <p className="muted">{t('players.noIds')}</p>
                 ) : (
-                  <PlayerIdentifiers
-                    ids={ids}
-                    mask
-                    copyable
-                    className="pl-ids-sheet"
-                    copyLabel={t('common.copy')}
-                    copiedLabel={t('common.copied')}
-                  />
+                  <section className="pp-card pp-ids">
+                    <PlayerIdentifiers
+                      ids={ids}
+                      mask
+                      copyable
+                      className="pl-ids-sheet"
+                      copyLabel={t('common.copy')}
+                      copiedLabel={t('common.copied')}
+                    />
+                  </section>
                 )
               )}
 
@@ -1147,94 +1135,82 @@ export default function Players({ user }) {
               )}
 
               {tab === 'ban' && (
-                <div className="pl-panel pl-ban">
-                  <div className="pl-ban-summary" aria-live="polite">
-                    <span className="pl-ban-label">{t('players.selection')}</span>
-                    <strong>{durationLabel}</strong>
-                    {templateId ? (
-                      <em>{templateList.find((tpl) => tpl.id === templateId)?.label || t('players.template')}</em>
-                    ) : (
-                      <em>{t('players.noTemplate')}</em>
+                isBanned && activeBan ? (
+                  <section className="pp-card">
+                    <header><h3>Bereits gebannt</h3></header>
+                    <p className="muted pp-p">{activeBan.reason || '—'}</p>
+                    {canRevoke && (
+                      <button type="button" className="btn" disabled={busy} onClick={() => revokeBan(activeBan.id)}>
+                        {t('players.revokeBan')}
+                      </button>
                     )}
-                  </div>
-                  <label className="pl-ban-field">
-                    <span className="pl-ban-label">{t('common.reason')}</span>
-                    <textarea
-                      rows={3}
-                      value={banReason}
-                      onChange={(e) => { setBanReason(e.target.value); setTemplateId(''); }}
-                      placeholder={t('players.reasonPh')}
-                      disabled={isBanned}
-                    />
-                  </label>
-                  {durationId === 'custom' && !isBanned && (
-                    <div className="pl-ban-custom-row">
-                      <label className="pl-ban-field pl-ban-amt">
-                        <span className="pl-ban-label">{t('common.days')}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={9999}
-                          inputMode="numeric"
-                          placeholder={t('ban.daysPh')}
-                          value={customDays}
-                          onChange={(e) => setCustomDays(e.target.value)}
-                        />
-                      </label>
-                      <label className="pl-ban-field pl-ban-amt">
-                        <span className="pl-ban-label">{t('ban.hhmm')}</span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder={t('ban.hhmmPh')}
-                          value={customHhmm}
-                          onChange={(e) => setCustomHhmm(e.target.value)}
-                          maxLength={5}
-                          autoComplete="off"
-                        />
-                      </label>
+                  </section>
+                ) : (
+                  <section className="pp-card pp-banform">
+                    <div className="pp-field">
+                      <span className="pp-label">{t('common.templates')}</span>
+                      <div className="pp-chips" role="listbox" aria-label={t('players.banTemplates')}>
+                        {templateList.length === 0 && <span className="muted pp-p">{t('players.noTemplates')}</span>}
+                        {templateList.map((tpl) => (
+                          <button
+                            key={tpl.id}
+                            type="button"
+                            role="option"
+                            aria-selected={templateId === tpl.id}
+                            className={`pp-chip${templateId === tpl.id ? ' active' : ''}`}
+                            onClick={() => applyTemplate(templateId === tpl.id ? '' : tpl.id, tpl)}
+                            title={tpl.reason || tpl.label}
+                          >
+                            {tpl.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  )}
-                  {isBanned && activeBan && canRevoke ? (
-                    <button
-                      type="button"
-                      className="btn pl-ban-btn"
-                      disabled={busy}
-                      onClick={() => revokeBan(activeBan.id)}
-                    >
-                      {t('players.revokeBan')}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn pl-ban-btn"
-                      disabled={busy || isBanned}
-                      onClick={applyBan}
-                    >
-                      {t('players.applyBan')}
-                    </button>
-                  )}
-                </div>
+                    <div className="pp-field">
+                      <span className="pp-label">{t('common.duration')}</span>
+                      <div className="pp-dur" role="listbox" aria-label={t('players.banDuration')}>
+                        {durationList.map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            role="option"
+                            aria-selected={durationId === d.id}
+                            className={durationId === d.id ? 'active' : ''}
+                            onClick={() => { setDurationId(d.id); setTemplateId(''); }}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {durationId === 'custom' && (
+                      <div className="pp-custom">
+                        <label className="field">
+                          <span>{t('common.days')}</span>
+                          <input type="number" min={0} max={9999} inputMode="numeric" placeholder={t('ban.daysPh')} value={customDays} onChange={(e) => setCustomDays(e.target.value)} />
+                        </label>
+                        <label className="field">
+                          <span>{t('ban.hhmm')}</span>
+                          <input type="text" inputMode="numeric" placeholder={t('ban.hhmmPh')} value={customHhmm} onChange={(e) => setCustomHhmm(e.target.value)} maxLength={5} autoComplete="off" />
+                        </label>
+                      </div>
+                    )}
+                    <label className="pp-field">
+                      <span className="pp-label">{t('common.reason')}</span>
+                      <textarea rows={3} value={banReason} onChange={(e) => { setBanReason(e.target.value); setTemplateId(''); }} placeholder={t('players.reasonPh')} />
+                    </label>
+                    <div className="pp-banfoot">
+                      <span className="muted">{durationLabel}</span>
+                      <button type="button" className="btn btn-danger" disabled={busy || banReason.trim().length < 3} onClick={applyBan}>
+                        <NavIcon name="ban" />{t('players.applyBan')}
+                      </button>
+                    </div>
+                  </section>
+                )
               )}
             </div>
-
-            {tab !== 'ban' && (
-              <div className="pl-actions">
-                <input
-                  className="pl-actions-reason"
-                  placeholder={t('players.actionPh')}
-                  value={actionReason}
-                  onChange={(e) => setActionReason(e.target.value)}
-                />
-                <div className="pl-actions-btns">
-                  <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('message')}>DM</button>
-                  <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('kick')}>Kick</button>
-                  <button type="button" className="btn btn-sm" disabled={!p.online || busy} onClick={() => act('warn')}>Warn</button>
-                </div>
-              </div>
-            )}
           </div>
-        </Modal>
+        </Drawer>
       )}
     </Page>
   );
