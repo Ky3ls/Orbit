@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
-import { roleLabel } from '../format.js';
+import { fmtFull, roleLabel } from '../format.js';
 import { Empty, Modal, Page, PageHeader } from '../components/Ui.jsx';
 import './team.css';
 import { useI18n } from '../i18n/I18nProvider.jsx';
@@ -511,6 +511,7 @@ export default function Admins({ user: me }) {
                     key={user.id}
                     className={`tm-tile${user.disabled ? ' off' : ''}${user.role === 'owner' ? ' is-owner' : ''}`}
                   >
+                    <span className="tm-avatar" aria-hidden="true">{String(user.username || '?').slice(0, 2).toUpperCase()}</span>
                     <div className="tm-tile-main">
                       <div className="tm-tile-top">
                         <strong className="tm-tile-name">{user.username}</strong>
@@ -519,6 +520,11 @@ export default function Admins({ user: me }) {
                         </span>
                       </div>
 
+                      <div className="tm-tile-facts">
+                        <span className={user.totp_enabled ? 'on' : ''}>{user.totp_enabled ? '2FA aktiv' : 'Ohne 2FA'}</span>
+                        <span>{user.last_login ? `Zuletzt aktiv ${fmtFull(user.last_login)}` : 'Noch nie angemeldet'}</span>
+                        {isSelf ? <span className="me">Du</span> : null}
+                      </div>
                       {(user.cfx_name || user.cfx_id || user.discord_id) && (
                         <div className="tm-tile-meta">
                           {(user.cfx_name || user.cfx_id) && (
@@ -635,6 +641,9 @@ export default function Admins({ user: me }) {
             </div>
           </div>
           <div className="tm-roles">
+            {templateList.length === 0 && (
+              <Empty title="Noch keine Vorlagen" text="Lege eine Rollen-Vorlage an, um neue Teammitglieder mit einem Klick einzurichten." />
+            )}
             {templateList.map((tpl) => (
               <button
                 key={tpl.id}

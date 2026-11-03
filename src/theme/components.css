@@ -334,7 +334,7 @@ input[type='file'] { padding: 7px; }
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  animation: orbit-fade-up 0.35s var(--ease) both;
+  animation: orbit-fade-up 0.35s var(--ease) backwards;
 }
 .ws-module-bar {
   display: flex;
@@ -798,7 +798,7 @@ input[type='file'] { padding: 7px; }
 .orbit-step.is-done { color: var(--ok); }
 .orbit-step.is-done .orbit-step-num { background: rgba(var(--ok-rgb), 0.14); border-color: rgba(var(--ok-rgb), 0.45); color: var(--ok); }
 .orbit-step.is-done .orbit-step-label { color: var(--text-2); }
-.orbit-stepper-panel { flex: 1; min-height: 280px; animation: orbit-step-r 0.3s var(--ease) both; }
+.orbit-stepper-panel { flex: 1; min-height: 280px; animation: orbit-step-r 0.3s var(--ease) backwards; }
 .orbit-stepper-panel.from-left { animation-name: orbit-step-l; }
 @keyframes orbit-step-r { from { opacity: 0; transform: translate3d(16px, 0, 0); } to { opacity: 1; transform: none; } }
 @keyframes orbit-step-l { from { opacity: 0; transform: translate3d(-16px, 0, 0); } to { opacity: 1; transform: none; } }
@@ -836,6 +836,9 @@ input[type='file'] { padding: 7px; }
 .seg,
 .mon-scope {
   display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
   gap: 2px;
   padding: 3px;
   border-radius: 11px;
@@ -844,6 +847,10 @@ input[type='file'] { padding: 7px; }
 }
 .seg > button,
 .mon-scope-btn {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  flex: 0 0 auto;
   height: 30px;
   padding: 0 14px;
   border: 0;

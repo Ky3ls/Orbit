@@ -3,7 +3,7 @@
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
-  animation: orbit-fade-up 0.4s var(--ease) both;
+  animation: orbit-fade-up 0.4s var(--ease) backwards;
 }
 .dash > .card { border-radius: 18px; }
 .dash-card-head {

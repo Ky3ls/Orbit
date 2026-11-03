@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Modal, Page, PageHeader, Split } from '../components/Ui.jsx';
 import { useI18n } from '../i18n/I18nProvider.jsx';
+import CfgCode from '../components/CfgCode.jsx';
+import { NavIcon } from '../layout/icons.jsx';
 
 function formatBytes(n) {
   if (!n && n !== 0) return '';
@@ -255,7 +257,7 @@ export default function CfgEditor() {
     el.setSelectionRange(start, end);
     const before = content.slice(0, start);
     const line = before.split('\n').length;
-    const lineHeight = 18.5;
+    const lineHeight = 20;
     el.scrollTop = Math.max(0, (line - 4) * lineHeight);
   }
 
@@ -307,7 +309,7 @@ export default function CfgEditor() {
           el.setSelectionRange(start, end);
           const before = content.slice(0, start);
           const line = before.split('\n').length;
-          el.scrollTop = Math.max(0, (line - 4) * 18.5);
+          el.scrollTop = Math.max(0, (line - 4) * 20);
           return next;
         });
         return;
@@ -394,6 +396,7 @@ export default function CfgEditor() {
         <form className="cfg-workspace" onSubmit={save}>
           <div className="cfg-toolbar">
             <div className="cfg-toolbar-file">
+              <span className="cfg-file-ico"><NavIcon name="cfg" /></span>
               <span className="cfg-file-badge">{activeFile || '—'}</span>
               {meta?.primary && <span className="cfg-pill">server.cfg</span>}
               {dirty && <span className="cfg-pill dirty">{t('cfg.dirty')}</span>}
@@ -464,23 +467,25 @@ export default function CfgEditor() {
                   </svg>
                 )}
               </button>
+              <button type="button" className="o-icon-btn" title={t('cfg.findAria')} onClick={() => { setSearchOpen(true); setTimeout(() => searchRef.current?.focus(), 0); }}>
+                <NavIcon name="search" />
+              </button>
               <button className="btn btn-primary btn-sm" type="submit" disabled={saving || !dirty}>
                 {saving ? t('cfg.saving') : t('common.save')}
+                <kbd className="cfg-kbd">Ctrl S</kbd>
               </button>
             </div>
           </div>
-          <textarea
+          <CfgCode
             ref={taRef}
-            className="mono cfg-area"
             value={content}
             onChange={onContentChange}
-            spellCheck={false}
             disabled={loading && !content}
-            aria-label={t('cfg.contentAria', { file: activeFile || 'CFG' })}
+            readOnly={meta ? meta.writable === false : false}
+            dirty={dirty}
+            footerHint={t('cfg.footer')}
+            ariaLabel={t('cfg.contentAria', { file: activeFile || 'CFG' })}
           />
-          <div className="cfg-footer">
-            <span className="muted">{t('cfg.footer')}</span>
-          </div>
         </form>
       </Split>
 
