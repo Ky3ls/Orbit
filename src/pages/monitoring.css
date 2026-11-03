@@ -1,0 +1,38 @@
+/* ═══ Monitoring ═══ */
+.mon-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.mon-tile { --mon: var(--accent); padding: 18px 20px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+.mon-tile::after {
+  content: '';
+  position: absolute;
+  right: -60px;
+  top: -60px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--mon) 18%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.mon-tile-head { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.mon-tile-ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--mon); background: color-mix(in srgb, var(--mon) 14%, transparent); }
+.mon-tile-ico svg { width: 16px; height: 16px; }
+.mon-live { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.mon-live i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); color: rgba(var(--ok-rgb), 0.6); animation: orbit-pulse 2s infinite; }
+.mon-tile-value { display: flex; align-items: baseline; gap: 6px; }
+.mon-tile-value strong { font-size: 40px; font-weight: 720; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.mon-tile-value span { color: var(--muted); font-size: 15px; font-weight: 560; }
+.mon-tile-meter { height: 6px; border-radius: 6px; background: var(--line); overflow: hidden; }
+.mon-tile-meter i { display: block; height: 100%; border-radius: inherit; background: var(--mon); transition: width 0.6s var(--ease); box-shadow: 0 0 12px color-mix(in srgb, var(--mon) 60%, transparent); }
+.mon-tile-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 0; }
+.mon-tile-stats div { padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.mon-tile-stats dt { font-size: 11px; color: var(--faint); white-space: nowrap; }
+.mon-tile-stats dd { margin: 2px 0 0; font-weight: 650; font-size: 14px; font-variant-numeric: tabular-nums; }
+.mon-tile-sub { margin: 0; font-size: 12px; color: var(--muted); }
+
+.mon-chart-card { padding: 18px 20px 16px; }
+.mon-chart-head h3 { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; }
+.mon-chart-head h3 i { width: 9px; height: 9px; border-radius: 3px; }
+.mon-chart-val { font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.mon-inst-head { padding: 16px 18px 12px; }
+.mon-inst-head p { margin: 4px 0 0; font-size: 13px; }
+
+@media (max-width: 1000px) { .mon-tiles { grid-template-columns: 1fr; } }

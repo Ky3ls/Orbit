@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { Empty, Page, PageHeader, PanelCard } from '../components/Ui.jsx';
+import './audit.css';
 import { toBcp47 } from '../i18n/core.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
+import { NavIcon } from '../layout/icons.jsx';
+
+const LEVELS = ['all', 'bad', 'warn', 'ok', 'info'];
 
 export default function ServerLog() {
   const { t, lang } = useI18n();
@@ -10,6 +14,7 @@ export default function ServerLog() {
   const [q, setQ] = useState('');
   const [err, setErr] = useState('');
   const [paused, setPaused] = useState(false);
+  const [level, setLevel] = useState('all');
   const seqRef = useRef(0);
   const boxRef = useRef(null);
   const pausedRef = useRef(false);
@@ -62,28 +67,56 @@ export default function ServerLog() {
     boxRef.current.scrollTop = boxRef.current.scrollHeight;
   }, [lines, paused]);
 
-  const view = q.trim()
-    ? lines.filter((l) => `${l.level} ${l.text}`.toLowerCase().includes(q.toLowerCase()))
-    : lines;
+  const counts = useMemo(() => {
+    const c = { all: lines.length, bad: 0, warn: 0, ok: 0, info: 0 };
+    for (const l of lines) c[l.level || 'info'] = (c[l.level || 'info'] || 0) + 1;
+    return c;
+  }, [lines]);
+
+  const view = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return lines.filter((l) => (level === 'all' || (l.level || 'info') === level)
+      && (!needle || `${l.level} ${l.text}`.toLowerCase().includes(needle)));
+  }, [lines, q, level]);
+
+  function download() {
+    const body = view.map((l) => `${new Date(l.t).toISOString()} [${l.level || 'info'}] ${l.text}`).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }));
+    a.download = `orbit-server-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.log`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
 
   return (
-    <Page>
+    <Page className="slog-page">
       <PageHeader
         eyebrow={t('slog.eyebrow')}
         title={t('page.serverLog')}
         description={t('slog.desc')}
         actions={(
-          <div className="row" style={{ gap: 8 }}>
-            <input className="search" placeholder={t('common.filter')} value={q} onChange={(e) => setQ(e.target.value)} />
-            <button type="button" className="btn btn-sm" onClick={() => setPaused((p) => !p)}>
-              {paused ? t('common.resume') : t('common.pause')}
+          <>
+            <button type="button" className="btn btn-sm" onClick={download} disabled={!view.length}>
+              <NavIcon name="external" />{t('slog2.download')}
             </button>
-          </div>
+            <button type="button" className={`btn btn-sm${paused ? ' btn-primary' : ''}`} onClick={() => setPaused((p) => !p)}>
+              <NavIcon name={paused ? 'play' : 'stop'} />{paused ? t('common.resume') : t('common.pause')}
+            </button>
+          </>
         )}
       />
-      <p className="page-hint muted" style={{ marginTop: -8, marginBottom: 14, fontSize: 13 }}>
-        {t('slog.hint')}
-      </p>
+      <div className="audit-toolbar">
+        <div className="seg slog-levels" role="tablist">
+          {LEVELS.map((lv) => (
+            <button key={lv} type="button" role="tab" aria-selected={level === lv} className={`${level === lv ? 'active' : ''} lv-${lv}`} onClick={() => setLevel(lv)}>
+              {lv !== 'all' ? <i className="slog-dot" /> : null}
+              {t(`slog2.level.${lv}`)}<span className="res-seg-n">{counts[lv] || 0}</span>
+            </button>
+          ))}
+        </div>
+        <input className="search audit-search" placeholder={t('common.filter')} value={q} onChange={(e) => setQ(e.target.value)} />
+        {paused ? <span className="badge warn">{t('slog2.paused')}</span> : <span className="badge ok">Live</span>}
+      </div>
       {err && <div className="err">{err}</div>}
       <PanelCard padded={false}>
         {view.length === 0 ? (

@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { Mark } from '../components/Ui.jsx';
 import { useI18n } from '../i18n/I18nProvider.jsx';
+import { NavIcon } from '../layout/icons.jsx';
+import './login.css';
 
 export default function Login({ onUser }) {
   const { t } = useI18n();
@@ -42,38 +44,57 @@ export default function Login({ onUser }) {
   }
 
   return (
-    <div className="login-screen login-page">
-      <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
-      <form className="login-card login-box login-page-card" onSubmit={submit}>
-        <div className="brand-link"><Mark /> Orbit</div>
-        <h2>{totp ? t('login.totpTitle') : t('login.title')}</h2>
-        <p className="sub">
-          {totp
-            ? t('login.subTotp')
-            : masterOk
-              ? t('login.subMaster')
-              : t('login.sub')}
-        </p>
-        {masterOk && !err && (
-          <div className="ok" style={{ marginBottom: 12, fontSize: 13 }}>
-            {t('login.masterOk')}
-          </div>
-        )}
-        {err && <div className="err">{err}</div>}
-        {!totp && <a className="btn cfx" href="/api/auth/cfx/start?mode=login">{t('login.cfx')}</a>}
-        {!totp && <div className="or">{t('login.orPassword')}</div>}
-        {!totp ? (
-          <>
-            <label className="field"><span>{t('login.user')}</span><input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} /></label>
-            <label className="field"><span>{t('login.password')}</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-          </>
-        ) : (
-          <label className="field"><span>{t('login.code')}</span><input autoFocus inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} /></label>
-        )}
-        <button className="btn btn-primary" disabled={busy} type="submit">
-          {busy ? t('login.checking') : totp ? t('login.confirm') : t('login.submit')}
-        </button>
-      </form>
+    <div className="auth">
+      <aside className="auth-hero" aria-hidden="true">
+        <div className="auth-hero-bg" />
+        <div className="auth-brand"><Mark /><b>Orbit</b></div>
+        <div className="auth-visual">
+          <div className="auth-planet" />
+          <i className="auth-ring r1"><b /></i>
+          <i className="auth-ring r2"><b /></i>
+          <i className="auth-ring r3"><b /></i>
+        </div>
+        <div className="auth-copy">
+          <h1>{t('login2.headline')}</h1>
+          <p>{t('login2.lead')}</p>
+          <ul>
+            <li><NavIcon name="activity" />{t('login2.f1')}</li>
+            <li><NavIcon name="users" />{t('login2.f2')}</li>
+            <li><NavIcon name="command" />{t('login2.f3')}</li>
+          </ul>
+        </div>
+      </aside>
+
+      <main className="auth-main">
+        <form className="auth-card" onSubmit={submit}>
+          <div className="auth-card-brand"><Mark /><b>Orbit</b></div>
+          <h2>{totp ? t('login.totpTitle') : t('login.title')}</h2>
+          <p className="sub">
+            {totp ? t('login.subTotp') : masterOk ? t('login.subMaster') : t('login.sub')}
+          </p>
+          {masterOk && !err && <div className="ok">{t('login.masterOk')}</div>}
+          {err && <div className="err">{err}</div>}
+          {!totp && (
+            <a className="btn cfx" href="/api/auth/cfx/start?mode=login">
+              <NavIcon name="bolt" />{t('login.cfx')}
+            </a>
+          )}
+          {!totp && <div className="auth-or"><span>{t('login.orPassword')}</span></div>}
+          {!totp ? (
+            <>
+              <label className="field"><span>{t('login.user')}</span><input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} /></label>
+              <label className="field"><span>{t('login.password')}</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+            </>
+          ) : (
+            <label className="field"><span>{t('login.code')}</span><input className="auth-otp mono" autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={code} onChange={(e) => setCode(e.target.value)} /></label>
+          )}
+          <button className="btn btn-primary btn-lg btn-block" disabled={busy} type="submit">
+            {busy ? <span className="auth-spin" /> : null}
+            {busy ? t('login.checking') : totp ? t('login.confirm') : t('login.submit')}
+          </button>
+          <p className="auth-foot"><NavIcon name="audit" />{t('login2.secure')}</p>
+        </form>
+      </main>
     </div>
   );
 }

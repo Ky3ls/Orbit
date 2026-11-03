@@ -866,12 +866,12 @@ export default function Settings({ user, onUser, onSetupReset }) {
           <div className="st-stack">
             <ModuleCard title={t('settings.appearance.title')} lead={t('settings.appearance.lead')}>
               <SegControl
-                label="Navigation"
-                value={prefs.navLayout}
-                onChange={(v) => setAppearance({ navLayout: v })}
+                label="Sidebar"
+                value={prefs.sidebarCollapsed ? 'compact' : 'full'}
+                onChange={(v) => setAppearance({ sidebarCollapsed: v === 'compact' })}
                 options={[
-                  { value: 'sidebar', label: 'Sidebar', hint: 'Links' },
-                  { value: 'dock', label: 'Toolbar', hint: 'Unten' },
+                  { value: 'full', label: 'Ausgeklappt', hint: 'Icons + Text' },
+                  { value: 'compact', label: 'Kompakt', hint: 'Nur Icons' },
                 ]}
               />
               <SegControl
@@ -891,7 +891,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       key={c.id}
                       type="button"
                       className={`st-accent${prefs.accent === c.id ? ' active' : ''}`}
-                      style={{ ['--swatch']: c.hex }}
+                      style={{ ['--swatch']: c.hex, ['--swatch-b']: c.brandB }}
                       title={c.label}
                       aria-label={c.label}
                       aria-pressed={prefs.accent === c.id}

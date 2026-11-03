@@ -11,8 +11,8 @@
   gap: 12px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
 }
 
 .setup-check .dot {
@@ -24,7 +24,7 @@
 }
 
 .setup-check.ok .dot { background: var(--ok); box-shadow: none; }
-.setup-check.warn .dot { background: #ffb020; }
+.setup-check.warn .dot { background: var(--warn); }
 .setup-check.bad .dot { background: var(--bad); }
 
 .setup-check b { display: block; font-size: 14px; }
@@ -49,7 +49,7 @@
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--line);
   font-size: 14px;
 }
 
@@ -63,7 +63,7 @@
   font-size: 14px;
   margin-bottom: 12px;
   background: var(--accent);
-  color: #000;
+  color: #fff;
 }
 
 .deploy-list {
@@ -77,8 +77,8 @@
   text-align: left;
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
   color: inherit;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
@@ -118,7 +118,7 @@
   padding: 3px 8px;
   border-radius: 999px;
   background: rgba(255, 193, 7, 0.18);
-  color: #ffc107;
+  color: var(--warn);
 }
 
 .deploy-tags {
@@ -140,12 +140,12 @@
 
 .tag-pill.fivem {
   border-color: rgba(255, 152, 0, 0.55);
-  color: #ff9800;
+  color: var(--warn);
 }
 
 .tag-pill.redm {
   border-color: rgba(244, 67, 54, 0.55);
-  color: #f44336;
+  color: var(--bad);
 }
 
 .db-pass-row {
@@ -210,7 +210,7 @@
 .db-setup-live.done .db-setup-spinner {
   animation: none;
   border-color: rgba(61, 214, 140, 0.35);
-  border-top-color: #3dd68c;
+  border-top-color: var(--ok);
 }
 
 @keyframes db-live-in {
@@ -261,7 +261,7 @@
 .db-setup-bar {
   height: 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-2);
   overflow: hidden;
 }
 
@@ -269,7 +269,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2, #ff9a4d));
+  background: linear-gradient(90deg, var(--accent), var(--brand-b));
   transition: width 0.35s ease;
 }
 

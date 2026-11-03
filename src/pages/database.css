@@ -47,7 +47,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 
 .db-aside-label {
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--faint);
@@ -392,7 +392,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 }
 
 .db-act-btn.danger {
-  color: #e07070;
+  color: var(--bad);
 }
 
 .db-act-btn:hover:not(:disabled) {
@@ -401,7 +401,7 @@ body.orbit-ws:has(.ws-banner) .ws-module.db-page {
 }
 
 .db-act-btn.danger:hover:not(:disabled) {
-  color: #f09090;
+  color: var(--bad);
 }
 
 .db-act-btn:disabled {

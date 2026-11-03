@@ -92,7 +92,7 @@
 }
 .osel-menu::-webkit-scrollbar-track {
   margin: 4px 0;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-2);
   border-radius: 8px;
 }
 .osel-menu::-webkit-scrollbar-thumb {

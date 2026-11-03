@@ -352,7 +352,7 @@ export const panelDe = {
 
   // CFG
   'cfg.eyebrow': 'Server',
-  'cfg.title': 'CFG',
+  'cfg.title': 'Konfiguration',
   'cfg.desc': 'Server-Konfiguration',
   'cfg.files': 'CFG-Dateien',
   'cfg.filterPh': 'Dateien filtern…',
@@ -988,7 +988,7 @@ export const panelEn = {
   'team.permsHint': 'Templates set the checks; manual changes switch to “Custom”.',
 
   'cfg.eyebrow': 'Server',
-  'cfg.title': 'CFG',
+  'cfg.title': 'Config',
   'cfg.desc': 'Server configuration',
   'cfg.files': 'CFG files',
   'cfg.filterPh': 'Filter files…',
