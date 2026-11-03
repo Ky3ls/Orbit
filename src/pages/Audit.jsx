@@ -86,12 +86,20 @@ export default function Audit() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
+  const today = (entries || []).filter((e) => new Date(e.created).toDateString() === new Date().toDateString()).length;
+  const TILES = [
+    { id: 'server', label: 'Server-Aktionen', icon: 'power', tone: 'accent' },
+    { id: 'players', label: 'Moderation', icon: 'users', tone: 'warn' },
+    { id: 'auth', label: 'Logins', icon: 'logout', tone: 'info' },
+    { id: 'system', label: 'System', icon: 'gear', tone: 'ok' },
+  ];
+
   return (
-    <Page className="audit-page">
+    <Page className="audit-page lg-page">
       <PageHeader
         eyebrow={t('audit.eyebrow')}
         title={t('page.audit')}
-        description={t('audit.desc')}
+        description={`Wer im Panel was gemacht hat — unveränderlich protokolliert. Heute: ${today} Einträge.`}
         actions={(
           <button type="button" className="btn btn-sm" onClick={exportCsv} disabled={!view.length}>
             <NavIcon name="external" />{t('audit2.export')}
@@ -99,49 +107,66 @@ export default function Audit() {
         )}
       />
 
-      <div className="audit-toolbar">
-        <div className="seg" role="tablist">
-          {['all', 'server', 'players', 'auth', 'system'].map((c) => (
-            <button key={c} type="button" role="tab" aria-selected={cat === c} className={cat === c ? 'active' : ''} onClick={() => setCat(c)}>
-              {t(`audit2.cat.${c}`)}<span className="res-seg-n">{counts[c]}</span>
-            </button>
-          ))}
-        </div>
-        <select className="audit-who" value={who} onChange={(e) => setWho(e.target.value)} aria-label={t('common.who')}>
-          <option value="">{t('audit2.allUsers')}</option>
-          {users.map((u) => <option key={u} value={u}>{u}</option>)}
-        </select>
-        <input className="search audit-search" placeholder={t('common.filter')} value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="lg-tiles">
+        {TILES.map((tile) => (
+          <button
+            key={tile.id}
+            type="button"
+            className={`lg-tile tone-${tile.tone}${cat === tile.id ? ' active' : ''}`}
+            onClick={() => setCat(cat === tile.id ? 'all' : tile.id)}
+            aria-pressed={cat === tile.id}
+          >
+            <span className="lg-tile-ico"><NavIcon name={tile.icon} /></span>
+            <span className="lg-tile-text"><b>{counts[tile.id]}</b><span>{tile.label}</span></span>
+          </button>
+        ))}
       </div>
 
-      {entries === null ? (
-        <div className="card audit-skel">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 44 }} />)}</div>
-      ) : days.length === 0 ? (
-        <div className="card"><Empty title={t('audit2.empty')} text={t('audit.hint')} /></div>
-      ) : (
-        <div className="audit-days">
-          {days.map((d) => (
-            <section key={d.key} className="audit-day">
-              <h3 className="audit-day-label"><span>{d.label}</span><em>{d.items.length}</em></h3>
-              <ol className="audit-list card">
-                {d.items.map((e) => {
-                  const c = CAT[category(e.action)];
-                  return (
-                    <li key={e.id} className={`audit-row tone-${toneFor(e.action)}`}>
-                      <time className="mono">{fmtClock.format(e.created)}</time>
-                      <span className="audit-ico"><NavIcon name={c.icon} /></span>
-                      <span className="audit-user">{e.user}</span>
-                      <code className="audit-action">{e.action}</code>
-                      <span className="audit-detail" title={e.detail}>{e.detail}</span>
-                      <span className="audit-ip mono">{e.ip}</span>
-                    </li>
-                  );
-                })}
-              </ol>
-            </section>
-          ))}
-        </div>
-      )}
+      <section className="lg-win card">
+        <header className="lg-win-head">
+          <span className="lg-win-count">
+            {cat === 'all' ? `${view.length} Einträge` : `${view.length} · ${TILES.find((x) => x.id === cat)?.label}`}
+            {cat !== 'all' ? <button type="button" className="lg-clear" onClick={() => setCat('all')}>Filter aufheben</button> : null}
+          </span>
+          <div className="lg-search">
+            <NavIcon name="search" />
+            <input placeholder="Benutzer, Aktion, Detail, IP…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <select className="audit-who" value={who} onChange={(e) => setWho(e.target.value)} aria-label={t('common.who')}>
+            <option value="">{t('audit2.allUsers')}</option>
+            {users.map((u) => <option key={u} value={u}>{u}</option>)}
+          </select>
+        </header>
+
+        {entries === null ? (
+          <div className="audit-skel">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 40 }} />)}</div>
+        ) : days.length === 0 ? (
+          <Empty title={t('audit2.empty')} text="Keine Einträge für diesen Filter." />
+        ) : (
+          <div className="audit-days">
+            {days.map((d) => (
+              <section key={d.key} className="audit-day">
+                <h3 className="audit-day-label"><span>{d.label}</span><em>{d.items.length}</em></h3>
+                <ol className="audit-list">
+                  {d.items.map((e) => {
+                    const c = CAT[category(e.action)];
+                    return (
+                      <li key={e.id} className={`audit-row tone-${toneFor(e.action)}`}>
+                        <time className="mono">{fmtClock.format(e.created)}</time>
+                        <span className="audit-ico"><NavIcon name={c.icon} /></span>
+                        <span className="audit-user">{e.user}</span>
+                        <code className="audit-action">{e.action}</code>
+                        <span className="audit-detail" title={e.detail}>{e.detail}</span>
+                        <span className="audit-ip mono">{e.ip}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            ))}
+          </div>
+        )}
+      </section>
     </Page>
   );
 }

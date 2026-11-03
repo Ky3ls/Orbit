@@ -1,31 +1,81 @@
-/* ═══ Ingame-Menü ═══ */
-.ig-hero { padding: 6px; border-radius: var(--radius-lg); }
-.ig-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.ig-step { display: flex; gap: 14px; padding: 16px; border-radius: 12px; background: var(--surface-2); }
-.ig-step-n {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent-ink);
-  background: var(--accent-dim);
+/* ═══ Ingame-Menü — Vorschau + Anleitung ═══ */
+.ig-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.ig-preview {
+  position: relative;
+  min-height: 520px;
+  padding: 36px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
 }
-.ig-step b { font-size: 13.5px; font-weight: 620; }
-.ig-step p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
-.ig-step kbd { font-size: 11px; }
-.ig-status { display: flex; align-items: center; gap: 10px; padding: 12px 14px 10px; font-size: 12.5px; color: var(--muted); }
-.ig-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-.ig-card { padding: 18px 20px; border-radius: var(--radius-lg); }
-.ig-card header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.ig-card h3 { font-size: 14.5px; flex: 1; }
-.ig-ico { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--accent-ink); background: var(--accent-dim); }
-.ig-ico svg { width: 16px; height: 16px; }
-.ig-count { font-size: 11.5px; color: var(--faint); font-weight: 600; }
-.ig-card ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.ig-card li { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
-.ig-card li svg { width: 14px; height: 14px; margin-top: 2px; color: var(--ok); flex: 0 0 auto; }
-@media (max-width: 900px) { .ig-steps { grid-template-columns: 1fr; } }
+/* angedeutete Spielszene */
+.ig-scene {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(80% 60% at 75% 30%, rgba(var(--accent-rgb), 0.12), transparent 60%),
+    linear-gradient(180deg, #1b1d22 0%, #0d0e11 55%, #08090b 100%);
+}
+.ig-scene::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40%;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 2px, transparent 2px 80px),
+    linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.6));
+  transform: perspective(400px) rotateX(55deg);
+  transform-origin: bottom;
+}
+.ig-menu {
+  position: relative;
+  width: min(340px, 100%);
+  border-radius: 12px;
+  background: rgba(10, 10, 12, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.9);
+  color: #f2f2f2;
+  overflow: hidden;
+  font-size: 13px;
+}
+.ig-menu-head { display: flex; align-items: center; gap: 12px; padding: 16px; border-bottom: 2px solid var(--accent); background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.18), transparent); }
+.ig-menu-logo .mark { --mark-size: 32px; }
+.ig-menu-head b { display: block; font-size: 15px; letter-spacing: 0.18em; }
+.ig-menu-head small { font-size: 11px; color: #a1a1a1; }
+.ig-menu-head kbd { margin-left: auto; background: rgba(255, 255, 255, 0.06); color: #cfcfcf; border-color: rgba(255, 255, 255, 0.12); }
+.ig-menu-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.ig-menu-tabs button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; border: 0; background: transparent; color: #8f8f8f; font-size: 12px; font-weight: 600; }
+.ig-menu-tabs button svg { width: 14px; height: 14px; }
+.ig-menu-tabs button.active { color: #fff; box-shadow: inset 0 -2px 0 var(--accent); background: rgba(255, 255, 255, 0.03); }
+.ig-menu-list { list-style: none; margin: 0; padding: 6px; min-height: 230px; }
+.ig-menu-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 40px; padding: 0 12px; border-radius: 7px; color: #d6d6d6; }
+.ig-menu-list li svg { width: 14px; height: 14px; color: #6b6b6b; }
+.ig-menu-list li.sel { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.ig-menu-list li.sel svg { color: inherit; }
+.ig-menu-foot { display: flex; gap: 12px; padding: 10px 14px; border-top: 1px solid rgba(255, 255, 255, 0.06); font-size: 11px; color: #8f8f8f; }
+.ig-menu-foot kbd { background: rgba(255, 255, 255, 0.06); color: #cfcfcf; border-color: rgba(255, 255, 255, 0.12); height: 18px; min-width: 18px; font-size: 10px; }
+
+.ig-side { display: flex; flex-direction: column; gap: 16px; }
+.ig-steps { padding: 18px 20px; border-radius: var(--radius-lg); }
+.ig-steps h3 { font-size: 14.5px; margin-bottom: 14px; }
+.ig-steps ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+.ig-steps li { display: flex; gap: 14px; }
+.ig-step-n { flex: 0 0 28px; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--accent-ink); background: var(--accent-dim); }
+.ig-steps b { font-size: 13.5px; font-weight: 620; }
+.ig-steps p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+.ig-steps kbd { font-size: 11px; }
+.ig-stat { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius-lg); }
+.ig-stat-ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--ok); background: rgba(var(--ok-rgb), 0.13); flex: 0 0 auto; }
+.ig-stat-ico svg { width: 16px; height: 16px; }
+.ig-stat b { display: block; font-size: 13.5px; font-weight: 600; }
+.ig-stat span { font-size: 12.5px; color: var(--muted); }
+.ig-count { display: grid; grid-template-columns: repeat(3, 1fr); border-radius: var(--radius-lg); overflow: hidden; }
+.ig-count > div { padding: 14px 16px; border-right: 1px solid var(--line); }
+.ig-count > div:last-child { border-right: 0; }
+.ig-count b { display: block; font-size: 22px; font-weight: 700; }
+.ig-count span { font-size: 12px; color: var(--muted); }
+@media (max-width: 1100px) { .ig-layout { grid-template-columns: 1fr; } .ig-preview { min-height: 440px; justify-content: center; } }
+@media (max-width: 560px) { .ig-preview { padding: 16px; } }

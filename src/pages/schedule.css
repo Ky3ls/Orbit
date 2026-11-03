@@ -538,3 +538,102 @@
 .sch-job:not(.is-on) .sch-job-time b { color: var(--faint); }
 .sch-job-body strong { font-weight: 620; }
 @media (max-width: 720px) { .sch-stats { grid-template-columns: 1fr 1fr; } .sch-stat-wide { grid-column: span 2; } }
+
+/* ═══ Automationen v2 — Tagesplan + Joblisten ═══ */
+.sch2 .tone-accent { --tone: var(--accent); --tone-rgb: var(--accent-rgb); }
+.sch2 .tone-info { --tone: var(--info); --tone-rgb: var(--info-rgb); }
+.sch2 .tone-ok { --tone: var(--ok); --tone-rgb: var(--ok-rgb); }
+.sch2-day { padding: 20px 22px 42px; border-radius: var(--radius-lg); }
+.sch2-day-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+.sch2-label { font-size: 11px; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.sch2-next { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.sch2-next strong { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; }
+.sch2-next span:not(.badge) { font-size: 14px; color: var(--text-2); }
+.sch2-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.sch2-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sch2-legend i { width: 8px; height: 8px; border-radius: 3px; background: var(--tone); }
+.sch2-track {
+  position: relative;
+  height: 10px;
+  margin: 0 14px;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.06), rgba(var(--accent-rgb), 0.02)),
+    var(--surface-3);
+}
+.sch2-tick { position: absolute; top: 14px; width: 1px; height: 6px; background: var(--line-2); transform: translateX(-0.5px); }
+.sch2-tick em { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 10.5px; color: var(--faint); font-family: var(--mono); white-space: nowrap; }
+.sch2-now { position: absolute; top: -8px; bottom: -8px; width: 2px; border-radius: 2px; background: var(--text); transform: translateX(-1px); }
+.sch2-now em { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); font-style: normal; font-size: 10.5px; font-weight: 650; color: var(--text); white-space: nowrap; }
+.sch2-mark {
+  position: absolute;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--surface);
+  background: var(--tone);
+  color: #0a0a0a;
+  transition: transform 0.16s var(--ease);
+  z-index: 1;
+}
+.sch2-mark svg { width: 14px; height: 14px; }
+.sch2-mark:hover { transform: translate(-50%, -50%) scale(1.15); z-index: 2; }
+.sch2-mark.off { background: var(--surface-3); color: var(--faint); border-color: var(--line-2); }
+
+.sch2-tabs > button svg { width: 15px; height: 15px; margin-right: 7px; }
+.sch2-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.sch2-grid.with-files { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.sch2-card { border-radius: var(--radius-lg); overflow: hidden; }
+.sch2-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.sch2-card-head h2 { font-size: 14.5px; }
+.sch2-card-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+.sch2-card-actions { display: flex; gap: 8px; }
+.sch2-card-actions .btn svg { width: 14px; height: 14px; }
+.sch2-jobs, .sch2-files { list-style: none; margin: 0; padding: 6px 12px; }
+.sch2-jobs li, .sch2-files li { display: flex; align-items: center; gap: 16px; padding: 12px 8px; border-bottom: 1px solid var(--line); }
+.sch2-jobs li:last-child, .sch2-files li:last-child { border-bottom: 0; }
+.sch2-time { font-size: 22px; font-weight: 600; min-width: 72px; color: var(--faint); }
+.sch2-jobs li.on .sch2-time { color: var(--text); }
+.sch2-job-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sch2-job-text b { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sch2-job-text span { font-size: 12.5px; color: var(--muted); }
+.sch2-file-ico { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--surface-2); color: var(--muted); flex: 0 0 auto; }
+.sch2-file-ico svg { width: 16px; height: 16px; }
+.sch2-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+.sch2-empty > svg { width: 26px; height: 26px; color: var(--faint); }
+.sch2-empty b { color: var(--text); font-size: 14px; }
+.sch2-empty .btn { margin-top: 8px; }
+.sch2-empty .btn svg { width: 14px; height: 14px; }
+
+.sch2-form { display: flex; flex-direction: column; }
+.sch2-kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.sch2-kind {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  text-align: left;
+}
+.sch2-kind svg { width: 18px; height: 18px; color: var(--tone); }
+.sch2-kind b { font-size: 12.5px; font-weight: 600; }
+.sch2-kind.active { border-color: var(--tone); background: rgba(var(--tone-rgb), 0.08); }
+.sch2-timerow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sch2-timerow input { width: 130px; }
+.pp-chip.active-acc { color: var(--accent-ink); border-color: rgba(var(--accent-rgb), 0.5); background: var(--accent-dim); }
+.sch2-formhint { font-size: 12.5px; margin: 0 0 16px; }
+.sch2-formfoot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 1000px) { .sch2-grid.with-files { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .sch2-tick:nth-child(even) em { display: none; }
+  .sch2-kinds { grid-template-columns: 1fr; }
+  .sch2-time { font-size: 18px; min-width: 56px; }
+}
