@@ -1,54 +1,55 @@
-/* ═══ Orbit Nebula — Design-Tokens (Dark default, Light via data-theme) ═══ */
+/* ═══ Orbit — Design-Tokens: Schwarz + frei wählbarer Akzent (Light via data-theme) ═══ */
 :root {
   /* Flächen */
-  --bg: #07080d;
-  --bg-2: #0b0d14;
-  --bg-elevated: #121522;
-  --surface: #0e1019;
-  --surface-2: #141725;
-  --surface-3: #1b1f31;
+  --bg: #000000;
+  --bg-2: #060606;
+  --bg-elevated: #111111;
+  --surface: #0b0b0b;
+  --surface-2: #121212;
+  --surface-3: #1a1a1a;
   --card: var(--surface);
-  --glass: rgba(14, 16, 25, 0.78);
-  --glass-strong: rgba(18, 21, 34, 0.94);
-  --surface-inset: #0a0c13;
-  --code-bg: #080a11;
-  --code-fg: #dfe3ff;
+  --glass: rgba(10, 10, 10, 0.8);
+  --glass-strong: rgba(14, 14, 14, 0.96);
+  --surface-inset: #050505;
+  --code-bg: #050505;
+  --code-fg: #e8e8e8;
 
   /* Linien */
-  --line: rgba(148, 160, 255, 0.085);
-  --line-2: rgba(148, 160, 255, 0.15);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.12);
   --line-strong: rgba(var(--accent-rgb), 0.5);
 
   /* Text */
-  --text: #eef0ff;
-  --text-2: #c7cbe6;
-  --muted: #8b92b4;
-  --faint: #575d7c;
+  --text: #f5f5f5;
+  --text-2: #cfcfcf;
+  --muted: #9a9a9a;
+  --faint: #5c5c5c;
 
   /* Akzent (per Preset überschrieben) */
-  --accent: #7c6cff;
-  --accent-2: #a597ff;
-  --accent-rgb: 124, 108, 255;
+  --accent: #ff7a1a;
+  --accent-2: #ff9a4d;
+  --accent-rgb: 255, 122, 26;
   --accent-dim: rgba(var(--accent-rgb), 0.14);
   --accent-ink: var(--accent-2);
-  --accent-fg: #ffffff;
+  --accent-fg: #0a0a0a;
+  /* Ein-Ton-Verlauf innerhalb des Akzents — kein Zweifarb-Look */
   --brand-a: var(--accent);
-  --brand-b: #3fd0ff;
-  --brand-grad: linear-gradient(135deg, var(--brand-a) 0%, var(--brand-b) 100%);
+  --brand-b: var(--accent-2);
+  --brand-grad: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
 
   /* Status */
-  --ok: #2fe0a0;
-  --ok-rgb: 47, 224, 160;
-  --warn: #ffc25c;
-  --warn-rgb: 255, 194, 92;
-  --bad: #ff5a7a;
-  --bad-rgb: 255, 90, 122;
-  --info: #5ab8ff;
-  --info-rgb: 90, 184, 255;
+  --ok: #34d399;
+  --ok-rgb: 52, 211, 153;
+  --warn: #fbbf24;
+  --warn-rgb: 251, 191, 36;
+  --bad: #f87171;
+  --bad-rgb: 248, 113, 113;
+  --info: #60a5fa;
+  --info-rgb: 96, 165, 250;
 
   /* Charts */
-  --chart-grid: rgba(148, 160, 255, 0.07);
-  --chart-axis: rgba(148, 160, 255, 0.12);
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-axis: rgba(255, 255, 255, 0.1);
   --chart-plot-bg: transparent;
 
   /* Form */
@@ -57,11 +58,11 @@
   --radius: 12px;
   --radius-lg: 16px;
   --radius-xl: 22px;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.65);
+  --shadow-sm: none;
+  --shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.8);
   --shadow-pop: 0 24px 70px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--line-2);
   --glow: none;
-  --focus-ring: 0 0 0 3px rgba(var(--accent-rgb), 0.3);
+  --focus-ring: 0 0 0 3px rgba(var(--accent-rgb), 0.22);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Typo */
@@ -78,27 +79,25 @@
 }
 
 :root[data-theme='light'] {
-  --bg: #f3f4f9;
-  --bg-2: #eceef6;
+  --bg: #f4f4f5;
+  --bg-2: #ececee;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f6f7fc;
-  --surface-3: #eceef7;
+  --surface-2: #f7f7f8;
+  --surface-3: #eeeef0;
   --glass: rgba(255, 255, 255, 0.8);
   --glass-strong: rgba(255, 255, 255, 0.96);
-  --surface-inset: #f4f5fa;
-  --code-bg: #f7f8fc;
-  --code-fg: #1d2140;
+  --surface-inset: #f6f6f7;
+  --code-bg: #f7f7f8;
+  --code-fg: #1c1c1f;
 
-  --line: rgba(24, 30, 80, 0.08);
-  --line-2: rgba(24, 30, 80, 0.14);
+  --line: rgba(0, 0, 0, 0.08);
+  --line-2: rgba(0, 0, 0, 0.13);
 
-  --text: #11132a;
-  --text-2: #2f3456;
-  --muted: #5d6385;
-  --faint: #9298b5;
-
-  --brand-b: #0ea5e9;
+  --text: #18181b;
+  --text-2: #3f3f46;
+  --muted: #63636b;
+  --faint: #a1a1aa;
 
   --ok: #0f9f6e;
   --ok-rgb: 15, 159, 110;
@@ -109,12 +108,12 @@
   --info: #1d7fe0;
   --info-rgb: 29, 127, 224;
 
-  --chart-grid: rgba(24, 30, 80, 0.07);
-  --chart-axis: rgba(24, 30, 80, 0.12);
+  --chart-grid: rgba(0, 0, 0, 0.06);
+  --chart-axis: rgba(0, 0, 0, 0.11);
 
-  --shadow-sm: 0 1px 2px rgba(17, 19, 42, 0.06);
-  --shadow: 0 12px 34px -14px rgba(17, 19, 42, 0.2);
-  --shadow-pop: 0 22px 60px -12px rgba(17, 19, 42, 0.26), 0 0 0 1px var(--line-2);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 12px 34px -14px rgba(0, 0, 0, 0.16);
+  --shadow-pop: 0 22px 60px -12px rgba(0, 0, 0, 0.22), 0 0 0 1px var(--line-2);
 
   color-scheme: light;
 }

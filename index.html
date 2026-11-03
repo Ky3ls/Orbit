@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow" />
-    <meta name="theme-color" content="#07080d" />
+    <meta name="theme-color" content="#000000" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>Orbit · Server Control</title>
     <style>
-      html, body { background: #07080d; color: #eef0ff; margin: 0; }
-      html[data-theme="light"], html[data-theme="light"] body { background: #f3f4f9; color: #11132a; }
+      html, body { background: #000000; color: #f5f5f5; margin: 0; }
+      html[data-theme="light"], html[data-theme="light"] body { background: #f4f4f5; color: #18181b; }
     </style>
     <script>
       try {
@@ -19,27 +19,29 @@
         root.dataset.sidebar = a.sidebarCollapsed ? 'collapsed' : 'expanded';
         var light = a.theme === 'light';
         var accents = {
-          nebula: ['#7c6cff','#a597ff','124, 108, 255','#3fd0ff','#5b49f0','91, 73, 240','#0ea5e9'],
-          aurora: ['#1fd1c1','#62eadb','31, 209, 193','#7c6cff','#0d9488','13, 148, 136','#6d5ae6'],
-          ocean: ['#4c8dff','#82b0ff','76, 141, 255','#22d3ee','#1d5fe0','29, 95, 224','#0891b2'],
-          plasma: ['#d44bff','#e48cff','212, 75, 255','#ff5fa2','#a21caf','162, 28, 175','#db2777'],
-          rose: ['#ff4f7b','#ff8aa6','255, 79, 123','#ffa34d','#d61f50','214, 31, 80','#ea7a12'],
-          ember: ['#ff7a1a','#ffa057','255, 122, 26','#ffcf4d','#c45a10','196, 90, 16','#ca8a04'],
-          solar: ['#f5b70a','#ffd256','245, 183, 10','#ff7a1a','#a16207','161, 98, 7','#c2410c'],
-          mint: ['#2ee59d','#7ff0c2','46, 229, 157','#3fd0ff','#059669','5, 150, 105','#0284c7']
+          orange: ['#ff7a1a','#ff9a4d','255, 122, 26','#c45a10','196, 90, 16','#0a0a0a'],
+          red: ['#ef4444','#f87171','239, 68, 68','#c53030','197, 48, 48','#ffffff'],
+          rose: ['#f43f5e','#fb7185','244, 63, 94','#be123c','190, 18, 60','#ffffff'],
+          amber: ['#f59e0b','#fbbf24','245, 158, 11','#b45309','180, 83, 9','#0a0a0a'],
+          lime: ['#84cc16','#a3e635','132, 204, 22','#4d7c0f','77, 124, 15','#0a0a0a'],
+          green: ['#22c55e','#4ade80','34, 197, 94','#15803d','21, 128, 61','#0a0a0a'],
+          teal: ['#14b8a6','#2dd4bf','20, 184, 166','#0f766e','15, 118, 110','#0a0a0a'],
+          cyan: ['#06b6d4','#22d3ee','6, 182, 212','#0e7490','14, 116, 144','#0a0a0a'],
+          blue: ['#3b82f6','#60a5fa','59, 130, 246','#1d4ed8','29, 78, 216','#ffffff'],
+          violet: ['#8b5cf6','#a78bfa','139, 92, 246','#6d28d9','109, 40, 217','#ffffff']
         };
-        var id = Number(a.v) >= 3 && accents[a.accent] ? a.accent : 'nebula';
+        var id = accents[a.accent] ? a.accent : 'orange';
         var c = accents[id];
-        var hex = light ? c[4] : c[0], rgb = light ? c[5] : c[2];
+        var hex = light ? c[3] : c[0], rgb = light ? c[4] : c[2];
         root.style.setProperty('--accent', hex);
         root.style.setProperty('--accent-2', c[1]);
         root.style.setProperty('--accent-rgb', rgb);
         root.style.setProperty('--accent-dim', 'rgba(' + rgb + ', 0.14)');
         root.style.setProperty('--accent-ink', light ? hex : c[1]);
-        root.style.setProperty('--brand-b', light ? c[6] : c[3]);
+        root.style.setProperty('--accent-fg', light ? '#ffffff' : c[5]);
         root.dataset.accent = id;
         var m = document.querySelector('meta[name="theme-color"]');
-        if (m) m.setAttribute('content', light ? '#f3f4f9' : '#07080d');
+        if (m) m.setAttribute('content', light ? '#f4f4f5' : '#000000');
       } catch (e) {}
     </script>
   </head>

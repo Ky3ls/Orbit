@@ -45,7 +45,7 @@ Dienst: `orbit` · Port: **40220** · läuft als **root** (wie txAdmin, kein eig
 Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram` (Pfad-Policy im Panel).
 
 
-## Oberfläche (Orbit Nebula)
+## Oberfläche
 
 - **Dashboard** — Server-Hero mit Power-Steuerung, Restart-Countdown, Live-KPIs (Spieler, CPU, RAM, FX) mit Verlauf, Live-Konsole, Online-Liste, Aktivitäts-Feed, Ressourcen- und Community-Übersicht
 - **Befehlspalette** — `Strg/⌘ + K` oder `/`: Seiten öffnen, Spieler suchen, Server starten/stoppen/neu starten, Theme und Akzentfarbe wechseln
@@ -53,7 +53,7 @@ Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram` (Pfad-Policy im Panel).
 - **Ressourcen** — Status-Filter, Verfügbarkeits-Anzeige, Ordner-Karten, Aktionen mit Rückmeldung
 - **Audit-Log** — Timeline nach Tagen, Kategorie-/Benutzer-Filter, CSV-Export
 - **Server-Log** — Level-Filter mit Zählern, Pause, Download als `.log`
-- **Darstellung** — Hell/Dunkel, kompakte Sidebar, 8 Akzent-Paletten (Nebula, Aurora, Ocean, Plasma, Rose, Ember, Solar, Mint)
+- **Darstellung** — Schwarz oder Hell, kompakte Sidebar, Akzentfarbe frei wählbar (10 Farben)
 
 **Ingame:** `/orbit` oder `/orbitmenu` — NoClip, God, Teleport, Heal, Announce, Spieler-Aktionen, Fahrzeug-Tools.
 

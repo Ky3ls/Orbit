@@ -113,8 +113,8 @@ export default function Monitoring() {
 
   const tiles = [
     { key: 'cpu', icon: 'cpu', label: 'CPU', value: `${Number(load.cpu || 0).toFixed(0)}`, unit: '%', pct: load.cpu, color: 'var(--accent)', stats: cpuStats, fmt: (v) => `${v.toFixed(0)}%` },
-    { key: 'ram', icon: 'memory', label: 'RAM', value: `${Number(load.ramPct || 0).toFixed(0)}`, unit: '%', pct: load.ramPct, color: 'var(--info)', stats: ramStats, fmt: (v) => `${v.toFixed(0)}%`, sub: `${fmtBytes(load.ramUsed)} / ${fmtBytes(load.ramTotal || host.ramTotal)}` },
-    { key: 'pl', icon: 'users', label: t('mon.players'), value: String(clients), unit: `/ ${maxClients || '–'}`, pct: maxClients ? (clients / maxClients) * 100 : 0, color: 'var(--ok)', stats: plStats, fmt: (v) => v.toFixed(0) },
+    { key: 'ram', icon: 'memory', label: 'RAM', value: `${Number(load.ramPct || 0).toFixed(0)}`, unit: '%', pct: load.ramPct, color: 'var(--accent)', stats: ramStats, fmt: (v) => `${v.toFixed(0)}%`, sub: `${fmtBytes(load.ramUsed)} / ${fmtBytes(load.ramTotal || host.ramTotal)}` },
+    { key: 'pl', icon: 'users', label: t('mon.players'), value: String(clients), unit: `/ ${maxClients || '–'}`, pct: maxClients ? (clients / maxClients) * 100 : 0, color: 'var(--accent)', stats: plStats, fmt: (v) => v.toFixed(0) },
   ];
 
   return (
@@ -172,18 +172,18 @@ export default function Monitoring() {
         </PanelCard>
         <PanelCard className="mon-chart-card">
           <div className="spread mon-chart-head">
-            <h3><i style={{ background: 'var(--info)' }} />RAM</h3>
+            <h3><i style={{ background: 'var(--accent)' }} />RAM</h3>
             <b className="mon-chart-val">{Number(load.ramPct || 0).toFixed(0)}%</b>
           </div>
-          <AreaChart data={series} accessor={ramAcc} color="var(--info)" yMax={100} formatY={pctAxis} ariaLabel={t('mon.ramAria')} />
+          <AreaChart data={series} accessor={ramAcc} color="var(--accent)" yMax={100} formatY={pctAxis} ariaLabel={t('mon.ramAria')} />
         </PanelCard>
       </section>
       <PanelCard className="mon-chart-card">
         <div className="spread mon-chart-head">
-          <h3><i style={{ background: 'var(--ok)' }} />{t('mon.players')}</h3>
+          <h3><i style={{ background: 'var(--accent)' }} />{t('mon.players')}</h3>
           <b className="mon-chart-val">{clients} / {maxClients || '–'}</b>
         </div>
-        <AreaChart data={series} accessor={getPlayers} color="var(--ok)" yMax={Math.max(maxClients, 1)} formatY={intAxis} ariaLabel={t('mon.playersAria')} />
+        <AreaChart data={series} accessor={getPlayers} color="var(--accent)" yMax={Math.max(maxClients, 1)} formatY={intAxis} ariaLabel={t('mon.playersAria')} />
       </PanelCard>
       {(state?.instances?.length > 0) && (
         <PanelCard padded={false}>

@@ -891,7 +891,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
                       key={c.id}
                       type="button"
                       className={`st-accent${prefs.accent === c.id ? ' active' : ''}`}
-                      style={{ ['--swatch']: c.hex, ['--swatch-b']: c.brandB }}
+                      style={{ ['--swatch']: c.hex, ['--swatch-b']: c.hex2 }}
                       title={c.label}
                       aria-label={c.label}
                       aria-pressed={prefs.accent === c.id}

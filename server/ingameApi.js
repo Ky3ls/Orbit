@@ -20,8 +20,8 @@ import { getUserPrefs } from './userPrefs.js';
 import { ACCENT_PRESETS } from '../src/prefsShared.js';
 
 function accentPayloadFromPrefs(prefs) {
-  const id = prefs?.accent && ACCENT_PRESETS[prefs.accent] ? prefs.accent : 'nebula';
-  const a = ACCENT_PRESETS[id] || ACCENT_PRESETS.nebula;
+  const id = prefs?.accent && ACCENT_PRESETS[prefs.accent] ? prefs.accent : 'orange';
+  const a = ACCENT_PRESETS[id] || ACCENT_PRESETS.orange;
   return {
     accent: a.id,
     accentHex: a.hex,

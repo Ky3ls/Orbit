@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './config.js';
 import { orbitControlMode, resolveFxLaunch } from './fxLaunch.js';
-import { emitFxConsoleLine, markFxConsoleEof, resetFxConsoleLog } from './fxLogTail.js';
+import { markFxConsoleEof, orbitLogDir, orbitLogFile, resetFxConsoleLog, setFxLineHook } from './fxLogTail.js';
 import { clearConsole, logPanel } from './state.js';
 
 /** Feste Pause nach Crash, bevor erneut gestartet wird (Konsole bleibt sichtbar). */
@@ -75,6 +75,53 @@ function persistPidState() {
 
 function fxPid(inst) {
   return inst?.child?.pid || inst?.adoptedPid || null;
+}
+
+/**
+ * FX-stdin als FIFO statt Pipe: FX hält die FIFO selbst lesend+schreibend offen
+ * (kein EOF) und überlebt so einen Panel-Restart. Jedes Panel kann neu anhängen.
+ */
+function fxStdinFifo(dataPath) {
+  return path.join(orbitLogDir(dataPath), 'fx-stdin.fifo');
+}
+
+function ensureStdinFifo(dataPath) {
+  const fifo = fxStdinFifo(dataPath);
+  fs.mkdirSync(path.dirname(fifo), { recursive: true });
+  try {
+    if (fs.statSync(fifo).isFIFO()) return fifo;
+    fs.unlinkSync(fifo);
+  } catch { /* fehlt */ }
+  execFileSync('mkfifo', ['-m', '600', fifo], { timeout: 3000 });
+  return fifo;
+}
+
+function instDataPath(inst) {
+  return inst?.lastSettings?.fxDataPath || inst?.dataPath || '';
+}
+
+/** Konsole erreichbar: alte Pipe (Altprozess) oder FIFO eines lebenden FX */
+function instConsoleOk(inst) {
+  if (inst.phase !== 'running') return false;
+  if (inst.child?.stdin && !inst.child.stdin.destroyed) return true;
+  const pid = fxPid(inst);
+  const dp = instDataPath(inst);
+  if (!pid || !dp || !pidAlive(pid)) return false;
+  try { return fs.statSync(fxStdinFifo(dp)).isFIFO(); } catch { return false; }
+}
+
+/** Befehl an FX — O_NONBLOCK: ENXIO, wenn niemand liest (FX weg) statt Hänger. */
+function writeFxStdin(inst, line) {
+  if (inst.child?.stdin && !inst.child.stdin.destroyed) {
+    inst.child.stdin.write(`${line}\n`);
+    return;
+  }
+  const fd = fs.openSync(fxStdinFifo(instDataPath(inst)), fs.constants.O_WRONLY | fs.constants.O_NONBLOCK);
+  try {
+    fs.writeSync(fd, `${line}\n`);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function getInst(key) {
@@ -180,10 +227,7 @@ export function supervisorRunning(instanceKey) {
 }
 
 export function supervisorConsoleReady(settings) {
-  const tryKey = (key) => {
-    const inst = getInst(key);
-    return !!(inst.phase === 'running' && inst.child?.stdin && !inst.child.stdin.destroyed);
-  };
+  const tryKey = (key) => instConsoleOk(getInst(key));
   if (settings) {
     if (tryKey(resolveInstanceKey(settings))) return true;
   }
@@ -213,47 +257,30 @@ function settingsKey(settings) {
   return `${settings.fxServerRoot || ''}|${settings.fxDataPath || ''}`;
 }
 
-function attachStreams(proc, logLine, key, dataPath, settings) {
-  const quiet = settings?.quietMode === '1' || settings?.quietMode === true;
-  // Quiet: Live-Konsole + Logdatei weiter; kein Mirror auf process.stdout (systemd/Terminal)
-  const onData = (chunk) => {
-    const text = String(chunk);
-    for (const line of text.split(/\r?\n/)) {
-      const trimmed = line.trimEnd();
-      if (!trimmed) continue;
-      const out = trimmed.slice(0, 480);
-      if (dataPath) emitFxConsoleLine(dataPath, out, logLine);
-      else logLine('info', out);
-      if (!quiet) {
-        try {
-          process.stdout.write(`${out}\n`);
-        } catch { /* */ }
-      }
-    }
-  };
-  proc.stdout?.on('data', onData);
-  proc.stderr?.on('data', onData);
-
-  // Boot-Monitor: harte Start-Fails; Yarn/Webpack → Deadline verlängern
-  const onBootHint = (chunk) => {
-    const t = String(chunk);
-    const inst = getInst(key);
-    if (/yarn install|Running build tasks|Building resource|started building|Fetching packages|Linking dependencies/i.test(t)) {
+/** Boot-Monitor-Hinweise aus FX-Logzeilen (vom Log-Tail, auch nach Panel-Restart). */
+function onFxLogLine(dataPath, line) {
+  for (const [, inst] of instances) {
+    if (instDataPath(inst) !== dataPath) continue;
+    if (/yarn install|Running build tasks|Building resource|started building|Fetching packages|Linking dependencies/i.test(line)) {
       inst.buildBusyUntil = Date.now() + 180_000;
     }
-    if (/Build tasks completed|Done in \d/i.test(t)) {
+    if (/Build tasks completed|Done in \d/i.test(line)) {
       inst.buildBusyUntil = Math.max(inst.buildBusyUntil || 0, Date.now() + 30_000);
     }
     // Nur echte Resource-Timeouts — Webpack-Fehler killen den Server nicht
-    if (/failed to start in time/i.test(t) || /Couldn't start resource/i.test(t)) {
+    if (/failed to start in time/i.test(line) || /Couldn't start resource/i.test(line)) {
       if (!(inst.buildBusyUntil && Date.now() < inst.buildBusyUntil)) {
         inst.bootResourceFail = true;
       }
     }
-  };
-  proc.stdout?.on('data', onBootHint);
-  proc.stderr?.on('data', onBootHint);
+    // Quiet: kein Mirror auf process.stdout (systemd/Terminal)
+    const quiet = inst.lastSettings?.quietMode === '1' || inst.lastSettings?.quietMode === true;
+    if (!quiet) {
+      try { process.stdout.write(`${line}\n`); } catch { /* */ }
+    }
+  }
 }
+setFxLineHook(onFxLogLine);
 
 /**
  * @param {Record<string, string>} settings
@@ -435,16 +462,25 @@ export async function startFxProcess(settings, logLine, opts = {}) {
     logPanel('info', `[FX:${key}] Quiet Mode — FX-Ausgabe nur in Live-Konsole, nicht im Terminal.`);
   }
 
-  // detached: Panel-Restart (KillMode=process) lässt FX weiterlaufen
-  const proc = spawn(launch.command, launch.args, {
-    cwd: launch.dataPath,
-    env: { ...process.env, TZ: process.env.TZ || 'Europe/Berlin' },
-    stdio: ['pipe', 'pipe', 'pipe'],
-    detached: true,
-  });
+  // detached + keine Pipes zum Panel: stdout/stderr → Logdatei (Panel tailt sie),
+  // stdin ← FIFO. So überlebt FX einen Panel-Restart (KillMode=process) ohne SIGPIPE.
+  const logFd = fs.openSync(orbitLogFile(launch.dataPath), 'a');
+  // O_RDWR auf FIFO blockiert nicht und FX hält selbst einen Writer → nie EOF
+  const stdinFd = fs.openSync(ensureStdinFifo(launch.dataPath), fs.constants.O_RDWR);
+  let proc;
+  try {
+    proc = spawn(launch.command, launch.args, {
+      cwd: launch.dataPath,
+      env: { ...process.env, TZ: process.env.TZ || 'Europe/Berlin' },
+      stdio: [stdinFd, logFd, logFd],
+      detached: true,
+    });
+  } finally {
+    fs.closeSync(logFd);
+    fs.closeSync(stdinFd);
+  }
   inst.child = proc;
   inst.adoptedPid = null;
-  attachStreams(proc, logLine, key, launch.dataPath, settings);
   try { proc.unref(); } catch { /* */ }
 
   proc.on('error', (err) => {
@@ -623,10 +659,9 @@ export async function kickAllPlayersOnAllServers(logLine = () => {}, message = '
   let n = 0;
   for (const [key, inst] of instances) {
     if (inst.phase !== 'running' && inst.phase !== 'starting') continue;
-    const stdin = inst.child?.stdin;
-    if (stdin && !stdin.destroyed) {
+    if (instConsoleOk({ ...inst, phase: 'running' })) {
       try {
-        stdin.write(`${cmd}\n`);
+        writeFxStdin(inst, cmd);
         n += 1;
         logLine('info', `[FX:${key}] Spieler gekickt (vor Shutdown)`);
         continue;
@@ -830,19 +865,15 @@ export function sendSupervisorCommand(settings, command) {
     if (settings) {
       const key = resolveInstanceKey(settings);
       const inst = getInst(key);
-      if (inst.phase === 'running' && inst.child?.stdin && !inst.child.stdin.destroyed) {
-        return { key, inst };
-      }
+      if (instConsoleOk(inst)) return { key, inst };
     }
     for (const [key, inst] of instances) {
-      if (inst.phase === 'running' && inst.child?.stdin && !inst.child.stdin.destroyed) {
-        return { key, inst };
-      }
+      if (instConsoleOk(inst)) return { key, inst };
     }
     return null;
   };
   const hit = pick();
   if (!hit) throw new Error('FXServer-Konsole nicht verbunden.');
-  hit.inst.child.stdin.write(`${line}\n`);
+  writeFxStdin(hit.inst, line);
   return '';
 }
