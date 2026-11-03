@@ -462,8 +462,8 @@
   font-weight: 700;
   font-size: 22px;
   letter-spacing: -0.03em;
-  color: #fff;
-  background: var(--brand-grad);
+  color: var(--accent-fg);
+  background: var(--accent);
   box-shadow: none;
 }
 .pl-hero-copy { min-width: 0; }
@@ -1253,7 +1253,7 @@
   .pl-id-row { grid-template-columns: 1fr; gap: 4px; }
 }
 
-/* ═══ Orbit Nebula — Spieler-Hub ═══ */
+/* ═══ Orbit — Spieler-Hub ═══ */
 .pl-hub-charts { gap: 16px; margin-bottom: 0; }
 .pl-hub-chart { padding: 18px 20px 14px; }
 .pl-hub-chart .chart-frame { height: 150px; }
@@ -1287,7 +1287,7 @@
   color: var(--text);
   background: var(--surface-3);
 }
-.pl-card.online .pl-card-avatar { background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.35), color-mix(in srgb, var(--brand-b) 25%, transparent)); }
+.pl-card.online .pl-card-avatar { background: rgba(var(--accent-rgb), 0.16); color: var(--accent-ink); }
 .pl-card.online .pl-card-avatar::after {
   content: '';
   position: absolute;

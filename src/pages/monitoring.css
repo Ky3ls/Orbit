@@ -9,7 +9,7 @@
   width: 180px;
   height: 180px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--mon) 18%, transparent), transparent 70%);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--mon) 8%, transparent), transparent 70%);
   pointer-events: none;
 }
 .mon-tile-head { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: var(--text-2); }
@@ -21,7 +21,7 @@
 .mon-tile-value strong { font-size: 40px; font-weight: 720; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
 .mon-tile-value span { color: var(--muted); font-size: 15px; font-weight: 560; }
 .mon-tile-meter { height: 6px; border-radius: 6px; background: var(--line); overflow: hidden; }
-.mon-tile-meter i { display: block; height: 100%; border-radius: inherit; background: var(--mon); transition: width 0.6s var(--ease); box-shadow: 0 0 12px color-mix(in srgb, var(--mon) 60%, transparent); }
+.mon-tile-meter i { display: block; height: 100%; border-radius: inherit; background: var(--mon); transition: width 0.6s var(--ease); }
 .mon-tile-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 0; }
 .mon-tile-stats div { padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
 .mon-tile-stats dt { font-size: 11px; color: var(--faint); white-space: nowrap; }

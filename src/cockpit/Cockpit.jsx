@@ -238,7 +238,7 @@ export default function Cockpit() {
           sub={t('dash.peak', { n: peak })}
           values={playersSeries}
           max={Math.max(maxClients, 1)}
-          color="var(--ok)"
+          color="var(--accent)"
           pct={maxClients ? (clients / maxClients) * 100 : 0}
           to="/players?filter=online"
         />
@@ -262,7 +262,7 @@ export default function Cockpit() {
           sub={host.ramTotal ? `${fmtBytes(host.ramUsed)} / ${fmtBytes(host.ramTotal)}` : '–'}
           values={ramSeries}
           max={100}
-          color="var(--info)"
+          color="var(--accent)"
           pct={host.ramPct || 0}
           to="/monitoring"
         />
@@ -274,7 +274,7 @@ export default function Cockpit() {
           sub={fxProc.ramUsed ? `RAM ${fmtBytes(fxProc.ramUsed)}` : (fxProc.pid ? `PID ${fxProc.pid}` : '–')}
           values={fxSeries}
           max={100}
-          color="var(--warn)"
+          color="var(--accent)"
           pct={fxProc.cpu || 0}
           to="/monitoring"
         />

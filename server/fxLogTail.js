@@ -4,6 +4,12 @@ import { parseDropFromLogLine, recordDrop } from './playerDrops.js';
 import { notifyPlayerDrop } from './discord.js';
 
 const dropOffsets = new Map();
+
+/** @type {((dataPath: string, line: string) => void) | null} Supervisor-Hook (Boot-Monitor) */
+let lineHook = null;
+export function setFxLineHook(fn) {
+  lineHook = fn;
+}
 /** @type {Map<string, number>} byte-offset für Panel-Konsole */
 const consoleOffsets = new Map();
 
@@ -125,15 +131,20 @@ export function pollFxConsole(dataPath, logLine) {
   }
   if (stat.size <= pos) return 0;
   const fd = fs.openSync(file, 'r');
-  const len = stat.size - pos;
+  const len = Math.min(stat.size - pos, 4 * 1024 * 1024);
   const buf = Buffer.alloc(len);
   fs.readSync(fd, buf, 0, len, pos);
   fs.closeSync(fd);
-  consoleOffsets.set(file, stat.size);
+  // FX schreibt direkt in die Datei → nur vollständige Zeilen verarbeiten
+  const lastNl = buf.lastIndexOf(0x0a);
+  if (lastNl < 0 && len < 64 * 1024) return 0;
+  const used = lastNl < 0 ? len : lastNl + 1;
+  consoleOffsets.set(file, pos + used);
   let n = 0;
-  for (const line of buf.toString('utf8').split(/\r?\n/)) {
+  for (const line of buf.subarray(0, used).toString('utf8').split(/\r?\n/)) {
     const trimmed = line.trimEnd();
     if (!trimmed) continue;
+    try { lineHook?.(dataPath, trimmed); } catch { /* */ }
     if (BUSY_SPAM_RE.test(trimmed)) {
       const key = trimmed.slice(0, 160);
       const now = Date.now();

@@ -1,4 +1,4 @@
-/* ═══ Orbit Nebula — Basis, Typografie, Utilities ═══ */
+/* ═══ Orbit — Basis, Typografie, Utilities ═══ */
 *,
 *::before,
 *::after { box-sizing: border-box; }
@@ -22,25 +22,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
-}
-
-/* Nebel-Hintergrund: zwei weiche Lichtquellen in Akzentfarbe */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(900px 520px at 12% -10%, rgba(var(--accent-rgb), 0.13), transparent 60%),
-    radial-gradient(700px 480px at 100% 0%, color-mix(in srgb, var(--brand-b) 9%, transparent), transparent 62%),
-    var(--bg);
-}
-:root[data-theme='light'] body::before {
-  background:
-    radial-gradient(900px 520px at 12% -10%, rgba(var(--accent-rgb), 0.09), transparent 60%),
-    radial-gradient(700px 480px at 100% 0%, color-mix(in srgb, var(--brand-b) 7%, transparent), transparent 62%),
-    var(--bg);
 }
 
 #root { min-height: 100vh; }

@@ -88,8 +88,8 @@
   display: grid;
   place-items: center;
   font-weight: 700;
-  background: var(--brand-grad);
-  color: #fff;
+  background: var(--accent);
+  color: var(--accent-fg);
 }
 
 .orb-cfx-id .eyebrow {

@@ -55,9 +55,9 @@ a:hover .dash-link svg { transform: translateX(3px); }
   padding: 28px 28px 24px;
   min-height: 210px;
   background:
-    radial-gradient(120% 140% at 0% 0%, rgba(var(--accent-rgb), 0.16), transparent 55%),
-    linear-gradient(160deg, var(--surface-2), var(--surface));
-  border-color: var(--line-2);
+    radial-gradient(120% 140% at 0% 0%, rgba(var(--accent-rgb), 0.07), transparent 55%),
+    var(--surface);
+  border-color: var(--line);
 }
 .dash-hero.tone-ok { --tone: var(--ok); --tone-rgb: var(--ok-rgb); }
 .dash-hero.tone-bad { --tone: var(--bad); --tone-rgb: var(--bad-rgb); }
@@ -69,7 +69,7 @@ a:hover .dash-link svg { transform: translateX(3px); }
   width: 460px;
   height: 460px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--brand-b) 22%, transparent), transparent 70%);
+  background: none;
   pointer-events: none;
 }
 /* Dekorative Orbit-Bahnen */
@@ -87,12 +87,12 @@ a:hover .dash-link svg { transform: translateX(3px); }
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
   transform: rotateX(70deg) rotateZ(-28deg);
 }
 .dash-hero-orbit i:nth-child(2) {
   inset: 34px;
-  border-color: color-mix(in srgb, var(--brand-b) 40%, transparent);
+  border-color: var(--line-2);
   transform: rotateX(70deg) rotateZ(38deg);
 }
 .dash-hero-orbit b {
@@ -108,8 +108,7 @@ a:hover .dash-link svg { transform: translateX(3px); }
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--brand-b);
-  box-shadow: 0 0 16px var(--brand-b);
+  background: var(--accent);
 }
 .dash-hero-main { position: relative; min-width: 0; flex: 1 1 360px; }
 .dash-greet { margin: 0 0 6px; color: var(--muted); font-size: 13.5px; }
@@ -119,10 +118,7 @@ a:hover .dash-link svg { transform: translateX(3px); }
   font-weight: 720;
   letter-spacing: -0.035em;
   line-height: 1.05;
-  background: linear-gradient(120deg, var(--text) 30%, color-mix(in srgb, var(--accent-2) 75%, var(--text)));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--text);
   overflow-wrap: anywhere;
 }
 .dash-host {
@@ -178,7 +174,7 @@ a:hover .dash-link svg { transform: translateX(3px); }
 .dash-restart-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
 .dash-restart-ring > svg:last-child { position: static; transform: none; width: 26px; height: 26px; color: var(--accent-ink); }
 .ring-track { fill: none; stroke: var(--line-2); stroke-width: 7; }
-.ring-fill { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; transition: stroke-dasharray 0.8s var(--ease); filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.6)); }
+.ring-fill { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; transition: stroke-dasharray 0.8s var(--ease); }
 .dash-restart-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .dash-restart-text strong { font-size: 30px; font-weight: 640; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .dash-restart-text .muted { font-size: 12.5px; }
@@ -261,7 +257,7 @@ a:hover .dash-link svg { transform: translateX(3px); }
   font-size: 12.5px;
   font-weight: 700;
   color: var(--text);
-  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.3), color-mix(in srgb, var(--brand-b) 22%, transparent));
+  background: var(--surface-3);
 }
 .dash-pavatar::after {
   content: '';
