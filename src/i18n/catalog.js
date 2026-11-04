@@ -28,6 +28,8 @@ const de = {
   'nav.menu': 'Menü',
   'nav.live': 'Live',
   'nav.manage': 'Verwaltung',
+  'nav.games': 'Instanzen',
+  'nav.instances': 'Alle Instanzen',
   'nav.ingame': 'Ingame-Menü',
 
   // Common
@@ -402,6 +404,8 @@ const en = {
   'nav.menu': 'Menu',
   'nav.live': 'Live',
   'nav.manage': 'Management',
+  'nav.games': 'Instances',
+  'nav.instances': 'All instances',
   'nav.ingame': 'In-game menu',
 
   'common.save': 'Save',

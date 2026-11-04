@@ -96,6 +96,7 @@ import {
 import { runRecipeInstall } from './recipeInstall.js';
 import { runRecipeYaml } from './recipeRunner.js';
 import { fetchRecommendedBuild, installArtifact } from './artifacts.js';
+import { ensureMcTables, handleMinecraftApi, initMinecraft } from './minecraft/mcApi.js';
 import { handlePlatformApi, initPlatform } from './platformApi.js';
 import { handleIngamePublicApi } from './ingameApi.js';
 import { primaryId, normalizeIdentifiers, mergeIdLists, cleanupPlayerDuplicates } from './playerIdentity.js';
@@ -962,6 +963,10 @@ async function handleApi(req, res, url) {
   const me = session;
 
   if (await handlePlatformApi({
+    req, res, url, method, pathname, me, db, ip, json, hasPerm, readBody, logLine,
+  })) return;
+
+  if (await handleMinecraftApi({
     req, res, url, method, pathname, me, db, ip, json, hasPerm, readBody, logLine,
   })) return;
 
@@ -3828,6 +3833,12 @@ const boot = (async () => {
       if (n > 0) auditSystem(db, 'fx.adopt', `${n} Instanz(en)`);
     } catch (err) {
       auditSystem(db, 'fx.adopt.fail', err.message);
+    }
+    try {
+      ensureMcTables(db);
+      initMinecraft(db, logLine);
+    } catch (err) {
+      auditSystem(db, 'mc.init.fail', err.message);
     }
     if (s.fxDataPath) backfillFxConsole(s.fxDataPath, logLine, 100);
     syncOrbitSystemResource(s.fxServerRoot || FX_SERVER_ROOT, s.fxDataPath || '', auditLogger(db, 'orbit.sync'));

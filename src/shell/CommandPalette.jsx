@@ -27,7 +27,7 @@ function score(hay, q) {
 /**
  * Befehlspalette (Strg/⌘ + K): Seiten, Server-Aktionen, Spielersuche, Darstellung.
  */
-export default function CommandPalette({ open, onClose, user, prefs, setAppearance, canControl, status, onLogout, onShortcuts, refreshStatus }) {
+export default function CommandPalette({ open, onClose, user, prefs, setAppearance, canControl, status, onLogout, onShortcuts, refreshStatus, mcList = [] }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
@@ -89,6 +89,20 @@ export default function CommandPalette({ open, onClose, user, prefs, setAppearan
         run: () => { navigate(m.to); return true; },
       });
     }
+    for (const m of mcList) {
+      out.push({
+        id: `mc:${m.id}`,
+        section: 'Instanzen',
+        icon: 'cube',
+        label: m.name,
+        hint: `Minecraft · ${m.type} ${m.mcVersion}${m.phase === 'running' ? ' · online' : ''}`,
+        hay: `${m.name} minecraft ${m.type} ${m.mcVersion} instanz server`,
+        run: () => { navigate(`/mc/${m.id}`); return true; },
+      });
+    }
+    if (user.role === 'owner' || user.role === 'admin') {
+      out.push({ id: 'mc:new', section: 'Instanzen', icon: 'plus', label: 'Neue Instanz erstellen', hint: 'Minecraft', hay: 'neue instanz erstellen minecraft server paper fabric forge neoforge vanilla purpur', run: () => { navigate('/instances/new'); return true; } });
+    }
     if (canControl) {
       const busy = status === 'starting' || status === 'stopping' || status === 'restarting';
       if (!busy && status !== 'online') {
@@ -132,7 +146,7 @@ export default function CommandPalette({ open, onClose, user, prefs, setAppearan
     out.push({ id: 'ui:keys', section: t('palette.help'), icon: 'keyboard', label: t('palette.shortcuts'), hay: 'shortcuts tastenkürzel hilfe keyboard', kbd: ['?'], run: () => { onShortcuts(); return true; } });
     out.push({ id: 'ui:logout', section: t('palette.help'), icon: 'logout', label: t('common.logout'), hay: 'logout abmelden ausloggen', run: () => { onLogout(); return true; } });
     return out;
-  }, [t, user.role, canControl, status, prefs, armed, q, navigate, setAppearance, onLogout, onShortcuts]);
+  }, [t, user.role, canControl, status, prefs, armed, q, navigate, setAppearance, onLogout, onShortcuts, mcList]);
 
   const results = useMemo(() => {
     const scored = items
