@@ -21,6 +21,7 @@ import ServerLog from './pages/ServerLog.jsx';
 import Settings from './pages/Settings.jsx';
 import Instances from './pages/mc/Instances.jsx';
 import McCreate from './pages/mc/McCreate.jsx';
+import McImport from './pages/mc/McImport.jsx';
 import McInstance from './pages/mc/McInstance.jsx';
 import Setup from './pages/Setup.jsx';
 
@@ -162,6 +163,7 @@ export default function App() {
           <Route path="database" element={setupOk ? <Database user={session.user} /> : <Navigate to="/setup" replace />} />
           <Route path="instances" element={setupOk ? <Instances /> : <Navigate to="/setup" replace />} />
           <Route path="instances/new" element={setupOk ? <McCreate /> : <Navigate to="/setup" replace />} />
+          <Route path="instances/import" element={setupOk ? <McImport /> : <Navigate to="/setup" replace />} />
           <Route path="mc/:id" element={setupOk ? <McInstance /> : <Navigate to="/setup" replace />} />
           <Route path="mc/:id/:tab" element={setupOk ? <McInstance /> : <Navigate to="/setup" replace />} />
           <Route path="more" element={setupOk ? <More /> : <Navigate to="/setup" replace />} />
