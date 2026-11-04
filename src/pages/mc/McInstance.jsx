@@ -1,27 +1,24 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api.js';
-import Drawer from '../../components/Drawer.jsx';
 import GameMark from '../../components/GameMark.jsx';
 import { toast } from '../../components/toast.jsx';
-import { Empty, Page } from '../../components/Ui.jsx';
+import { Page } from '../../components/Ui.jsx';
 import { NavIcon } from '../../layout/icons.jsx';
-import { TYPE_META, fmtDur, fmtMb, phaseOf, serverAddress } from './mcShared.js';
+import { TYPE_META, fmtDur, fmtMb, phaseOf } from './mcShared.js';
+import McFiles from './McFiles.jsx';
+import McMods from './McMods.jsx';
+import McSettings from './McSettings.jsx';
 import './mc.css';
 
 const TABS = [
   { id: 'console', label: 'Übersicht & Konsole', icon: 'term' },
   { id: 'mods', label: 'Mods', icon: 'box' },
-  { id: 'properties', label: 'server.properties', icon: 'cfg' },
+  { id: 'settings', label: 'Einstellungen', icon: 'cfg' },
+  { id: 'files', label: 'Dateien', icon: 'folder' },
   { id: 'instance', label: 'Instanz', icon: 'gear' },
 ];
 const QUICK = ['list', 'save-all', 'time set day', 'weather clear', 'tps'];
-
-function fmtCount(n) {
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} Mio.`;
-  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
-  return String(n);
-}
 
 /* ── Konsole ── */
 function Console({ inst }) {
@@ -112,316 +109,90 @@ function Console({ inst }) {
   );
 }
 
-/* ── Mods / Plugins ── */
-function Mods({ inst, noun }) {
-  const [data, setData] = useState(null);
-  const [updates, setUpdates] = useState(null);
-  const [browse, setBrowse] = useState(false);
-  const [q, setQ] = useState('');
-  const [results, setResults] = useState(null);
+/* ── Adresse & Erreichbarkeit ── */
+function Reach({ inst }) {
+  const [host, setHost] = useState('');
+  const [saved, setSaved] = useState('');
+  const [check, setCheck] = useState(null);
+  const [ext, setExt] = useState(null);
   const [busy, setBusy] = useState('');
-  const [filter, setFilter] = useState('');
-  const fileRef = useRef(null);
-  const one = noun === 'Plugins' ? 'Plugin' : 'Mod';
-
-  const load = useCallback(() => {
-    api(`/api/mc/instances/${inst.id}/mods`).then(setData).catch((e) => toast.err(e.message));
-  }, [inst.id]);
-  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (!browse) return undefined;
-    const id = setTimeout(() => {
-      setResults(null);
-      api(`/api/mc/instances/${inst.id}/mods/search?q=${encodeURIComponent(q)}`)
-        .then(setResults)
-        .catch((e) => { setResults({ hits: [], total: 0 }); toast.err(e.message); });
-    }, 250);
-    return () => clearTimeout(id);
-  }, [browse, q, inst.id]);
-
-  const restartHint = (d) => { if (d?.restartNeeded) toast.warn('Neustart nötig', { text: 'Änderungen greifen nach einem Server-Neustart.' }); };
-
-  async function install(hit) {
-    setBusy(hit.id);
-    try {
-      const d = await api(`/api/mc/instances/${inst.id}/mods/install`, { method: 'POST', body: { projectId: hit.id } });
-      toast.ok(`${hit.title} installiert`, { text: d.added.length > 1 ? `Inkl. Abhängigkeiten: ${d.added.slice(1).join(', ')}` : undefined });
-      restartHint(d);
-      setResults((r) => r && { ...r, hits: r.hits.map((h) => (h.id === hit.id ? { ...h, installed: true } : h)) });
-      load();
-    } catch (e) {
-      toast.err(`${hit.title}: ${e.message}`);
-    }
-    setBusy('');
-  }
-
-  async function toggle(m) {
-    try {
-      const d = await api(`/api/mc/instances/${inst.id}/mods/toggle`, { method: 'POST', body: { file: m.file, enabled: !m.enabled } });
-      restartHint(d);
-      load();
-    } catch (e) { toast.err(e.message); }
-  }
-
-  async function remove(m) {
-    if (!window.confirm(`${m.title} entfernen?`)) return;
-    try {
-      const d = await api(`/api/mc/instances/${inst.id}/mods?file=${encodeURIComponent(m.file)}`, { method: 'DELETE' });
-      toast.ok(`${m.title} entfernt`);
-      restartHint(d);
-      load();
-    } catch (e) { toast.err(e.message); }
-  }
-
-  async function checkUpdates() {
-    setBusy('updates');
-    try {
-      const d = await api(`/api/mc/instances/${inst.id}/mods/updates`);
-      setUpdates(d.updates || {});
-      const n = Object.keys(d.updates || {}).length;
-      toast(n ? `${n} Update${n === 1 ? '' : 's'} verfügbar` : 'Alles aktuell');
-    } catch (e) { toast.err(e.message); }
-    setBusy('');
-  }
-
-  async function update(m) {
-    const u = updates?.[m.file];
-    if (!u) return;
-    setBusy(m.file);
-    try {
-      const d = await api(`/api/mc/instances/${inst.id}/mods/update`, { method: 'POST', body: { file: m.file, projectId: u.projectId } });
-      toast.ok(`${m.title} → ${u.version}`);
-      restartHint(d);
-      setUpdates((x) => { const n = { ...x }; delete n[m.file]; return n; });
-      load();
-    } catch (e) { toast.err(e.message); }
-    setBusy('');
-  }
-
-  async function upload(e) {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setBusy('upload');
-    try {
-      const res = await fetch(`/api/mc/instances/${inst.id}/mods/upload?name=${encodeURIComponent(file.name)}`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/octet-stream', 'X-TX2-Client': '1' },
-        body: file,
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || 'Upload fehlgeschlagen');
-      toast.ok(`${d.file} hochgeladen`);
-      restartHint(d);
-      load();
-    } catch (err) { toast.err(err.message); }
-    setBusy('');
-  }
-
-  const items = (data?.items || []).filter((m) => !filter || m.title.toLowerCase().includes(filter.toLowerCase()));
-  const enabled = (data?.items || []).filter((m) => m.enabled).length;
-
-  return (
-    <>
-      <section className="mci-mods card">
-        <header className="mci-mods-head">
-          <div>
-            <h2>Installierte {noun}</h2>
-            <p>{data ? `${data.items.length} gesamt · ${enabled} aktiv` : 'Lädt…'}</p>
-          </div>
-          <div className="mci-mods-actions">
-            <div className="lg-search"><NavIcon name="search" /><input placeholder="Filtern…" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
-            <button type="button" className="btn btn-sm" disabled={busy === 'updates'} onClick={checkUpdates}><NavIcon name="refresh" />Updates prüfen</button>
-            <button type="button" className="btn btn-sm" disabled={busy === 'upload'} onClick={() => fileRef.current?.click()}><NavIcon name="external" />.jar hochladen</button>
-            <input ref={fileRef} type="file" accept=".jar" hidden onChange={upload} />
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => setBrowse(true)}><NavIcon name="plus" />{one} hinzufügen</button>
-          </div>
-        </header>
-        {data && data.items.length === 0 ? (
-          <div className="sch2-empty">
-            <NavIcon name="box" />
-            <b>Noch keine {noun}</b>
-            <span>Durchsuche Modrinth — Orbit zeigt nur {noun}, die zu {TYPE_META[inst.type]?.label} {inst.mcVersion} passen.</span>
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => setBrowse(true)}><NavIcon name="search" />{noun} durchsuchen</button>
-          </div>
-        ) : (
-          <ul className="mci-modlist">
-            {items.map((m) => (
-              <li key={m.file} className={m.enabled ? '' : 'off'}>
-                {m.icon ? <img src={m.icon} alt="" loading="lazy" /> : <span className="mci-modico"><NavIcon name="box" /></span>}
-                <div className="mci-modtext">
-                  <b>{m.title}{m.dependency ? <em>Abhängigkeit</em> : null}{m.manual ? <em>manuell</em> : null}</b>
-                  <span className="mono">{m.version || m.file}</span>
-                </div>
-                {updates?.[m.file] ? (
-                  <button type="button" className="btn btn-sm mci-upd" disabled={busy === m.file} onClick={() => update(m)}><NavIcon name="refresh" />{updates[m.file].version}</button>
-                ) : null}
-                <span className="mci-size">{fmtMb(Math.round(m.size / 1048576 * 10) / 10)}</span>
-                <button type="button" role="switch" aria-checked={m.enabled} aria-label={m.enabled ? 'Deaktivieren' : 'Aktivieren'} className={`switch${m.enabled ? ' on' : ''}`} onClick={() => toggle(m)} />
-                <button type="button" className="o-icon-btn" title="Entfernen" onClick={() => remove(m)}><NavIcon name="x" /></button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {browse && (
-        <Drawer label={`${noun} hinzufügen`} width={640} onClose={() => setBrowse(false)}>
-          <header className="pp-head">
-            <div className="pp-top">
-              <span className="mci-mr"><NavIcon name="search" /></span>
-              <div className="pp-title">
-                <h2>{noun} hinzufügen</h2>
-                <div className="pp-sub"><span className="pp-state">Modrinth · passend zu {TYPE_META[inst.type]?.label} {inst.mcVersion}</span></div>
-              </div>
-              <button type="button" className="pp-close" aria-label="Schließen" onClick={() => setBrowse(false)}><NavIcon name="x" /></button>
-            </div>
-            <div className="pl-search mci-browse-search">
-              <NavIcon name="search" />
-              <input autoFocus placeholder={`${one} suchen, z. B. ${noun === 'Plugins' ? 'LuckPerms, EssentialsX' : 'Lithium, Create, JEI'}`} value={q} onChange={(e) => setQ(e.target.value)} />
-            </div>
-          </header>
-          <div className="pp-scroll">
-            {!results ? <div className="mcx-loading">Suche…</div> : results.hits.length === 0 ? (
-              <Empty title="Nichts gefunden" text="Andere Suchbegriffe probieren — es werden nur kompatible Versionen angezeigt." />
-            ) : (
-              <>
-                <p className="muted mci-count">{q ? `${results.total} Treffer` : 'Beliebteste'}</p>
-                <ul className="mci-results">
-                  {results.hits.map((h) => (
-                    <li key={h.id}>
-                      {h.icon ? <img src={h.icon} alt="" loading="lazy" /> : <span className="mci-modico"><NavIcon name="box" /></span>}
-                      <div className="mci-res-text">
-                        <b>{h.title}<small> von {h.author}</small></b>
-                        <p>{h.description}</p>
-                        <div className="mci-res-meta">
-                          <span><NavIcon name="external" />{fmtCount(h.downloads)}</span>
-                          {h.categories.map((c) => <span key={c} className="tag">{c}</span>)}
-                        </div>
-                      </div>
-                      {h.installed ? (
-                        <span className="badge ok">Installiert</span>
-                      ) : (
-                        <button type="button" className="btn btn-sm btn-primary" disabled={!!busy} onClick={() => install(h)}>
-                          {busy === h.id ? 'Lädt…' : 'Installieren'}
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        </Drawer>
-      )}
-    </>
-  );
-}
-
-/* ── server.properties ── */
-function Properties({ inst }) {
-  const [schema, setSchema] = useState([]);
-  const [saved, setSaved] = useState(null);
-  const [values, setValues] = useState({});
-  const [raw, setRaw] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    api(`/api/mc/instances/${inst.id}/properties`).then((d) => {
-      setSchema(d.schema || []);
-      setSaved(d.values || {});
-      setValues(d.values || {});
-    }).catch((e) => toast.err(e.message));
-  }, [inst.id]);
-
-  const groups = useMemo(() => {
-    const out = new Map();
-    for (const f of schema) {
-      if (!out.has(f.group)) out.set(f.group, []);
-      out.get(f.group).push(f);
-    }
-    return [...out.entries()];
-  }, [schema]);
-  const known = new Set(schema.map((f) => f.key));
-  const extra = Object.keys(values).filter((k) => !known.has(k)).sort();
-  const dirtyKeys = saved ? Object.keys(values).filter((k) => values[k] !== saved[k]) : [];
-  const set = (k, v) => setValues((x) => ({ ...x, [k]: String(v) }));
+    api('/api/mc/address').then((d) => { setHost(d.host || ''); setSaved(d.host || ''); setCheck(d.check); }).catch(() => {});
+  }, []);
 
   async function save() {
-    setBusy(true);
+    setBusy('save');
     try {
-      const patch = Object.fromEntries(dirtyKeys.map((k) => [k, values[k]]));
-      const d = await api(`/api/mc/instances/${inst.id}/properties`, { method: 'PUT', body: { values: patch } });
-      setSaved(d.values);
-      setValues(d.values);
-      toast.ok('server.properties gespeichert', { text: d.restartNeeded ? 'Greift nach einem Neustart.' : undefined });
+      const d = await api('/api/mc/address', { method: 'PUT', body: { host } });
+      setSaved(d.host);
+      setHost(d.host);
+      setCheck(d.check);
+      toast.ok('Adresse gespeichert', { text: `${d.host}:${inst.port}` });
     } catch (e) { toast.err(e.message); }
-    setBusy(false);
+    setBusy('');
+  }
+  async function testOutside() {
+    setBusy('ext');
+    setExt(null);
+    try { setExt(await api(`/api/mc/instances/${inst.id}/reach`)); } catch (e) { toast.err(e.message); }
+    setBusy('');
   }
 
-  if (!saved) return <div className="mcx-loading">Lädt…</div>;
-  if (!Object.keys(saved).length) return <div className="card"><Empty title="Noch keine server.properties" text="Die Datei entsteht beim ersten Start des Servers." /></div>;
-
-  const field = (f) => {
-    const v = values[f.key] ?? '';
-    if (f.type === 'bool') {
-      return <button type="button" role="switch" aria-checked={v === 'true'} className={`switch${v === 'true' ? ' on' : ''}`} onClick={() => set(f.key, v === 'true' ? 'false' : 'true')} />;
-    }
-    if (f.type === 'select') {
-      return (
-        <select value={v} onChange={(e) => set(f.key, e.target.value)}>
-          {!f.options.includes(v) && v ? <option value={v}>{v}</option> : null}
-          {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-      );
-    }
-    return <input type={f.type === 'number' ? 'number' : 'text'} min={f.min} max={f.max} value={v} readOnly={f.readonly} onChange={(e) => set(f.key, e.target.value)} className={f.type === 'number' ? 'sx-num' : ''} />;
-  };
-
+  const full = `${saved || host}:${inst.port}`;
   return (
-    <div className="sx-stack">
-      <div className="mci-props-bar">
-        <div className="seg">
-          <button type="button" className={raw ? '' : 'active'} onClick={() => setRaw(false)}>Formular</button>
-          <button type="button" className={raw ? 'active' : ''} onClick={() => setRaw(true)}>Alle Schlüssel</button>
+    <section className="sx-card">
+      <header className="sx-card-head">
+        <div><h3>Adresse & Erreichbarkeit</h3><p>Diese Adresse tragen Spieler in Minecraft ein. Gilt für alle Minecraft-Instanzen.</p></div>
+      </header>
+      <div className="sx-card-body">
+        <div className="sx-row">
+          <div className="sx-row-text"><b>Öffentliche Adresse</b><span>Domain (z. B. play.deinserver.de) oder IP — ohne Port</span></div>
+          <div className="sx-row-ctl mci-inline">
+            <input value={host} placeholder="play.deinserver.de" onChange={(e) => setHost(e.target.value.trim())} />
+            <button type="button" className="btn btn-sm" disabled={busy === 'save' || host === saved} onClick={save}>Speichern</button>
+          </div>
         </div>
-        <span className="muted">Port ändert man unter „Instanz“.</span>
+        {check && (
+          <div className={`mci-dns ${check.cloudflare ? 'bad' : !check.resolves && !check.isIp ? 'bad' : check.pointsHere ? 'ok' : 'warn'}`}>
+            <NavIcon name={check.cloudflare || (!check.resolves && !check.isIp) ? 'x' : check.pointsHere ? 'check' : 'bolt'} />
+            <div>
+              {check.cloudflare ? (
+                <><b>Läuft über den Cloudflare-Proxy — Minecraft kann so nicht verbinden.</b><span>Bei Cloudflare den DNS-Eintrag auf „Nur DNS“ (graue Wolke) stellen. Minecraft nutzt reines TCP, das der Proxy nicht weiterleitet.</span></>
+              ) : !check.resolves && !check.isIp ? (
+                <><b>Domain ist nicht auflösbar.</b><span>DNS-Eintrag (A-Record) auf {check.local?.[0] || 'die Server-IP'} anlegen.</span></>
+              ) : check.pointsHere ? (
+                <><b>DNS ist korrekt.</b><span>{check.host} → {check.ips.join(', ')} (dieser Server)</span></>
+              ) : (
+                <><b>Zeigt nicht auf diesen Server.</b><span>{check.host} → {check.ips.join(', ')} · dieser Server: {check.local?.join(', ')}</span></>
+              )}
+            </div>
+          </div>
+        )}
+        <div className="sx-row">
+          <div className="sx-row-text"><b>Verbinden mit</b><span>{inst.port === 25565 ? 'Standard-Port — in Minecraft reicht auch die Adresse ohne :25565' : 'Nicht-Standard-Port — muss in Minecraft mit angegeben werden'}</span></div>
+          <div className="sx-row-ctl mci-inline">
+            <code className="mci-full mono">{full}</code>
+            <button type="button" className="btn btn-sm" onClick={() => navigator.clipboard?.writeText(full).then(() => toast.ok('Adresse kopiert', { text: full }))}><NavIcon name="copy" />Kopieren</button>
+          </div>
+        </div>
+        <div className="sx-row">
+          <div className="sx-row-text"><b>Von außen prüfen</b><span>Fragt den öffentlichen Dienst mcsrvstat.us, ob der Server aus dem Internet erreichbar ist.</span></div>
+          <div className="sx-row-ctl mci-inline">
+            {ext ? (
+              <span className={`badge ${ext.external.online ? 'ok' : 'bad'}`}>{ext.external.online ? `Erreichbar · ${ext.external.version || ''} · ${ext.external.players || ''}` : 'Nicht erreichbar'}</span>
+            ) : null}
+            <button type="button" className="btn btn-sm" disabled={busy === 'ext' || !inst.status.pid} onClick={testOutside}><NavIcon name="globe" />{busy === 'ext' ? 'Prüft…' : inst.status.pid ? 'Jetzt prüfen' : 'Server starten'}</button>
+          </div>
+        </div>
+        {ext && !ext.external.online && (
+          <div className="mci-dns bad">
+            <NavIcon name="x" />
+            <div><b>Von außen nicht erreichbar.</b><span>Port {inst.port} (TCP) in der Firewall deines Hosters freigeben (z. B. IONOS Cloud-Firewall) und prüfen, ob die Adresse auf diesen Server zeigt.</span></div>
+          </div>
+        )}
       </div>
-      {!raw ? groups.map(([g, fields]) => (
-        <section key={g} className="sx-card">
-          <header className="sx-card-head"><div><h3>{g}</h3></div></header>
-          <div className="sx-card-body">
-            {fields.map((f) => (
-              <div key={f.key} className="sx-row">
-                <div className="sx-row-text"><b>{f.label}</b><span className="mono">{f.key}</span></div>
-                <div className="sx-row-ctl">{field(f)}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )) : (
-        <section className="sx-card">
-          <div className="sx-card-body">
-            {[...schema.map((f) => f.key), ...extra].filter((k) => k in values).map((k) => (
-              <div key={k} className="sx-row">
-                <div className="sx-row-text"><b className="mono">{k}</b></div>
-                <div className="sx-row-ctl"><input className="mono" value={values[k] ?? ''} readOnly={k === 'server-port' || k === 'query.port'} onChange={(e) => set(k, e.target.value)} /></div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-      {dirtyKeys.length > 0 && (
-        <div className="sx-savebar" role="status">
-          <span className="sx-savebar-dot" />
-          <span className="sx-savebar-text">{dirtyKeys.length} ungespeicherte Änderung{dirtyKeys.length === 1 ? '' : 'en'}</span>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setValues(saved)}>Verwerfen</button>
-          <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={save}>{busy ? 'Speichert…' : 'Speichern'}</button>
-        </div>
-      )}
-    </div>
+    </section>
   );
 }
 
@@ -489,6 +260,7 @@ function InstanceSettings({ inst, onChange }) {
           {ram ? <ul className="mci-reasons">{ram.reasons.map((r) => <li key={r}>{r}</li>)}</ul> : null}
         </div>
       </section>
+      <Reach inst={inst} />
       <section className="sx-card">
         <header className="sx-card-head"><div><h3>Allgemein</h3></div></header>
         <div className="sx-card-body">
@@ -518,9 +290,13 @@ function InstanceSettings({ inst, onChange }) {
             <div className="sx-row-text"><b>Crash-Neustart</b><span>Nach einem Absturz automatisch neu starten (max. 3× in 10 Min.).</span></div>
             <div className="sx-row-ctl"><button type="button" role="switch" aria-checked={inst.autoRestart} className={`switch${inst.autoRestart ? ' on' : ''}`} onClick={() => patch({ autoRestart: !inst.autoRestart }, 'Gespeichert')} /></div>
           </div>
-          <div className="sx-row">
-            <div className="sx-row-text"><b>Ordner</b></div>
-            <div className="sx-row-ctl"><code className="mci-path">{inst.path}</code></div>
+          <div className="sx-row stack">
+            <div className="sx-row-text"><b>Ordner auf dem Server</b><span>Hier liegen Welt, Configs und {inst.modKind || 'Daten'} dieser Instanz.</span></div>
+            <div className="sx-row-ctl mci-pathrow">
+              <code className="mci-path mono">{inst.path}</code>
+              <button type="button" className="btn btn-sm" onClick={() => navigator.clipboard?.writeText(inst.path).then(() => toast.ok('Pfad kopiert', { text: inst.path }))}><NavIcon name="copy" />Kopieren</button>
+              <button type="button" className="btn btn-sm" onClick={() => navigate(`/mc/${inst.id}/files`)}><NavIcon name="folder" />Im Dateimanager</button>
+            </div>
           </div>
         </div>
       </section>
@@ -571,7 +347,7 @@ export default function McInstance() {
   const ph = phaseOf(inst);
   const st = inst.status;
   const tabs = TABS.filter((t) => t.id !== 'mods' || inst.modKind).map((t) => (t.id === 'mods' ? { ...t, label: inst.modKind } : t));
-  const addr = serverAddress(inst);
+  const addr = inst.address || `${window.location.hostname}:${inst.port}`;
 
   return (
     <Page className="mcx-page mci-page">
@@ -648,8 +424,9 @@ export default function McInstance() {
           </aside>
         </div>
       )}
-      {tab === 'mods' && inst.modKind && <Mods inst={inst} noun={inst.modKind} />}
-      {tab === 'properties' && <Properties inst={inst} />}
+      {tab === 'mods' && inst.modKind && <McMods inst={inst} noun={inst.modKind} onRestart={() => control('restart')} />}
+      {(tab === 'settings' || tab === 'properties') && <McSettings inst={inst} />}
+      {tab === 'files' && <McFiles inst={inst} />}
       {tab === 'instance' && <InstanceSettings inst={inst} onChange={setInst} />}
     </Page>
   );

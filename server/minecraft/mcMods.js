@@ -105,6 +105,8 @@ export async function installMod(inst, projectId, log = () => {}, depth = 0, see
     projectId,
     slug: project.slug,
     title: project.title,
+    description: project.description || '',
+    categories: (project.categories || []).slice(0, 4),
     icon: project.icon_url,
     versionId: version.id,
     versionNumber: version.version_number,
@@ -130,6 +132,25 @@ export async function installMod(inst, projectId, log = () => {}, depth = 0, see
   return added;
 }
 
+/** Fehlende Beschreibungen/Kategorien älterer Installationen einmalig nachladen */
+export async function enrichMeta(inst) {
+  const meta = readMeta(inst);
+  const missing = Object.values(meta).filter((m) => m.projectId && m.description == null);
+  if (!missing.length) return;
+  try {
+    const ids = JSON.stringify(missing.map((m) => m.projectId));
+    const list = await mr(`/projects?ids=${encodeURIComponent(ids)}`, { signal: AbortSignal.timeout(4000) });
+    for (const p of list || []) {
+      const m = meta[p.id];
+      if (!m) continue;
+      m.description = p.description || '';
+      m.categories = (p.categories || []).slice(0, 4);
+    }
+    for (const m of missing) if (m.description == null) m.description = '';
+    writeMeta(inst, meta);
+  } catch { /* offline — beim nächsten Mal erneut */ }
+}
+
 /** Installierte Mods/Plugins (Ordner-Inhalt + Modrinth-Metadaten) */
 export function listMods(inst) {
   const k = modKind(inst);
@@ -150,6 +171,9 @@ export function listMods(inst) {
       enabled,
       size,
       title: m?.title || base.replace(/\.jar$/i, ''),
+      description: m?.description || '',
+      categories: m?.categories || [],
+      installedAt: m?.installedAt || null,
       icon: m?.icon || null,
       version: m?.versionNumber || null,
       projectId: m?.projectId || null,
