@@ -55,7 +55,10 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
   const canManage = canControl && (me.role === 'owner' || me.role === 'admin');
   const canConsole = hasPerm(me, 'console.write') || canControl;
   const deny = () => json(res, 403, { error: 'Keine Berechtigung.' });
-  const fail = (e, code = 400) => json(res, code, { error: e.message || String(e) });
+  const fail = (e, code = 400) => {
+    if (res.headersSent) { try { res.end(); } catch { /* */ } return; }
+    json(res, code, { error: e.message || String(e) });
+  };
   if (!canView) { deny(); return true; }
 
   try {
@@ -168,9 +171,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
           json(res, 200, { pending: true });
           return true;
         }
-        const cat = itemCatalog(ver);
-        res.setHeader('Cache-Control', 'private, max-age=3600');
-        json(res, 200, cat);
+        json(res, 200, itemCatalog(ver));
         return true;
       }
       const file = texturePath(ver, url.searchParams.get('p'));
