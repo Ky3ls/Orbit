@@ -8,11 +8,13 @@ import { NavIcon } from '../../layout/icons.jsx';
 import { TYPE_META, fmtDur, fmtMb, phaseOf } from './mcShared.js';
 import McFiles from './McFiles.jsx';
 import McMods from './McMods.jsx';
+import McPlayers from './McPlayers.jsx';
 import McSettings from './McSettings.jsx';
 import './mc.css';
 
 const TABS = [
   { id: 'console', label: 'Übersicht & Konsole', icon: 'term' },
+  { id: 'players', label: 'Spieler', icon: 'users' },
   { id: 'mods', label: 'Mods', icon: 'box' },
   { id: 'settings', label: 'Einstellungen', icon: 'cfg' },
   { id: 'files', label: 'Dateien', icon: 'folder' },
@@ -424,6 +426,7 @@ export default function McInstance() {
           </aside>
         </div>
       )}
+      {tab === 'players' && <McPlayers inst={inst} />}
       {tab === 'mods' && inst.modKind && <McMods inst={inst} noun={inst.modKind} onRestart={() => control('restart')} />}
       {(tab === 'settings' || tab === 'properties') && <McSettings inst={inst} />}
       {tab === 'files' && <McFiles inst={inst} />}

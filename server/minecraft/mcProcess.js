@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { DATA_DIR } from '../config.js';
+import { ensureRconProperties } from './mcRcon.js';
 import { getMcInstance, listMcInstances, updateMcInstance } from './mcDb.js';
 import { jvmFlags } from './mcRam.js';
 
@@ -163,6 +164,7 @@ export async function startMc(db, id, log = () => {}) {
   clearTimeout(s.restartTimer);
   rotateLog(inst);
   appendLog(inst, `[Orbit] ─── Start ${new Date().toLocaleString('de-DE')} · ${inst.ram_mb} MB RAM ───`);
+  try { ensureRconProperties(inst); } catch { /* RCON optional */ }
   const ids = ownForRun(inst);
   const logFd = fs.openSync(consoleLog(inst), 'a');
   const stdinFd = fs.openSync(ensureFifo(inst), fs.constants.O_RDWR);
