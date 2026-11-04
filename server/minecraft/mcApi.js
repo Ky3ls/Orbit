@@ -413,7 +413,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
     }
     const pm = sub.match(/^\/players\/([0-9a-fA-F-]{36})(\/inventory)?$/);
     if (pm && method === 'GET' && !pm[2]) {
-      json(res, 200, { player: await playerDetail(inst, pm[1]) });
+      json(res, 200, { player: await playerDetail(inst, pm[1], { parts: url.searchParams.get('parts') || '' }) });
       return true;
     }
     if (pm && pm[2] && method === 'POST') {

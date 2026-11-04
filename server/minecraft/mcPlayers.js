@@ -2,9 +2,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { plain, readNbtFile, T, writeNbtFile } from './mcNbt.js';
-import { chownForRun, consoleLog, isRunning, mcStatus, sendMc } from './mcProcess.js';
+import { chownForRun, consoleLog, consoleQuery, isRunning, mcStatus, sendMc } from './mcProcess.js';
 import { readProperties, writeProperties } from './mcProperties.js';
 import { rcon, rconConfig } from './mcRcon.js';
+import { parseSnbt } from './mcSnbt.js';
 import { UA } from './mcSources.js';
 
 /* ── Pfade & Dateien ── */
@@ -361,7 +362,7 @@ function lastIps(inst) {
   return map;
 }
 
-export async function playerDetail(inst, uuidIn) {
+export async function playerDetail(inst, uuidIn, opts = {}) {
   const uuid = dashUuid(uuidIn);
   if (!uuid) throw new Error('Ungültige UUID.');
   const list = await listPlayers(inst);
@@ -371,12 +372,21 @@ export async function playerDetail(inst, uuidIn) {
   let raw = null;
   let source = null;
   const datFile = path.join(dirs.data, `${uuid}.dat`);
-  if (base.online && list.rcon) {
-    // `data get` kürzt lange Ausgaben → Spieler speichern lassen und die frische Datei lesen
-    source = (await freshSave(inst, datFile)) ? 'live' : 'file-stale';
-  }
   if (fs.existsSync(datFile)) {
-    try { raw = plain(readNbtFile(datFile)); if (!source) source = 'file'; } catch { /* beschädigt */ }
+    try { raw = plain(readNbtFile(datFile)); source = 'file'; } catch { /* beschädigt */ }
+  }
+  if (base.online && list.running) {
+    try {
+      const parts = opts.parts === 'inv' ? [...INV_PARTS, 'active_effects'] : opts.parts === 'all' ? [...INV_PARTS, 'active_effects', 'abilities'] : ['active_effects'];
+      const live = await livePlayer(inst, base.name, parts);
+      if (Object.keys(live).length) {
+        raw = { ...(raw || {}), ...live };
+        // fehlende Liste = leer (z. B. keine Effekte mehr)
+        if (parts.includes('active_effects') && !live.active_effects) raw.active_effects = [];
+        if (parts.includes('EnderItems') && !live.EnderItems) raw.EnderItems = [];
+        source = 'live';
+      }
+    } catch { /* Datei bleibt */ }
   }
   const statsJson = readJson(path.join(dirs.stats, `${uuid}.json`), null);
   const s = statsJson?.stats || {};
@@ -388,6 +398,7 @@ export async function playerDetail(inst, uuidIn) {
     source,
     canEdit: base.online ? true : !!raw,
     editMode: base.online ? 'command' : 'file',
+    liveParts: source === 'live' ? (opts.parts || 'vitals') : null,
     data: raw ? normalizePlayer(raw) : null,
     stats: statsJson ? {
       summary: statsSummary(statsJson),
@@ -403,21 +414,31 @@ export async function playerDetail(inst, uuidIn) {
   };
 }
 
-/* ── Frische Spielerdaten: save-all (gedrosselt), dann auf neue .dat warten ── */
-const lastSave = new Map();
-async function freshSave(inst, datFile) {
-  const last = lastSave.get(inst.id) || 0;
-  if (Date.now() - last < 4000) return true;
-  lastSave.set(inst.id, Date.now());
-  const before = mtime(datFile) || 0;
-  try { await rcon(inst, 'save-all'); } catch { return false; }
-  for (let i = 0; i < 30; i += 1) {
-    if ((mtime(datFile) || 0) > before) return true;
-    await new Promise((r) => setTimeout(r, 100));
+/* ── Live-Daten eines Online-Spielers ──
+ * Kurze Werte per RCON (keine Konsolen-Ausgabe), Inventar & Co. über die Konsole (dort ungekürzt). */
+const VITALS = ['Health', 'foodLevel', 'foodSaturationLevel', 'XpLevel', 'XpP', 'XpTotal', 'Pos', 'Dimension', 'playerGameType', 'SelectedItemSlot', 'AbsorptionAmount', 'Air', 'Fire'];
+const INV_PARTS = ['Inventory', 'equipment', 'EnderItems'];
+
+async function livePlayer(inst, name, parts) {
+  const raw = {};
+  const useRcon = !!rconConfig(inst);
+  const consoleKeys = [...parts];
+  if (useRcon) {
+    const outs = await Promise.all(VITALS.map((k) => rcon(inst, `data get entity ${name} ${k}`).catch(() => '')));
+    VITALS.forEach((k, i) => {
+      const out = outs[i];
+      const at = out.indexOf('entity data: ');
+      if (at < 0 || out.endsWith('...')) return;
+      try { raw[k] = parseSnbt(out.slice(at + 13)); } catch { /* */ }
+    });
+  } else consoleKeys.push(...VITALS);
+  for (const key of consoleKeys) {
+    const txt = await consoleQuery(inst, `data get entity ${name} ${key}`, name);
+    if (txt == null) continue;
+    try { raw[key] = parseSnbt(txt); } catch { /* */ }
   }
-  return (mtime(datFile) || 0) > before;
+  return raw;
 }
-export function invalidateSave(inst) { lastSave.delete(inst.id); }
 
 /** Item-Modifier inline: ab 26.x heißt der Schlüssel `type`, davor `function` */
 async function modify(inst, target, slot, fn, args) {
@@ -467,9 +488,10 @@ export async function editInventory(inst, uuidIn, body) {
   const id = String(body.id || '');
   if (op === 'set' && !ITEM_RE.test(id)) throw new Error('Ungültige Item-ID.');
 
+  if (op === 'move') return moveItem(inst, detail, String(body.from || ''), String(body.to || ''));
+
   if (detail.online) {
     const n = detail.name;
-    invalidateSave(inst);
     if (op === 'clear') return command(inst, `clear ${n}`);
     if (op === 'clear-ender') {
       for (let i = 0; i < 27; i += 1) await command(inst, `item replace entity ${n} enderchest.${i} with minecraft:air`);
@@ -477,7 +499,6 @@ export async function editInventory(inst, uuidIn, body) {
     }
     const s = cmdSlot(body.slot);
     if (op === 'remove') return command(inst, `item replace entity ${n} ${s} with minecraft:air`);
-    invalidateSave(inst);
     if (op === 'count') return modify(inst, n, s, 'minecraft:set_count', `count:${count}`);
     if (op === 'repair') return modify(inst, n, s, 'minecraft:set_damage', 'damage:1.0');
     if (op === 'set') return command(inst, `item replace entity ${n} ${s} with ${id} ${count}`);
@@ -531,6 +552,84 @@ export async function editInventory(inst, uuidIn, body) {
   chownForRun(file);
   try { chownForRun(`${file}.orbit-bak`); } catch { /* */ }
   return { ok: true, file: true };
+}
+
+/* ── Items verschieben / tauschen ── */
+const slotKey = (slot) => String(slot);
+function occupiedMap(norm) {
+  const m = new Map();
+  for (const [n, it] of Object.entries(norm.inv)) m.set(`inv:${n}`, it);
+  for (const [n, it] of Object.entries(norm.ender)) m.set(`ender:${n}`, it);
+  for (const k of ['head', 'chest', 'legs', 'feet']) if (norm.equip[k]) m.set(`armor:${k}`, norm.equip[k]);
+  if (norm.equip.offhand) m.set('offhand', norm.equip.offhand);
+  return m;
+}
+
+async function moveItem(inst, detail, from, to) {
+  cmdSlot(from); cmdSlot(to); // validiert beide
+  if (from === to) return { ok: true };
+  if (detail.online) {
+    const n = detail.name;
+    const live = await livePlayer(inst, n, INV_PARTS);
+    const occ = occupiedMap(normalizePlayer({ ...live, EnderItems: live.EnderItems || [] }));
+    if (!occ.has(slotKey(from))) throw new Error('Der Slot ist inzwischen leer.');
+    const F = cmdSlot(from);
+    const D = cmdSlot(to);
+    if (!occ.has(slotKey(to))) {
+      await command(inst, `item replace entity ${n} ${D} from entity ${n} ${F}`);
+      await command(inst, `item replace entity ${n} ${F} with minecraft:air`);
+      return { ok: true };
+    }
+    // Tauschen über einen freien Zwischen-Slot
+    const order = [...Array.from({ length: 27 }, (_, i) => i + 9), ...Array.from({ length: 9 }, (_, i) => i)].map((i) => `inv:${i}`);
+    const tmp = order.find((k) => !occ.has(k) && k !== from && k !== to);
+    if (!tmp) throw new Error('Zum Tauschen braucht der Spieler einen freien Inventar-Slot.');
+    const T2 = cmdSlot(tmp);
+    await command(inst, `item replace entity ${n} ${T2} from entity ${n} ${D}`);
+    await command(inst, `item replace entity ${n} ${D} from entity ${n} ${F}`);
+    await command(inst, `item replace entity ${n} ${F} from entity ${n} ${T2}`);
+    await command(inst, `item replace entity ${n} ${T2} with minecraft:air`);
+    return { ok: true, swapped: true };
+  }
+
+  // offline: direkt in der Spielerdatei
+  const file = path.join(playerDirs(inst).data, `${detail.uuid}.dat`);
+  if (!fs.existsSync(file)) throw new Error('Für diesen Spieler gibt es noch keine Spielerdaten.');
+  const root = readNbtFile(file);
+  const dv = root.v.DataVersion?.v || 0;
+  const take = (slot) => {
+    const ref = fileSlotRef(root, slot, dv);
+    if (ref.type === 'list') {
+      const idx = ref.list.v.findIndex((e) => e.v.Slot?.v === ref.n);
+      if (idx < 0) return null;
+      const [tag] = ref.list.v.splice(idx, 1);
+      delete tag.v.Slot;
+      return tag;
+    }
+    const tag = ref.comp[ref.key] || null;
+    delete ref.comp[ref.key];
+    return tag;
+  };
+  const put = (slot, tag) => {
+    const ref = fileSlotRef(root, slot, dv);
+    if (ref.type === 'list') {
+      tag.v.Slot = { t: T.BYTE, v: ref.n };
+      ref.list.v.push(tag);
+      ref.list.et = T.COMPOUND;
+    } else {
+      delete tag.v.Slot;
+      ref.comp[ref.key] = tag;
+    }
+  };
+  const a = take(from);
+  if (!a) throw new Error('Der Slot ist leer.');
+  const b = take(to);
+  put(to, a);
+  if (b) put(from, b);
+  writeNbtFile(file, root);
+  chownForRun(file);
+  try { chownForRun(`${file}.orbit-bak`); } catch { /* */ }
+  return { ok: true, file: true, swapped: !!b };
 }
 
 /* ── Aktionen (Kick, Bann, OP, Whitelist, …) ── */

@@ -121,16 +121,37 @@ export function rconConfig(inst) {
   return { port: Number(p['rcon.port']) || 25575, password: p['rcon.password'] };
 }
 
-/** RCON in server.properties einschalten (greift beim nächsten Start) */
-export function ensureRconProperties(inst) {
-  const p = readProperties(inst.path);
-  if (p['enable-rcon'] === 'true' && p['rcon.password'] && p['rcon.port']) return false;
-  writeProperties(inst.path, {
-    'enable-rcon': 'true',
-    'rcon.port': String(p['rcon.port'] && p['rcon.port'] !== '25575' ? p['rcon.port'] : 35000 + Number(inst.id)),
-    'rcon.password': p['rcon.password'] || crypto.randomBytes(24).toString('base64url'),
-    'broadcast-rcon-to-ops': 'false',
+function portFree(port) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(false));
+    srv.once('listening', () => srv.close(() => resolve(true)));
+    srv.listen(port, '0.0.0.0');
   });
+}
+
+/**
+ * RCON in server.properties einschalten (greift beim Start).
+ * Der Port muss frei sein — sonst bindet der Server RCON nicht und wir landen bei einem fremden Dienst.
+ * @param {number[]} reserved RCON-/Spiel-Ports anderer Instanzen
+ */
+export async function ensureRconProperties(inst, reserved = []) {
+  const p = readProperties(inst.path);
+  const want = Number(p['rcon.port']) && p['rcon.port'] !== '25575' ? Number(p['rcon.port']) : 35000 + Number(inst.id);
+  let port = want;
+  const taken = new Set(reserved.map(Number));
+  for (let i = 0; i < 200; i += 1) {
+    const cand = want + i;
+    if (!taken.has(cand) && await portFree(cand)) { port = cand; break; }
+  }
+  const patch = {};
+  if (p['enable-rcon'] !== 'true') patch['enable-rcon'] = 'true';
+  if (String(port) !== p['rcon.port']) patch['rcon.port'] = String(port);
+  if (!p['rcon.password']) patch['rcon.password'] = crypto.randomBytes(24).toString('base64url');
+  if (p['broadcast-rcon-to-ops'] !== 'false') patch['broadcast-rcon-to-ops'] = 'false';
+  if (!Object.keys(patch).length) return false;
+  writeProperties(inst.path, patch);
+  dropRcon(inst);
   return true;
 }
 
