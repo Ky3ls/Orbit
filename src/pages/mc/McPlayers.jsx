@@ -32,9 +32,10 @@ export default function McPlayers({ inst }) {
   const [sel, setSel] = useState(null);
   const [adding, setAdding] = useState(false);
   const [bc, setBc] = useState(false);
+  const [loadErr, setLoadErr] = useState(null);
 
   const load = useCallback(() => {
-    api(`/api/mc/instances/${inst.id}/players`).then(setData).catch((e) => toast.err(e.message));
+    api(`/api/mc/instances/${inst.id}/players`).then((d) => { setData(d); setLoadErr(null); }).catch((e) => setLoadErr(e.message || 'Anfrage fehlgeschlagen'));
   }, [inst.id]);
   useEffect(() => {
     load();
@@ -59,6 +60,14 @@ export default function McPlayers({ inst }) {
     return true;
   });
 
+  if (!data && loadErr) {
+    return (
+      <div className="card mm-empty">
+        <Empty title="Spieler konnten nicht geladen werden" text={loadErr} />
+        <div className="mcp-retry"><button type="button" className="btn btn-sm" onClick={load}><NavIcon name="refresh" />Erneut versuchen</button></div>
+      </div>
+    );
+  }
   if (!data) return <div className="mcx-loading">Lädt Spieler…</div>;
 
   const toggleWl = async () => {

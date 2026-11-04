@@ -231,3 +231,5 @@ div.mcp-tile { padding-right: 14px; }
   .mcp-slot { width: 38px; height: 38px; }
   .mcp-gm { grid-template-columns: 1fr 1fr; }
 }
+.mcp-retry { display: flex; justify-content: center; padding: 0 0 20px; }
+.mcp-retry .btn svg { width: 14px; height: 14px; }
