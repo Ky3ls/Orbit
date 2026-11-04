@@ -8,6 +8,7 @@ import { checkUpdates, enrichMeta, installMod, listMods, modKind, removeMod, sav
 import { listConfigs, readConfig, writeConfigRaw, writeConfigValues } from './mcConfig.js';
 import { listDir, makeDir, readText, removePath, renamePath, streamFile, uploadFile, writeText } from './mcFiles.js';
 import { assetsReady, defaultSkin, ensureAssets, itemCatalog, skinFor, texturePath } from './mcAssets.js';
+import { archiveEntries, backupDir, backupOverview, createBackup, deleteBackup, ensureBackupTable, getBackupJob, initMcBackups, listBackups, publicJob, restoreBackup, setBackupCfg, streamBackup, updateBackup, uploadBackup } from './mcBackup.js';
 import { analyzeServer, getImportJob, importServer, scanServers } from './mcImport.js';
 import { editInventory, listPlayers, playerAction, playerDetail } from './mcPlayers.js';
 import { checkHost, externalCheck, publicHost, setPublicHost } from './mcNet.js';
@@ -16,7 +17,7 @@ import { PROPERTY_SCHEMA, readProperties, writeProperties } from './mcProperties
 import { hostMemory, suggestRam } from './mcRam.js';
 import { MC_TYPES, listVersions, requiredJava } from './mcSources.js';
 
-export { ensureMcTables, initMinecraft };
+export { ensureMcTables, initMinecraft, initMcBackups, ensureBackupTable };
 
 function publicInstance(inst, host = '') {
   let launch = {};
@@ -268,8 +269,11 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       if (body.deleteFiles && target.startsWith(path.resolve(MC_ROOT) + path.sep)) {
         fs.rmSync(target, { recursive: true, force: true });
       }
+      if (body.deleteBackups) {
+        try { fs.rmSync(backupDir(inst), { recursive: true, force: true }); } catch { /* */ }
+      }
       deleteMcInstanceRow(db, inst.id);
-      audit(db, me.username, 'mc.delete', `${inst.name}${body.deleteFiles ? ' (inkl. Dateien)' : ''}`, ip);
+      audit(db, me.username, 'mc.delete', `${inst.name}${body.deleteFiles ? ' (inkl. Dateien)' : ''}${body.deleteBackups ? ' (inkl. Backups)' : ''}`, ip);
       json(res, 200, { ok: true });
       return true;
     }
@@ -422,6 +426,86 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       const out = await editInventory(inst, pm[1], body);
       audit(db, me.username, 'mc.player.inventory', `${inst.name}: ${pm[1].slice(0, 8)} ${body.op} ${body.slot || ''} ${body.id || ''}`.trim(), ip);
       json(res, 200, { ok: true, viaFile: !!out?.file });
+      return true;
+    }
+
+    /* ── Backups ── */
+    if (sub === '/backups' && method === 'GET') {
+      json(res, 200, backupOverview(db, inst));
+      return true;
+    }
+    if (sub === '/backups' && method === 'POST') {
+      if (!canControl) return deny() || true;
+      const body = await readBody(req);
+      const job = createBackup(db, inst, { scope: body.scope, note: body.note, by: me.username, announce: body.announce !== false });
+      audit(db, me.username, 'mc.backup.create', `${inst.name}: ${body.scope || 'full'}`, ip);
+      json(res, 200, { job: publicJob(job) });
+      return true;
+    }
+    const bj = sub.match(/^\/backups\/jobs\/(\d+)$/);
+    if (bj && method === 'GET') {
+      const job = getBackupJob(bj[1]);
+      if (!job || job.instanceId !== inst.id) throw new Error('Job nicht gefunden.');
+      json(res, 200, { job: publicJob(job) });
+      return true;
+    }
+    if (sub === '/backups/settings' && method === 'PUT') {
+      if (!canManage) return deny() || true;
+      const body = await readBody(req);
+      const cfg = setBackupCfg(db, inst, body);
+      audit(db, me.username, 'mc.backup.settings', `${inst.name}: ${cfg.enabled ? `alle ${cfg.everyHours} h, ${cfg.scope}, behalten ${cfg.keep}` : 'aus'}`, ip);
+      json(res, 200, backupOverview(db, inst));
+      return true;
+    }
+    if (sub === '/backups/restore' && method === 'POST') {
+      if (!canManage) return deny() || true;
+      const body = await readBody(req);
+      const job = restoreBackup(db, inst, {
+        file: body.file,
+        entries: Array.isArray(body.entries) ? body.entries.map(String) : null,
+        stop: !!body.stop,
+        startAfter: !!body.startAfter,
+        safety: body.safety !== false,
+        by: me.username,
+        log: logLine,
+      });
+      audit(db, me.username, 'mc.backup.restore', `${inst.name}: ${String(body.file).slice(0, 80)}${body.entries?.length ? ` (${body.entries.join(', ').slice(0, 80)})` : ''}`, ip);
+      json(res, 200, { job: publicJob(job) });
+      return true;
+    }
+    if (sub === '/backups/entries' && method === 'GET') {
+      const file = url.searchParams.get('file');
+      const b = listBackups(inst).find((x) => x.file === file);
+      if (!b) throw new Error('Backup nicht gefunden.');
+      json(res, 200, { entries: b.entries || await archiveEntries(`${backupDir(inst)}/${b.file}`) });
+      return true;
+    }
+    if (sub === '/backups/download' && method === 'GET') {
+      if (!canManage) return deny() || true;
+      audit(db, me.username, 'mc.backup.download', `${inst.name}: ${String(url.searchParams.get('file')).slice(0, 80)}`, ip);
+      streamBackup(inst, url.searchParams.get('file'), res);
+      return true;
+    }
+    if (sub === '/backups/upload' && method === 'POST') {
+      if (!canManage) return deny() || true;
+      const out = await uploadBackup(inst, req, url.searchParams.get('name'), me.username);
+      audit(db, me.username, 'mc.backup.upload', `${inst.name}: ${out.file}`, ip);
+      json(res, 200, { ok: true, ...out });
+      return true;
+    }
+    if (sub === '/backups/file' && method === 'PATCH') {
+      if (!canControl) return deny() || true;
+      const body = await readBody(req);
+      updateBackup(inst, url.searchParams.get('file'), body);
+      json(res, 200, { ok: true });
+      return true;
+    }
+    if (sub === '/backups/file' && method === 'DELETE') {
+      if (!canManage) return deny() || true;
+      const file = url.searchParams.get('file');
+      deleteBackup(inst, file);
+      audit(db, me.username, 'mc.backup.delete', `${inst.name}: ${String(file).slice(0, 80)}`, ip);
+      json(res, 200, { ok: true });
       return true;
     }
 
