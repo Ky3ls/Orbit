@@ -41,11 +41,47 @@ function highlightLine(line) {
   return out;
 }
 
+/* YAML/JSON/Properties: Schlüssel, Strings, Zahlen, Booleans, Kommentare */
+function highlightData(line) {
+  const t = line.trimStart();
+  if (t.startsWith('#') || t.startsWith('//')) return `<span class="tk-c">${escapeHtml(line)}</span>`;
+  let code = line;
+  let comment = '';
+  let inStr = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"' || ch === "'") inStr = !inStr;
+    if (!inStr && ch === '#' && (i === 0 || /\s/.test(line[i - 1]))) { code = line.slice(0, i); comment = line.slice(i); break; }
+  }
+  const m = code.match(/^(\s*-?\s*)("?[\w.@$\-/ ]+"?)(\s*[:=])(.*)$/);
+  let out;
+  if (m) {
+    out = `${escapeHtml(m[1])}<span class="tk-k">${escapeHtml(m[2])}</span>${escapeHtml(m[3])}${valueHtml(m[4])}`;
+  } else {
+    out = valueHtml(code);
+  }
+  if (comment) out += `<span class="tk-c">${escapeHtml(comment)}</span>`;
+  return out;
+}
+function valueHtml(v) {
+  return escapeHtml(v)
+    .replace(/(&quot;|")([^"]*)("?)/g, '<span class="tk-s">"$2$3</span>')
+    .replace(/'([^']*)'/g, '<span class="tk-s">\'$1\'</span>')
+    .replace(/(^|[\s,[:])(true|false|null|~)(?=[\s,\]}]|$)/g, '$1<span class="tk-f">$2</span>')
+    .replace(/(^|[\s,[:])(-?\d+(?:\.\d+)?)(?=[\s,\]}]|$)/g, '$1<span class="tk-n">$2</span>');
+}
+
+export function langFor(file) {
+  if (/\.(cfg)$/i.test(file || '')) return 'cfg';
+  if (/\.(ya?ml|json5?|properties|toml|conf|ini|mcmeta|snbt|lang)$/i.test(file || '')) return 'data';
+  return 'plain';
+}
+
 /**
  * Code-Editor: Textarea über hervorgehobenem <pre>, plus Zeilennummern + Statusleiste.
  * Ref zeigt auf die Textarea (Suche nutzt setSelectionRange/scrollTop).
  */
-const CfgCode = forwardRef(function CfgCode({ value, onChange, disabled, ariaLabel, dirty, readOnly, footerHint }, ref) {
+const CfgCode = forwardRef(function CfgCode({ value, onChange, disabled, ariaLabel, dirty, readOnly, footerHint, lang = 'cfg', langLabel }, ref) {
   const taRef = useRef(null);
   const preRef = useRef(null);
   const gutterRef = useRef(null);
@@ -58,7 +94,10 @@ const CfgCode = forwardRef(function CfgCode({ value, onChange, disabled, ariaLab
   }, [ref]);
 
   const lines = useMemo(() => String(value || '').split('\n'), [value]);
-  const html = useMemo(() => lines.map(highlightLine).join('\n'), [lines]);
+  const html = useMemo(() => {
+    const fn = lang === 'cfg' ? highlightLine : lang === 'data' ? highlightData : escapeHtml;
+    return lines.map(fn).join('\n');
+  }, [lines, lang]);
   const ensures = useMemo(() => lines.filter((l) => /^\s*ensure\s/i.test(l)).length, [lines]);
 
   const sync = useCallback(() => {
@@ -131,10 +170,10 @@ const CfgCode = forwardRef(function CfgCode({ value, onChange, disabled, ariaLab
         {readOnly ? <span className="cfgx-ro">Schreibgeschützt</span> : null}
         <span>Zeile {cursor.line}, Spalte {cursor.col}</span>
         <span>{lines.length} Zeilen</span>
-        <span>{ensures} ensure</span>
+        {lang === 'cfg' ? <span>{ensures} ensure</span> : null}
         <span className="grow" />
         {footerHint ? <span className="cfgx-hint">{footerHint}</span> : null}
-        <span>CFG · UTF-8</span>
+        <span>{langLabel || (lang === 'cfg' ? 'CFG' : lang === 'data' ? 'YAML/JSON' : 'Text')} · UTF-8</span>
       </div>
     </div>
   );

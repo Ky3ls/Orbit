@@ -421,7 +421,7 @@ export default function McCreate() {
                 </div>
               </div>
               <dl className="mcx-preview-facts">
-                <div><dt>Adresse</dt><dd className="mono">{typeof window !== 'undefined' ? window.location.hostname : ''}{Number(form.port) === 25565 ? '' : `:${form.port}`}</dd></div>
+                <div><dt>Adresse</dt><dd className="mono">{typeof window !== 'undefined' ? window.location.hostname : ''}:{form.port}</dd></div>
                 <div><dt>Typ</dt><dd>{tm.label} {form.mcVersion}</dd></div>
                 <div><dt>Modus</dt><dd>{form.hardcore ? 'Hardcore' : { survival: 'Überleben', creative: 'Kreativ', adventure: 'Abenteuer' }[form.gamemode]} · {{ peaceful: 'Friedlich', easy: 'Leicht', normal: 'Normal', hard: 'Schwer' }[form.difficulty]}</dd></div>
                 <div><dt>PvP</dt><dd>{form.pvp ? 'An' : 'Aus'}</dd></div>

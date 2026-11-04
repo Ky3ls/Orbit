@@ -114,6 +114,15 @@ function ownForRun(inst) {
   return ids;
 }
 
+/** Einzelne Datei/Ordner nach Bearbeitung im Panel dem Laufzeit-Benutzer zurückgeben */
+export function chownForRun(absPath, recursive = false) {
+  const ids = runAs();
+  if (!ids) return;
+  try {
+    execFileSync('chown', [...(recursive ? ['-R'] : []), `${ids.uid}:${ids.gid}`, absPath], { timeout: 60_000 });
+  } catch { /* nicht kritisch — beim nächsten Start wird ohnehin übernommen */ }
+}
+
 /** Launch-Argumente aus der gespeicherten Launch-Beschreibung */
 export function launchArgs(inst) {
   let launch = {};

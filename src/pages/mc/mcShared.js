@@ -37,7 +37,9 @@ export function fmtDur(ms) {
   return `${Math.floor(h / 24)} Tage`;
 }
 
+/** Adresse immer mit Port — vom Server (öffentliche Adresse), sonst Panel-Host */
 export function serverAddress(inst) {
+  if (inst.address) return inst.address;
   const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-  return inst.port === 25565 ? host : `${host}:${inst.port}`;
+  return `${host}:${inst.port}`;
 }

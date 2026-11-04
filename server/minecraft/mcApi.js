@@ -4,15 +4,18 @@ import { audit } from '../db.js';
 import { MC_ROOT, deleteMcInstanceRow, ensureMcTables, getMcInstance, listMcInstances, updateMcInstance } from './mcDb.js';
 import { createInstance, getJob, isPortAvailable, suggestPort } from './mcInstall.js';
 import { ensureJava, listJavas } from './mcJava.js';
-import { checkUpdates, installMod, listMods, modKind, removeMod, saveUpload, searchMods, toggleMod, updateMod } from './mcMods.js';
-import { initMinecraft, isRunning, mcStatus, readConsole, restartMc, runningRamMb, sendMc, startMc, stopMc } from './mcProcess.js';
+import { checkUpdates, enrichMeta, installMod, listMods, modKind, removeMod, saveUpload, searchMods, toggleMod, updateMod } from './mcMods.js';
+import { listConfigs, readConfig, writeConfigRaw, writeConfigValues } from './mcConfig.js';
+import { listDir, makeDir, readText, removePath, renamePath, streamFile, uploadFile, writeText } from './mcFiles.js';
+import { checkHost, externalCheck, publicHost, setPublicHost } from './mcNet.js';
+import { chownForRun, initMinecraft, isRunning, mcStatus, readConsole, restartMc, runningRamMb, sendMc, startMc, stopMc } from './mcProcess.js';
 import { PROPERTY_SCHEMA, readProperties, writeProperties } from './mcProperties.js';
 import { hostMemory, suggestRam } from './mcRam.js';
 import { MC_TYPES, listVersions, requiredJava } from './mcSources.js';
 
 export { ensureMcTables, initMinecraft };
 
-function publicInstance(inst) {
+function publicInstance(inst, host = '') {
   let launch = {};
   try { launch = JSON.parse(inst.launch || '{}'); } catch { /* */ }
   return {
@@ -25,6 +28,8 @@ function publicInstance(inst) {
     loaderVersion: inst.loader_version,
     path: inst.path,
     port: inst.port,
+    host,
+    address: host ? `${host}:${inst.port}` : null,
     ramMb: inst.ram_mb,
     javaMajor: inst.java_major,
     javaPath: inst.java_path,
@@ -99,9 +104,28 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
 
+    /* ── Öffentliche Adresse ── */
+    if (pathname === '/api/mc/address') {
+      if (method === 'PUT') {
+        if (!canManage) return deny() || true;
+        const body = await readBody(req);
+        const host = setPublicHost(db, body.host);
+        audit(db, me.username, 'mc.address', host, ip);
+        json(res, 200, { host, check: host ? await checkHost(host) : null });
+        return true;
+      }
+      const host = publicHost(db);
+      json(res, 200, { host, check: host ? await checkHost(host) : null });
+      return true;
+    }
+    if (method === 'GET' && pathname === '/api/mc/address/check') {
+      json(res, 200, await checkHost(String(url.searchParams.get('host') || '').trim().toLowerCase()));
+      return true;
+    }
+
     /* ── Instanzen ── */
     if (method === 'GET' && pathname === '/api/mc/instances') {
-      json(res, 200, { instances: listMcInstances(db).map(publicInstance), host: { ...hostMemory(), reservedMb: runningRamMb(db) } });
+      json(res, 200, { instances: listMcInstances(db).map((i) => publicInstance(i, publicHost(db))), host: { ...hostMemory(), reservedMb: runningRamMb(db) } });
       return true;
     }
     if (method === 'POST' && pathname === '/api/mc/instances') {
@@ -120,7 +144,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
         properties: body.properties && typeof body.properties === 'object' ? body.properties : undefined,
       }, logLine);
       audit(db, me.username, 'mc.create', `${out.instance.name} (${body.type} ${body.mcVersion})`, ip);
-      json(res, 200, { instance: publicInstance(out.instance), jobId: out.jobId });
+      json(res, 200, { instance: publicInstance(out.instance, publicHost(db)), jobId: out.jobId });
       return true;
     }
     const jm = pathname.match(/^\/api\/mc\/jobs\/(\d+)$/);
@@ -139,7 +163,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
     const sub = im[2] || '';
 
     if (method === 'GET' && sub === '') {
-      json(res, 200, { instance: publicInstance(inst) });
+      json(res, 200, { instance: publicInstance(inst, publicHost(db)) });
       return true;
     }
     if (method === 'PATCH' && sub === '') {
@@ -168,7 +192,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       }
       const next = updateMcInstance(db, inst.id, patch);
       audit(db, me.username, 'mc.update', `${inst.name}: ${Object.keys(patch).join(', ')}`, ip);
-      json(res, 200, { instance: publicInstance(next) });
+      json(res, 200, { instance: publicInstance(next, publicHost(db)) });
       return true;
     }
     if (method === 'DELETE' && sub === '') {
@@ -229,7 +253,87 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
         return true;
       }
     }
+    if (method === 'GET' && sub === '/reach') {
+      const host = publicHost(db);
+      if (!host) throw new Error('Keine öffentliche Adresse eingestellt.');
+      json(res, 200, { host, port: inst.port, dns: await checkHost(host), external: await externalCheck(host, inst.port) });
+      return true;
+    }
+
+    /* ── Configs (Paper/Spigot/Bukkit/Purpur) ── */
+    if (method === 'GET' && sub === '/configs') {
+      json(res, 200, { configs: listConfigs(inst) });
+      return true;
+    }
+    const cm = sub.match(/^\/configs\/([a-z-]+)$/);
+    if (cm) {
+      if (method === 'GET') {
+        json(res, 200, readConfig(inst, cm[1]));
+        return true;
+      }
+      if (method === 'PUT') {
+        if (!canManage) return deny() || true;
+        const body = await readBody(req, 4 * 1048576);
+        const file = body.raw !== undefined ? writeConfigRaw(inst, cm[1], body.raw) : writeConfigValues(inst, cm[1], body.values);
+        chownForRun(file);
+        audit(db, me.username, 'mc.config', `${inst.name}: ${cm[1]}`, ip);
+        json(res, 200, { ...readConfig(inst, cm[1]), restartNeeded: isRunning(inst.id) });
+        return true;
+      }
+    }
+
+    /* ── Dateimanager ── */
+    if (sub === '/files') {
+      const rel = url.searchParams.get('path') || '';
+      if (method === 'GET') {
+        json(res, 200, url.searchParams.get('read') ? readText(inst, rel) : listDir(inst, rel));
+        return true;
+      }
+      if (!canManage) return deny() || true;
+      if (method === 'PUT') {
+        const body = await readBody(req, 3 * 1048576);
+        chownForRun(writeText(inst, body.path, body.content));
+        audit(db, me.username, 'mc.file.write', `${inst.name}: ${body.path}`, ip);
+        json(res, 200, { ok: true, restartNeeded: isRunning(inst.id) });
+        return true;
+      }
+      if (method === 'DELETE') {
+        removePath(inst, rel);
+        audit(db, me.username, 'mc.file.delete', `${inst.name}: ${rel}`, ip);
+        json(res, 200, { ok: true });
+        return true;
+      }
+    }
+    if (sub === '/files/mkdir' && method === 'POST') {
+      if (!canManage) return deny() || true;
+      const body = await readBody(req);
+      chownForRun(makeDir(inst, body.path));
+      json(res, 200, { ok: true });
+      return true;
+    }
+    if (sub === '/files/rename' && method === 'POST') {
+      if (!canManage) return deny() || true;
+      const body = await readBody(req);
+      chownForRun(renamePath(inst, body.from, body.to), true);
+      audit(db, me.username, 'mc.file.rename', `${inst.name}: ${body.from} → ${body.to}`, ip);
+      json(res, 200, { ok: true });
+      return true;
+    }
+    if (sub === '/files/upload' && method === 'POST') {
+      if (!canManage) return deny() || true;
+      const up = await uploadFile(inst, url.searchParams.get('path') || '', url.searchParams.get('name'), req);
+      chownForRun(up.abs);
+      audit(db, me.username, 'mc.file.upload', `${inst.name}: ${up.rel}`, ip);
+      json(res, 200, { ok: true, path: up.rel });
+      return true;
+    }
+    if (sub === '/files/download' && method === 'GET') {
+      streamFile(inst, url.searchParams.get('path') || '', res);
+      return true;
+    }
+
     if (sub === '/mods' && method === 'GET') {
+      await enrichMeta(inst);
       json(res, 200, listMods(inst));
       return true;
     }
