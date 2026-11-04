@@ -12,6 +12,13 @@ export const MODULES = [
     ],
   },
   {
+    id: 'games',
+    labelKey: 'nav.games',
+    items: [
+      { to: '/instances', labelKey: 'nav.instances', icon: 'layers', key: 'i', kw: 'instanzen minecraft fivem multi game server neu erstellen' },
+    ],
+  },
+  {
     id: 'server',
     labelKey: 'nav.server',
     items: [
@@ -56,6 +63,10 @@ export function localizedModules(t) {
 
 /** Aktuelles Modul inkl. Gruppe zu einem Pfad */
 export function moduleForPath(pathname) {
+  if (pathname === '/mc' || pathname.startsWith('/mc/')) {
+    const g = MODULES.find((x) => x.id === 'games');
+    return { group: g, item: g.items[0] };
+  }
   for (const g of MODULES) {
     for (const item of g.items) {
       if (item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(`${item.to}/`)) {

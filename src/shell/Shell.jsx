@@ -43,6 +43,9 @@ export default function Shell({ user, onLogout }) {
   const [powerOpen, setPowerOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [mcList, setMcList] = useState([]);
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const switchRef = useRef(null);
   const powerRef = useRef(null);
   const userRef = useRef(null);
   const gPending = useRef(0);
@@ -86,7 +89,26 @@ export default function Shell({ user, onLogout }) {
     setPowerOpen(false);
     setUserOpen(false);
     setDrawer(false);
+    setSwitchOpen(false);
   }, [loc.pathname]);
+
+  /* Minecraft-Instanzen für Navigation + Umschalter */
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      if (document.hidden) return;
+      api('/api/mc/instances')
+        .then((d) => {
+          if (!alive) return;
+          const next = (d.instances || []).map((i) => ({ id: i.id, name: i.name, type: i.type, mcVersion: i.mcVersion, phase: i.status?.phase, players: i.status?.players, max: i.status?.maxPlayers }));
+          setMcList((prev) => (sameJson(prev, next) ? prev : next));
+        })
+        .catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 8000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
 
   /* Dokumenttitel */
   useEffect(() => {
@@ -96,14 +118,15 @@ export default function Shell({ user, onLogout }) {
 
   /* Popover schließen bei Klick außerhalb */
   useEffect(() => {
-    if (!powerOpen && !userOpen) return undefined;
+    if (!powerOpen && !userOpen && !switchOpen) return undefined;
     const onDown = (e) => {
       if (powerRef.current && !powerRef.current.contains(e.target)) setPowerOpen(false);
       if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false);
+      if (switchRef.current && !switchRef.current.contains(e.target)) setSwitchOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [powerOpen, userOpen]);
+  }, [powerOpen, userOpen, switchOpen]);
 
   /* Globale Tastenkürzel */
   useEffect(() => {
@@ -157,18 +180,41 @@ export default function Shell({ user, onLogout }) {
         </button>
       </div>
 
-      <Link to="/panel" className={`sb-server tone-${tone}`} title={live.hostname}>
-        <span className="sb-server-orb" aria-hidden="true"><i /></span>
-        <span className="sb-server-main">
-          <span className="sb-server-name">{live.serverLabel}</span>
-          <span className="sb-server-meta">
-            <span className="sb-server-status">{statusLabel(status)}</span>
-            <span className="sb-server-sep">·</span>
-            <span className="mono">{live.clients}/{live.maxClients}</span>
+      <div className="sb-switch" ref={switchRef}>
+        <button type="button" className={`sb-server tone-${tone}${switchOpen ? ' open' : ''}`} title={live.hostname} onClick={() => setSwitchOpen((v) => !v)} aria-expanded={switchOpen}>
+          <span className="sb-server-orb" aria-hidden="true"><i /></span>
+          <span className="sb-server-main">
+            <span className="sb-server-name">{live.serverLabel}</span>
+            <span className="sb-server-meta">
+              <span className="sb-server-status">{statusLabel(status)}</span>
+              <span className="sb-server-sep">·</span>
+              <span className="mono">{live.clients}/{live.maxClients}</span>
+              {mcList.length ? <span className="sb-server-more">+{mcList.length}</span> : null}
+            </span>
+            <span className="sb-server-bar" aria-hidden="true"><i style={{ width: `${playerPct}%` }} /></span>
           </span>
-          <span className="sb-server-bar" aria-hidden="true"><i style={{ width: `${playerPct}%` }} /></span>
-        </span>
-      </Link>
+          <span className="sb-switch-ico"><NavIcon name="switch" /></span>
+        </button>
+        {switchOpen && (
+          <div className="pop sb-switch-menu" role="menu">
+            <div className="sb-switch-label">FiveM</div>
+            <Link to="/panel" className="sb-switch-item" role="menuitem">
+              <span className={`sb-dot tone-${tone}`} />
+              <span className="sb-switch-text"><b>{live.serverLabel}</b><small>{statusLabel(status)} · {live.clients}/{live.maxClients}</small></span>
+            </Link>
+            {mcList.length > 0 && <div className="sb-switch-label">Minecraft</div>}
+            {mcList.map((m) => (
+              <Link key={m.id} to={`/mc/${m.id}`} className="sb-switch-item" role="menuitem">
+                <span className={`sb-dot tone-${({ running: 'ok', starting: 'warn', stopping: 'warn', crashed: 'bad', failed: 'bad', installing: 'warn' })[m.phase] || 'idle'}`} />
+                <span className="sb-switch-text"><b>{m.name}</b><small>{m.type} {m.mcVersion}{m.phase === 'running' ? ` · ${m.players ?? 0}/${m.max ?? '–'}` : ''}</small></span>
+              </Link>
+            ))}
+            <div className="pop-sep" />
+            <Link to="/instances" className="pop-item" role="menuitem"><NavIcon name="layers" />Alle Instanzen</Link>
+            {(user.role === 'owner' || user.role === 'admin') && <Link to="/instances/new" className="pop-item" role="menuitem"><NavIcon name="plus" />Neue Instanz</Link>}
+          </div>
+        )}
+      </div>
 
       <nav className="sb-nav">
         {modules.map((group) => (
@@ -190,6 +236,13 @@ export default function Shell({ user, onLogout }) {
                 </NavLink>
               );
             })}
+            {group.id === 'games' && mcList.map((m) => (
+              <NavLink key={m.id} to={`/mc/${m.id}`} title={m.name} className={({ isActive }) => `sb-item sb-sub${isActive || loc.pathname.startsWith(`/mc/${m.id}/`) ? ' active' : ''}`}>
+                <span className="sb-ico"><NavIcon name="cube" /></span>
+                <span className="sb-label">{m.name}</span>
+                <span className={`sb-dot tone-${({ running: 'ok', starting: 'warn', stopping: 'warn', crashed: 'bad', failed: 'bad', installing: 'warn' })[m.phase] || 'idle'}`} />
+              </NavLink>
+            ))}
           </div>
         ))}
       </nav>
@@ -340,6 +393,7 @@ export default function Shell({ user, onLogout }) {
         onLogout={onLogout}
         onShortcuts={() => setKeysOpen(true)}
         refreshStatus={refreshStatus}
+        mcList={mcList}
       />
       <ShortcutsDialog open={keysOpen} onClose={() => setKeysOpen(false)} modules={modules} isOwner={isOwner} mac={IS_MAC} />
       <Toaster />

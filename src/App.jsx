@@ -19,12 +19,15 @@ import Resources from './pages/Resources.jsx';
 import Schedule from './pages/Schedule.jsx';
 import ServerLog from './pages/ServerLog.jsx';
 import Settings from './pages/Settings.jsx';
+import Instances from './pages/mc/Instances.jsx';
+import McCreate from './pages/mc/McCreate.jsx';
+import McInstance from './pages/mc/McInstance.jsx';
 import Setup from './pages/Setup.jsx';
 
 const PANEL_PREFIXES = [
   '/panel', '/monitoring', '/console', '/players', '/history', '/drops',
   '/bans', '/whitelist', '/resources', '/schedule', '/server-log', '/cfg',
-  '/audit', '/admins', '/ingame', '/database', '/more', '/setup', '/settings',
+  '/audit', '/admins', '/ingame', '/database', '/more', '/setup', '/settings', '/instances', '/mc',
 ];
 
 function isPanelPath(pathname) {
@@ -157,6 +160,10 @@ export default function App() {
           <Route path="ingame" element={setupOk ? <Ingame user={session.user} /> : <Navigate to="/setup" replace />} />
           <Route path="platform" element={<Navigate to="/settings?section=host&tab=servers" replace />} />
           <Route path="database" element={setupOk ? <Database user={session.user} /> : <Navigate to="/setup" replace />} />
+          <Route path="instances" element={setupOk ? <Instances /> : <Navigate to="/setup" replace />} />
+          <Route path="instances/new" element={setupOk ? <McCreate /> : <Navigate to="/setup" replace />} />
+          <Route path="mc/:id" element={setupOk ? <McInstance /> : <Navigate to="/setup" replace />} />
+          <Route path="mc/:id/:tab" element={setupOk ? <McInstance /> : <Navigate to="/setup" replace />} />
           <Route path="more" element={setupOk ? <More /> : <Navigate to="/setup" replace />} />
           <Route path="setup" element={setupOk ? <Navigate to="/panel" replace /> : <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={() => { setSession({ ...session, setup: true }); window.location.assign('/panel'); }} />} />
           <Route

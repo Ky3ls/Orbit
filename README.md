@@ -55,6 +55,18 @@ Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram` (Pfad-Policy im Panel).
 - **Server-Log** — Level-Filter mit Zählern, Pause, Download als `.log`
 - **Darstellung** — Schwarz oder Hell, kompakte Sidebar, Akzentfarbe frei wählbar (10 Farben)
 
+## Multi-Game: Minecraft
+
+Unter **Instanzen** laufen Minecraft-Server parallel zu FiveM — der Umschalter oben in der Sidebar wechselt zwischen allen Instanzen.
+
+- **Typen:** Vanilla, Paper, Purpur (Plugins), Fabric, Forge, NeoForge (Mods) — jede Version, inkl. Loader-Auswahl
+- **Java automatisch:** benötigte Version laut Mojang; fehlende Versionen lädt Orbit als Eclipse Temurin nach `/opt/orbit/runtimes`
+- **RAM-Empfehlung:** aus Typ, Mod-/Plugin-Anzahl, Slots, Sichtweite und freiem Host-Speicher; Start mit Aikar-G1GC-Flags
+- **Mods & Plugins:** Modrinth-Suche passend zu Loader + Version, Abhängigkeiten werden mitinstalliert, Updates per Hash-Abgleich, eigene `.jar` hochladen
+- **server.properties:** gruppiertes Formular oder alle Schlüssel
+- **Sicher:** Server laufen als Systembenutzer `orbit-mc` (nicht root) und überstehen einen Panel-Neustart
+- Daten: `/opt/orbit/servers/minecraft/<instanz>/`
+
 **Ingame:** `/orbit` oder `/orbitmenu` — NoClip, God, Teleport, Heal, Announce, Spieler-Aktionen, Fahrzeug-Tools.
 
 Weitere Server später: **Einstellungen → Instanzen**.
