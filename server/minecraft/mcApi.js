@@ -7,6 +7,8 @@ import { ensureJava, listJavas } from './mcJava.js';
 import { checkUpdates, enrichMeta, installMod, listMods, modKind, removeMod, saveUpload, searchMods, toggleMod, updateMod } from './mcMods.js';
 import { listConfigs, readConfig, writeConfigRaw, writeConfigValues } from './mcConfig.js';
 import { listDir, makeDir, readText, removePath, renamePath, streamFile, uploadFile, writeText } from './mcFiles.js';
+import { assetsReady, defaultSkin, ensureAssets, itemCatalog, skinFor, texturePath } from './mcAssets.js';
+import { editInventory, listPlayers, playerAction, playerDetail } from './mcPlayers.js';
 import { checkHost, externalCheck, publicHost, setPublicHost } from './mcNet.js';
 import { chownForRun, initMinecraft, isRunning, mcStatus, readConsole, restartMc, runningRamMb, sendMc, startMc, stopMc } from './mcProcess.js';
 import { PROPERTY_SCHEMA, readProperties, writeProperties } from './mcProperties.js';
@@ -153,6 +155,38 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       if (!job) return json(res, 404, { error: 'Job nicht gefunden.' }) || true;
       const after = Number(url.searchParams.get('after') || 0);
       json(res, 200, { ...job, log: job.log.filter((l) => l.t > after) });
+      return true;
+    }
+
+    /* ── Assets: Item-Katalog, Texturen, Skins ── */
+    const am = pathname.match(/^\/api\/mc\/assets\/([\w.-]+)\/(catalog|tex)$/);
+    if (am && method === 'GET') {
+      const ver = am[1];
+      if (am[2] === 'catalog') {
+        if (!assetsReady(ver)) {
+          try { ensureAssets(ver); } catch (e) { return json(res, 200, { pending: false, error: e.message }) || true; }
+          json(res, 200, { pending: true });
+          return true;
+        }
+        const cat = itemCatalog(ver);
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        json(res, 200, cat);
+        return true;
+      }
+      const file = texturePath(ver, url.searchParams.get('p'));
+      if (!file) { json(res, 404, { error: 'Textur nicht gefunden.' }); return true; }
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=604800' });
+      fs.createReadStream(file).pipe(res);
+      return true;
+    }
+    const sm = pathname.match(/^\/api\/mc\/skin\/([0-9a-fA-F-]{32,36})$/);
+    if (sm && method === 'GET') {
+      const skin = await skinFor(sm[1]);
+      const ver = String(url.searchParams.get('v') || '').replace(/[^\w.-]/g, '');
+      const file = skin?.file || (ver && assetsReady(ver) ? defaultSkin(ver, skin?.slim) : null);
+      if (!file || !fs.existsSync(file)) { json(res, 404, { error: 'Kein Skin.' }); return true; }
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'private, max-age=21600', 'X-Skin-Model': skin?.slim ? 'slim' : 'wide' });
+      fs.createReadStream(file).pipe(res);
       return true;
     }
 
@@ -329,6 +363,34 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
     }
     if (sub === '/files/download' && method === 'GET') {
       streamFile(inst, url.searchParams.get('path') || '', res);
+      return true;
+    }
+
+    /* ── Spieler ── */
+    if (sub === '/players' && method === 'GET') {
+      json(res, 200, await listPlayers(inst));
+      return true;
+    }
+    if (sub === '/players/action' && method === 'POST') {
+      if (!canControl) return deny() || true;
+      const body = await readBody(req);
+      const out = await playerAction(inst, body, me.username);
+      const who = body.name || body.ip || '';
+      audit(db, me.username, `mc.player.${String(body.action).slice(0, 24)}`, `${inst.name}: ${who}${body.reason ? ` (${String(body.reason).slice(0, 80)})` : ''}`, ip);
+      json(res, 200, { ok: true, viaFile: !!out?.file, output: out?.out || null });
+      return true;
+    }
+    const pm = sub.match(/^\/players\/([0-9a-fA-F-]{36})(\/inventory)?$/);
+    if (pm && method === 'GET' && !pm[2]) {
+      json(res, 200, { player: await playerDetail(inst, pm[1]) });
+      return true;
+    }
+    if (pm && pm[2] && method === 'POST') {
+      if (!canControl) return deny() || true;
+      const body = await readBody(req);
+      const out = await editInventory(inst, pm[1], body);
+      audit(db, me.username, 'mc.player.inventory', `${inst.name}: ${pm[1].slice(0, 8)} ${body.op} ${body.slot || ''} ${body.id || ''}`.trim(), ip);
+      json(res, 200, { ok: true, viaFile: !!out?.file });
       return true;
     }
 
