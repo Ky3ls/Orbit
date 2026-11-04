@@ -15,6 +15,38 @@ const GROUPS = [
   { id: 'vanilla', label: 'Vanilla', hint: 'Unverändertes Minecraft' },
 ];
 
+const MC_COLORS = { 0: '#000', 1: '#00a', 2: '#0a0', 3: '#0aa', 4: '#a00', 5: '#a0a', 6: '#fa0', 7: '#aaa', 8: '#555', 9: '#55f', a: '#5f5', b: '#5ff', c: '#f55', d: '#f5f', e: '#ff5', f: '#fff' };
+
+/** MOTD mit §-Formatcodes darstellen */
+function renderMotd(text) {
+  const parts = [];
+  let style = {};
+  let buf = '';
+  const flush = () => { if (buf) parts.push(<span key={parts.length} style={style}>{buf}</span>); buf = ''; };
+  const src = String(text).replace(/&([0-9a-fk-or])/gi, '§$1');
+  for (let i = 0; i < src.length; i += 1) {
+    if (src[i] === '§' && i + 1 < src.length) {
+      flush();
+      const c = src[i + 1].toLowerCase();
+      if (MC_COLORS[c]) style = { color: MC_COLORS[c] };
+      else if (c === 'l') style = { ...style, fontWeight: 700 };
+      else if (c === 'o') style = { ...style, fontStyle: 'italic' };
+      else if (c === 'n') style = { ...style, textDecoration: 'underline' };
+      else if (c === 'm') style = { ...style, textDecoration: 'line-through' };
+      else if (c === 'r') style = {};
+      i += 1;
+    } else if (src[i] === '\n' || (src[i] === '\\' && src[i + 1] === 'n')) {
+      flush();
+      parts.push(<br key={`br${parts.length}`} />);
+      if (src[i] === '\\') i += 1;
+    } else {
+      buf += src[i];
+    }
+  }
+  flush();
+  return parts;
+}
+
 export default function McCreate() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -22,7 +54,7 @@ export default function McCreate() {
   const [form, setForm] = useState({
     game: '', type: 'paper', mcVersion: '', loaderVersion: '', name: '', port: '',
     maxPlayers: 20, gamemode: 'survival', difficulty: 'normal', onlineMode: true, seed: '',
-    viewDistance: 10, plannedMods: 0, ramMb: 4096, autostart: true, startAfter: true, eula: false,
+    viewDistance: 10, simDistance: 10, motd: '', pvp: true, whitelist: false, hardcore: false, plannedMods: 0, ramMb: 4096, autostart: true, startAfter: true, eula: false,
   });
   const [versions, setVersions] = useState(null);
   const [vq, setVq] = useState('');
@@ -122,6 +154,12 @@ export default function McCreate() {
             'online-mode': form.onlineMode ? 'true' : 'false',
             'level-seed': form.seed,
             'view-distance': form.viewDistance,
+            'simulation-distance': form.simDistance,
+            motd: (form.motd || form.name).trim(),
+            pvp: form.pvp ? 'true' : 'false',
+            'white-list': form.whitelist ? 'true' : 'false',
+            'enforce-whitelist': form.whitelist ? 'true' : 'false',
+            hardcore: form.hardcore ? 'true' : 'false',
           },
         },
       });
@@ -289,49 +327,108 @@ export default function McCreate() {
         )}
 
         {step === 3 && (
-          <div className="mcx-form">
-            <label className="field mcx-span2">
-              <span>Name der Instanz</span>
-              <input value={form.name} onChange={(e) => set({ name: e.target.value })} maxLength={40} />
-            </label>
-            <label className="field">
-              <span>Port</span>
-              <input type="number" min={1024} max={65535} value={form.port} onChange={(e) => set({ port: e.target.value })} />
-              <small className={`mcx-hint${portCheck?.ok === false ? ' bad' : ' ok'}`}>{portCheck?.ok === false ? portCheck.reason : 'Port ist frei'}</small>
-            </label>
-            <label className="field">
-              <span>Spieler-Slots</span>
-              <input type="number" min={1} max={500} value={form.maxPlayers} onChange={(e) => set({ maxPlayers: Number(e.target.value) || 1 })} />
-            </label>
-            <div className="field">
-              <span>Spielmodus</span>
-              <div className="seg">
-                {[['survival', 'Überleben'], ['creative', 'Kreativ'], ['adventure', 'Abenteuer']].map(([v, l]) => (
-                  <button key={v} type="button" className={form.gamemode === v ? 'active' : ''} onClick={() => set({ gamemode: v })}>{l}</button>
-                ))}
+          <div className="mcx-setup">
+            <div className="mcx-setup-main">
+              <section className="mcx-sec">
+                <h3>Allgemein</h3>
+                <div className="mcx-grid2">
+                  <label className="field">
+                    <span>Name der Instanz</span>
+                    <input value={form.name} onChange={(e) => set({ name: e.target.value })} maxLength={40} />
+                    <small className="mcx-hint">Nur im Panel sichtbar</small>
+                  </label>
+                  <label className="field">
+                    <span>Port</span>
+                    <input type="number" min={1024} max={65535} value={form.port} onChange={(e) => set({ port: e.target.value })} />
+                    <small className={`mcx-hint${portCheck?.ok === false ? ' bad' : ' ok'}`}>{portCheck?.ok === false ? portCheck.reason : 'Port ist frei'}</small>
+                  </label>
+                  <label className="field mcx-span2">
+                    <span>Beschreibung in der Serverliste (MOTD)</span>
+                    <input value={form.motd} maxLength={120} placeholder={form.name || 'Ein Minecraft-Server'} onChange={(e) => set({ motd: e.target.value })} />
+                    <small className="mcx-hint">Farbcodes wie <code>§a</code> (grün) oder <code>§l</code> (fett) werden unterstützt — Vorschau rechts.</small>
+                  </label>
+                  <label className="field">
+                    <span>Spieler-Slots</span>
+                    <input type="number" min={1} max={500} value={form.maxPlayers} onChange={(e) => set({ maxPlayers: Number(e.target.value) || 1 })} />
+                  </label>
+                  <label className="field">
+                    <span>Seed (optional)</span>
+                    <input value={form.seed} onChange={(e) => set({ seed: e.target.value })} placeholder="zufällig" />
+                  </label>
+                </div>
+              </section>
+
+              <section className="mcx-sec">
+                <h3>Gameplay</h3>
+                <div className="mcx-grid2">
+                  <div className="field">
+                    <span>Spielmodus</span>
+                    <div className="seg mcx-seg">
+                      {[['survival', 'Überleben'], ['creative', 'Kreativ'], ['adventure', 'Abenteuer']].map(([v, l]) => (
+                        <button key={v} type="button" className={form.gamemode === v ? 'active' : ''} onClick={() => set({ gamemode: v })}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="field">
+                    <span>Schwierigkeit</span>
+                    <div className="seg mcx-seg">
+                      {[['peaceful', 'Friedlich'], ['easy', 'Leicht'], ['normal', 'Normal'], ['hard', 'Schwer']].map(([v, l]) => (
+                        <button key={v} type="button" className={form.difficulty === v ? 'active' : ''} onClick={() => set({ difficulty: v })}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="mcx-switches">
+                  {[
+                    ['pvp', 'PvP', 'Spieler können sich gegenseitig Schaden zufügen'],
+                    ['hardcore', 'Hardcore', 'Nur ein Leben — nach dem Tod Zuschauermodus'],
+                    ['whitelist', 'Whitelist', 'Nur freigeschaltete Spieler dürfen joinen'],
+                    ['onlineMode', 'Online-Modus', 'Prüft Mojang-Accounts (empfohlen)'],
+                    ['autostart', 'Autostart', 'Startet automatisch mit Orbit'],
+                  ].map(([key, label, hint]) => (
+                    <div key={key} className="mcx-switch-row">
+                      <div><b>{label}</b><span>{hint}</span></div>
+                      <button type="button" role="switch" aria-checked={!!form[key]} aria-label={label} className={`switch${form[key] ? ' on' : ''}`} onClick={() => set({ [key]: !form[key] })} />
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="mcx-sec">
+                <h3>Leistung</h3>
+                <div className="mcx-grid2">
+                  <label className="field">
+                    <span className="mcx-range-label">Sichtweite <b>{form.viewDistance} Chunks</b></span>
+                    <input type="range" className="mcx-range" min={2} max={32} value={form.viewDistance} style={{ '--pct': `${((form.viewDistance - 2) / 30) * 100}%` }} onChange={(e) => set({ viewDistance: Number(e.target.value) })} />
+                    <small className={`mcx-hint${form.viewDistance > 16 ? ' warn' : ''}`}>{form.viewDistance > 16 ? 'Sehr hoch — deutlich mehr RAM und CPU, empfohlen 8–12' : 'Wie weit Spieler die Welt sehen · empfohlen 8–12'}</small>
+                  </label>
+                  <label className="field">
+                    <span className="mcx-range-label">Simulationsweite <b>{form.simDistance} Chunks</b></span>
+                    <input type="range" className="mcx-range" min={2} max={32} value={form.simDistance} style={{ '--pct': `${((form.simDistance - 2) / 30) * 100}%` }} onChange={(e) => set({ simDistance: Number(e.target.value) })} />
+                    <small className={`mcx-hint${form.simDistance > form.viewDistance ? ' warn' : ''}`}>{form.simDistance > form.viewDistance ? 'Größer als die Sichtweite bringt nichts' : 'In welchem Radius Mobs, Farmen und Pflanzen aktiv sind · empfohlen 6–10'}</small>
+                  </label>
+                </div>
+              </section>
+            </div>
+
+            <aside className="mcx-preview">
+              <span className="mcx-label">Vorschau in der Serverliste</span>
+              <div className="mcx-list-entry">
+                <span className="mcx-list-icon"><GameMark game="minecraft" color={tm.color} size={48} /></span>
+                <div className="mcx-list-text">
+                  <div className="mcx-list-top"><b>{form.name || 'Minecraft-Server'}</b><span>0/{form.maxPlayers}</span></div>
+                  <div className="mcx-motd">{renderMotd(form.motd || form.name || 'Ein Minecraft-Server')}</div>
+                </div>
               </div>
-            </div>
-            <div className="field">
-              <span>Schwierigkeit</span>
-              <div className="seg">
-                {[['peaceful', 'Friedlich'], ['easy', 'Leicht'], ['normal', 'Normal'], ['hard', 'Schwer']].map(([v, l]) => (
-                  <button key={v} type="button" className={form.difficulty === v ? 'active' : ''} onClick={() => set({ difficulty: v })}>{l}</button>
-                ))}
-              </div>
-            </div>
-            <label className="field">
-              <span>Sichtweite (Chunks)</span>
-              <input type="range" min={4} max={24} value={form.viewDistance} onChange={(e) => set({ viewDistance: Number(e.target.value) })} />
-              <small className="mcx-hint">{form.viewDistance} Chunks{form.viewDistance > 12 ? ' — braucht mehr RAM und CPU' : ''}</small>
-            </label>
-            <label className="field">
-              <span>Seed (optional)</span>
-              <input value={form.seed} onChange={(e) => set({ seed: e.target.value })} placeholder="zufällig" />
-            </label>
-            <div className="mcx-toggles mcx-span2">
-              <label><input type="checkbox" checked={form.onlineMode} onChange={(e) => set({ onlineMode: e.target.checked })} /><span><b>Online-Modus</b><small>Nur Spieler mit gekauftem Minecraft (empfohlen)</small></span></label>
-              <label><input type="checkbox" checked={form.autostart} onChange={(e) => set({ autostart: e.target.checked })} /><span><b>Autostart</b><small>Startet automatisch mit Orbit</small></span></label>
-            </div>
+              <dl className="mcx-preview-facts">
+                <div><dt>Adresse</dt><dd className="mono">{typeof window !== 'undefined' ? window.location.hostname : ''}{Number(form.port) === 25565 ? '' : `:${form.port}`}</dd></div>
+                <div><dt>Typ</dt><dd>{tm.label} {form.mcVersion}</dd></div>
+                <div><dt>Modus</dt><dd>{form.hardcore ? 'Hardcore' : { survival: 'Überleben', creative: 'Kreativ', adventure: 'Abenteuer' }[form.gamemode]} · {{ peaceful: 'Friedlich', easy: 'Leicht', normal: 'Normal', hard: 'Schwer' }[form.difficulty]}</dd></div>
+                <div><dt>PvP</dt><dd>{form.pvp ? 'An' : 'Aus'}</dd></div>
+                <div><dt>Zugang</dt><dd>{form.whitelist ? 'Nur Whitelist' : 'Offen'}{form.onlineMode ? '' : ' · Offline-Modus'}</dd></div>
+              </dl>
+              {!form.onlineMode && <div className="banner warn">Ohne Online-Modus kann sich jeder als beliebiger Spieler ausgeben.</div>}
+            </aside>
           </div>
         )}
 
@@ -392,6 +489,12 @@ export default function McCreate() {
               <div><dt>Java</dt><dd>{java?.required ?? '–'}</dd></div>
               <div><dt>Spielmodus</dt><dd>{form.gamemode}</dd></div>
               <div><dt>Schwierigkeit</dt><dd>{form.difficulty}</dd></div>
+              <div><dt>Sichtweite</dt><dd>{form.viewDistance} Chunks</dd></div>
+              <div><dt>Simulation</dt><dd>{form.simDistance} Chunks</dd></div>
+              <div><dt>PvP</dt><dd>{form.pvp ? 'An' : 'Aus'}</dd></div>
+              <div><dt>Whitelist</dt><dd>{form.whitelist ? 'An' : 'Aus'}</dd></div>
+              <div><dt>Hardcore</dt><dd>{form.hardcore ? 'An' : 'Aus'}</dd></div>
+              <div><dt>Autostart</dt><dd>{form.autostart ? 'An' : 'Aus'}</dd></div>
             </dl>
             <label className="mcx-eula">
               <input type="checkbox" checked={form.eula} onChange={(e) => set({ eula: e.target.checked })} />

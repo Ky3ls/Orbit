@@ -32,13 +32,21 @@ export function propsFile(instPath) {
   return path.join(instPath, 'server.properties');
 }
 
+/** Properties-Format: Nicht-ASCII als \\uXXXX, damit §-Codes und Umlaute in jeder MC-Version ankommen */
+function escapeValue(v) {
+  return String(v ?? '').replace(/[\r\n]/g, ' ').replace(/[^\x20-\x7e]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+function unescapeValue(v) {
+  return String(v).replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
 export function parseProperties(text) {
   const values = {};
   for (const line of String(text || '').split(/\r?\n/)) {
     if (!line || line.startsWith('#') || line.startsWith('!')) continue;
     const i = line.indexOf('=');
     if (i < 0) continue;
-    values[line.slice(0, i).trim()] = line.slice(i + 1);
+    values[line.slice(0, i).trim()] = unescapeValue(line.slice(i + 1));
   }
   return values;
 }
@@ -56,7 +64,7 @@ export function writeProperties(instPath, patch) {
   const file = propsFile(instPath);
   let text = '';
   try { text = fs.readFileSync(file, 'utf8'); } catch { text = '#Minecraft server properties\n'; }
-  const pending = new Map(Object.entries(patch).map(([k, v]) => [k, String(v ?? '').replace(/[\r\n]/g, ' ')]));
+  const pending = new Map(Object.entries(patch).map(([k, v]) => [k, escapeValue(v)]));
   const lines = text.split(/\r?\n/).map((line) => {
     if (!line || line.startsWith('#')) return line;
     const i = line.indexOf('=');

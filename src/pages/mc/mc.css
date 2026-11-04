@@ -289,3 +289,75 @@
   .mci-quick { display: none; }
   .mcx-steps button { font-size: 0; gap: 0; padding: 0 4px; }
 }
+
+/* ═══ Assistent: Einstellungen + Vorschau ═══ */
+.mcx-setup { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 22px; align-items: start; }
+.mcx-setup-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.mcx-sec { padding: 18px 20px 8px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); }
+.mcx-sec h3 { font-size: 11px; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+.mcx-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+.mcx-grid2 .mcx-span2 { grid-column: span 2; }
+.mcx-sec input:not([type='range']):not([type='checkbox']) { background: var(--surface); }
+.mcx-sec code { font-size: 11px; padding: 1px 4px; border-radius: 4px; background: var(--surface-3); }
+.mcx-hint.warn { color: var(--warn); }
+.mcx-seg { width: 100%; }
+.mcx-seg > button { flex: 1; justify-content: center; }
+.mcx-switches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin: 6px 0 8px; }
+.mcx-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.mcx-switch-row b { display: block; font-size: 13.5px; font-weight: 600; }
+.mcx-switch-row span { font-size: 12px; color: var(--muted); }
+.mcx-range-label { display: flex; justify-content: space-between; }
+.mcx-range-label b { font-weight: 650; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.mcx-range[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  min-height: 0;
+  padding: 0;
+  margin: 12px 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--accent) var(--pct), var(--surface-3) var(--pct));
+}
+.mcx-range[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); cursor: grab; }
+.mcx-range[type='range']::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); }
+
+.mcx-preview { position: sticky; top: calc(var(--topbar-h) + 16px); display: flex; flex-direction: column; gap: 12px; }
+.mcx-label { font-size: 11px; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+/* Nachbau eines Eintrags der Minecraft-Serverliste */
+.mcx-list-entry {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #1e1e1e;
+  border: 2px solid #3a3a3a;
+  font-family: var(--mono);
+  color: #fff;
+}
+.mcx-list-icon .gm { border-radius: 4px; }
+.mcx-list-text { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.45; }
+.mcx-list-top { display: flex; justify-content: space-between; gap: 8px; }
+.mcx-list-top b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mcx-list-top span { color: #aaa; flex: 0 0 auto; }
+.mcx-motd { color: #aaa; word-break: break-word; }
+.mcx-preview-facts { margin: 0; padding: 4px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); }
+.mcx-preview-facts div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.mcx-preview-facts div:last-child { border-bottom: 0; }
+.mcx-preview-facts dt { color: var(--muted); }
+.mcx-preview-facts dd { margin: 0; font-weight: 600; text-align: right; }
+.mcx-summary { max-width: none; }
+.mcx-sum-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.mcx-summary .mcx-eula { max-width: 760px; }
+
+@media (max-width: 1200px) {
+  .mcx-setup { grid-template-columns: 1fr; }
+  .mcx-preview { position: static; }
+  .mcx-sum-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 720px) {
+  .mcx-grid2, .mcx-switches { grid-template-columns: 1fr; }
+  .mcx-grid2 .mcx-span2 { grid-column: auto; }
+  .mcx-sum-grid { grid-template-columns: 1fr 1fr; }
+}
