@@ -39,7 +39,7 @@ export default function McPlayers({ inst }) {
   }, [inst.id]);
   useEffect(() => {
     load();
-    const t = setInterval(load, 6000);
+    const t = setInterval(() => { if (!document.hidden) load(); }, 2500);
     return () => clearInterval(t);
   }, [load]);
 
@@ -246,13 +246,22 @@ function PlayerDrawer({ inst, cat, uuid, online, onClose, onChange }) {
   const [p, setP] = useState(null);
   const [tab, setTab] = useState('overview');
   const [err, setErr] = useState(null);
+  const busyRef = useRef(false);
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
   const load = useCallback(() => {
-    api(`/api/mc/instances/${inst.id}/players/${uuid}`).then((d) => { setP(d.player); setErr(null); }).catch((e) => setErr(e.message));
+    if (busyRef.current) return Promise.resolve();
+    busyRef.current = true;
+    const parts = tabRef.current === 'inventory' ? 'inv' : '';
+    return api(`/api/mc/instances/${inst.id}/players/${uuid}${parts ? `?parts=${parts}` : ''}`)
+      .then((d) => { setP(d.player); setErr(null); })
+      .catch((e) => setErr(e.message))
+      .finally(() => { busyRef.current = false; });
   }, [inst.id, uuid]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, tab]);
+  // Live: online jede Sekunde, offline alle 10 s (Datei ändert sich beim Autosave)
   useEffect(() => {
-    if (!p?.online) return undefined;
-    const t = setInterval(load, 5000);
+    const t = setInterval(() => { if (!document.hidden) load(); }, p?.online ? 1000 : 10000);
     return () => clearInterval(t);
   }, [p?.online, load]);
 
@@ -274,6 +283,7 @@ function PlayerDrawer({ inst, cat, uuid, online, onClose, onChange }) {
                 <h2>{p.name}</h2>
                 <div className="pp-sub">
                   <span className={`pp-state${p.online ? ' on' : ''}`}><i />{p.online ? 'Online' : `Zuletzt ${fmtAgo(p.lastSeen)}`}</span>
+                  {p.source === 'live' && <span className="mcp-live inline"><i />Live</span>}
                   {p.op ? <span className="mcp-chip warn"><NavIcon name="crown" />OP {p.op}</span> : null}
                   {p.whitelisted ? <span className="mcp-chip info"><NavIcon name="wl" />Whitelist</span> : null}
                   {p.banned ? <span className="mcp-chip bad"><NavIcon name="ban" />Gebannt</span> : null}
@@ -341,7 +351,6 @@ function Overview({ inst, cat, p }) {
       <div className="mcp-ov">
         <div className="mcp-ov-body">
           <McBody uuid={p.uuid} ver={inst.mcVersion} scale={7} />
-          {p.source === 'live' && <span className="mcp-live"><i />Live</span>}
         </div>
         <div className="mcp-ov-main">
           {d ? (
@@ -398,11 +407,29 @@ function Overview({ inst, cat, p }) {
 /* ── Inventar ── */
 const ARMOR = [['head', 'Helm'], ['chest', 'Brust'], ['legs', 'Hose'], ['feet', 'Schuhe']];
 
-function Slot({ item, cat, active, selected, onClick, label }) {
+function Slot({ id, item, cat, active, selected, onClick, label, onMove, moving }) {
+  const [over, setOver] = useState(false);
   const enchanted = item?.ench?.length;
   const pct = item?.max ? Math.max(0, 1 - (item.dmg || 0) / item.max) : null;
   return (
-    <button type="button" className={`mcp-slot${active ? ' active' : ''}${selected ? ' sel' : ''}${enchanted ? ' glint' : ''}${item ? '' : ' empty'}`} onClick={onClick} title={item ? undefined : label}>
+    <button
+      type="button"
+      className={`mcp-slot${active ? ' active' : ''}${selected ? ' sel' : ''}${enchanted ? ' glint' : ''}${item ? '' : ' empty'}${over ? ' over' : ''}${moving ? ' moving' : ''}`}
+      onClick={onClick}
+      title={item ? undefined : label}
+      draggable={!!item}
+      onDragStart={(e) => { e.dataTransfer.setData('text/x-mc-slot', id); e.dataTransfer.effectAllowed = 'move'; document.body.classList.add('mcp-dragging'); }}
+      onDragEnd={() => document.body.classList.remove('mcp-dragging')}
+      onDragOver={(e) => { if ([...e.dataTransfer.types].includes('text/x-mc-slot')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOver(true); } }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        document.body.classList.remove('mcp-dragging');
+        const from = e.dataTransfer.getData('text/x-mc-slot');
+        if (from && from !== id) onMove(from, id);
+      }}
+    >
       {item ? <ItemIcon id={item.id} cat={cat} size={34} /> : label ? <span className="mcp-slot-lbl">{label}</span> : null}
       {item && item.count > 1 && <span className="mcp-slot-n">{item.count}</span>}
       {pct !== null && pct < 1 && <span className="mcp-slot-dur"><i style={{ width: `${pct * 100}%`, background: `hsl(${pct * 120}, 80%, 48%)` }} /></span>}
@@ -468,23 +495,68 @@ function ItemPicker({ cat, onPick, initial = '' }) {
   );
 }
 
+function getAt(d, slot) {
+  const [k, n] = slot.split(':');
+  if (k === 'inv') return d.inv[n];
+  if (k === 'ender') return d.ender[n];
+  if (k === 'armor') return d.equip[n];
+  if (k === 'offhand') return d.equip.offhand;
+  return null;
+}
+function setAt(d, slot, item) {
+  const [k, n] = slot.split(':');
+  const box = k === 'inv' ? d.inv : k === 'ender' ? d.ender : d.equip;
+  const key = k === 'offhand' ? 'offhand' : n;
+  if (item) box[key] = item; else delete box[key];
+}
+function applyMove(d, from, to) {
+  const next = { ...d, inv: { ...d.inv }, ender: { ...d.ender }, equip: { ...d.equip } };
+  const a = getAt(d, from);
+  const b = getAt(d, to);
+  setAt(next, to, a);
+  setAt(next, from, b);
+  return next;
+}
+
 function Inventory({ inst, cat, p, reload }) {
   const [sel, setSel] = useState(null);
   const [count, setCount] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [moveFrom, setMoveFrom] = useState(null);
+  const [opt, setOpt] = useState(null); // optimistische Ansicht bis zur nächsten Live-Antwort
   const panelRef = useRef(null);
-  const d = p.data;
+  const lastData = useRef(p.data);
+  const moveAt = useRef(0);
+  useEffect(() => {
+    // Antworten, die vor dem Verschieben angefragt wurden, nicht über die optimistische Ansicht legen
+    if (p.data !== lastData.current) { lastData.current = p.data; if (!busy && Date.now() - moveAt.current > 700) setOpt(null); }
+  }, [p.data, busy]);
+  const d = opt || p.data;
   if (!d) return <Empty title="Kein Inventar" text="Der Spieler war noch nie auf dieser Welt." />;
-  const itemAt = (slot) => {
-    const [k, n] = slot.split(':');
-    if (k === 'inv') return d.inv[n];
-    if (k === 'ender') return d.ender[n];
-    if (k === 'armor') return d.equip[n];
-    if (k === 'offhand') return d.equip.offhand;
-    return null;
-  };
+  const itemAt = (slot) => getAt(d, slot);
   const selItem = sel ? itemAt(sel) : null;
+
+  async function move(from, to) {
+    if (!getAt(d, from)) return;
+    setMoveFrom(null);
+    moveAt.current = Date.now();
+    setOpt(applyMove(d, from, to));
+    setSel(to);
+    setBusy(true);
+    try {
+      const r = await api(`/api/mc/instances/${inst.id}/players/${p.uuid}/inventory`, { method: 'POST', body: { op: 'move', from, to } });
+      if (r.viaFile) toast.ok(getAt(d, to) ? 'Items getauscht' : 'Item verschoben', { text: 'In die Spielerdatei geschrieben (Backup: .orbit-bak).' });
+    } catch (e) { toast.err(e.message); setOpt(null); }
+    moveAt.current = Date.now();
+    setBusy(false);
+    setTimeout(reload, p.online ? 150 : 30);
+  }
+
   const pick = (slot) => {
+    if (moveFrom) {
+      if (slot !== moveFrom) move(moveFrom, slot); else setMoveFrom(null);
+      return;
+    }
     setSel(slot === sel ? null : slot);
     const it = itemAt(slot);
     setCount(it?.count || 1);
@@ -495,11 +567,12 @@ function Inventory({ inst, cat, p, reload }) {
     try {
       const r = await api(`/api/mc/instances/${inst.id}/players/${p.uuid}/inventory`, { method: 'POST', body });
       toast.ok(okText, { text: r.viaFile ? 'In die Spielerdatei geschrieben (Backup: .orbit-bak).' : 'Live an den Spieler gesendet.' });
-      setTimeout(reload, p.online ? 400 : 50);
+      setTimeout(reload, p.online ? 150 : 30);
       if (body.op === 'remove' || body.op === 'clear' || body.op === 'clear-ender') setSel(null);
     } catch (e) { toast.err(e.message); }
     setBusy(false);
   }
+  const slotProps = (id) => ({ id, cat, item: itemAt(id), active: sel === id, moving: moveFrom === id, onClick: () => pick(id), onMove: move });
   const slotLabel = (slot) => {
     const [k, n] = slot.split(':');
     if (k === 'inv') return Number(n) < 9 ? `Hotbar ${Number(n) + 1}` : `Inventar ${Number(n) - 8}`;
@@ -512,25 +585,33 @@ function Inventory({ inst, cat, p, reload }) {
     <div className="mcp-inv-wrap">
       <div className={`mcp-mode ${p.online ? 'live' : 'file'}`}>
         <NavIcon name={p.online ? 'bolt' : 'db'} />
-        {p.online ? 'Spieler ist online: Änderungen gehen sofort per Befehl ins Spiel.' : 'Spieler ist offline: Änderungen werden direkt in seine Spielerdatei geschrieben, mit Backup.'}
+        {p.online ? 'Live: Das Inventar aktualisiert sich jede Sekunde, Änderungen gehen sofort ins Spiel.' : 'Spieler ist offline: Änderungen werden direkt in seine Spielerdatei geschrieben, mit Backup.'}
+        <span className="mcp-mode-hint">Items per Drag &amp; Drop verschieben oder tauschen</span>
       </div>
+      {moveFrom && (
+        <div className="mcp-movebar">
+          <NavIcon name="switch" />
+          <span><b>{itemAt(moveFrom) ? (itemAt(moveFrom).name || itemName(cat, itemAt(moveFrom).id)) : ''}</b> verschieben: Ziel-Slot anklicken</span>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setMoveFrom(null)}>Abbrechen</button>
+        </div>
+      )}
       <div className="mcp-inv">
         <div className="mcp-inv-side">
-          {ARMOR.map(([k, l]) => <Slot key={k} cat={cat} item={d.equip[k]} label={l} active={sel === `armor:${k}`} onClick={() => pick(`armor:${k}`)} />)}
+          {ARMOR.map(([k, l]) => <Slot key={k} {...slotProps(`armor:${k}`)} label={l} />)}
           <div className="mcp-inv-sep" />
-          <Slot cat={cat} item={d.equip.offhand} label="Hand" active={sel === 'offhand'} onClick={() => pick('offhand')} />
+          <Slot {...slotProps('offhand')} label="Hand" />
         </div>
         <div className="mcp-inv-main">
           <div className="mcp-inv-title">Inventar</div>
           <div className="mcp-grid9">
-            {Array.from({ length: 27 }, (_, i) => i + 9).map((n) => <Slot key={n} cat={cat} item={d.inv[n]} active={sel === `inv:${n}`} onClick={() => pick(`inv:${n}`)} />)}
+            {Array.from({ length: 27 }, (_, i) => i + 9).map((n) => <Slot key={n} {...slotProps(`inv:${n}`)} />)}
           </div>
           <div className="mcp-grid9 hotbar">
-            {Array.from({ length: 9 }, (_, n) => <Slot key={n} cat={cat} item={d.inv[n]} selected={d.selected === n} active={sel === `inv:${n}`} onClick={() => pick(`inv:${n}`)} />)}
+            {Array.from({ length: 9 }, (_, n) => <Slot key={n} {...slotProps(`inv:${n}`)} selected={d.selected === n} />)}
           </div>
           <div className="mcp-inv-title ender">Enderkiste</div>
           <div className="mcp-grid9 ender">
-            {Array.from({ length: 27 }, (_, n) => <Slot key={n} cat={cat} item={d.ender[n]} active={sel === `ender:${n}`} onClick={() => pick(`ender:${n}`)} />)}
+            {Array.from({ length: 27 }, (_, n) => <Slot key={n} {...slotProps(`ender:${n}`)} />)}
           </div>
         </div>
       </div>
@@ -557,6 +638,7 @@ function Inventory({ inst, cat, p, reload }) {
                   <button type="button" onClick={() => setCount(Math.min(99, count + 1))}>+</button>
                 </div>
                 <button type="button" className="btn btn-sm" disabled={busy || count === selItem.count} onClick={() => edit({ op: 'count', slot: sel, count }, 'Anzahl geändert')}>Anzahl setzen</button>
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { setMoveFrom(sel); setSel(null); }}><NavIcon name="switch" />Verschieben</button>
                 {selItem.max && selItem.dmg ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => edit({ op: 'repair', slot: sel }, 'Repariert')}><NavIcon name="wrench" />Reparieren</button> : null}
                 <button type="button" className="btn btn-sm btn-danger" disabled={busy} onClick={() => edit({ op: 'remove', slot: sel }, 'Item entfernt')}><NavIcon name="x" />Entfernen</button>
               </div>

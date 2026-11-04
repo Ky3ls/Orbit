@@ -233,3 +233,15 @@ div.mcp-tile { padding-right: 14px; }
 }
 .mcp-retry { display: flex; justify-content: center; padding: 0 0 20px; }
 .mcp-retry .btn svg { width: 14px; height: 14px; }
+.mcp-live.inline { position: static; }
+.mcp-mode { flex-wrap: wrap; }
+.mcp-mode-hint { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+.mcp-movebar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(var(--accent-rgb), 0.45); background: rgba(var(--accent-rgb), 0.08); font-size: 13px; }
+.mcp-movebar > svg { width: 15px; height: 15px; color: var(--accent-ink); }
+.mcp-movebar span { flex: 1; }
+.mcp-slot[draggable='true'] { cursor: grab; }
+.mcp-slot[draggable='true']:active { cursor: grabbing; }
+.mcp-slot.over { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.16); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.35); }
+.mcp-slot.moving { border-color: var(--accent); animation: mcp-pulse 1.2s ease-in-out infinite; }
+body.mcp-dragging .mcp-tip { display: none !important; }
+.mcp-edit-acts .btn svg { width: 13px; height: 13px; }
