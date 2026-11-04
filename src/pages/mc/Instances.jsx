@@ -53,7 +53,10 @@ export default function Instances() {
         title="Instanzen"
         description="Alle Server auf diesem Host — FiveM und Minecraft laufen parallel."
         actions={canManage ? (
-          <Link to="/instances/new" className="btn btn-primary btn-sm"><NavIcon name="plus" />Neue Instanz</Link>
+          <>
+            <Link to="/instances/import" className="btn btn-sm"><NavIcon name="switch" />Importieren</Link>
+            <Link to="/instances/new" className="btn btn-primary btn-sm"><NavIcon name="plus" />Neue Instanz</Link>
+          </>
         ) : null}
       />
 
@@ -144,6 +147,13 @@ export default function Instances() {
             <span><NavIcon name="plus" /></span>
             <b>Neue Instanz</b>
             <small>Minecraft: Vanilla, Paper, Purpur, Fabric, Forge oder NeoForge</small>
+          </Link>
+        )}
+        {canManage && (
+          <Link to="/instances/import" className="mcx-card mcx-add">
+            <span><NavIcon name="switch" /></span>
+            <b>Server importieren</b>
+            <small>Bestehenden Minecraft-Server samt Welten, Plugins/Mods und Einstellungen übernehmen</small>
           </Link>
         )}
       </div>

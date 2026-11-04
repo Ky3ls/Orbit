@@ -8,6 +8,7 @@ import { checkUpdates, enrichMeta, installMod, listMods, modKind, removeMod, sav
 import { listConfigs, readConfig, writeConfigRaw, writeConfigValues } from './mcConfig.js';
 import { listDir, makeDir, readText, removePath, renamePath, streamFile, uploadFile, writeText } from './mcFiles.js';
 import { assetsReady, defaultSkin, ensureAssets, itemCatalog, skinFor, texturePath } from './mcAssets.js';
+import { analyzeServer, getImportJob, importServer, scanServers } from './mcImport.js';
 import { editInventory, listPlayers, playerAction, playerDetail } from './mcPlayers.js';
 import { checkHost, externalCheck, publicHost, setPublicHost } from './mcNet.js';
 import { chownForRun, initMinecraft, isRunning, mcStatus, readConsole, restartMc, runningRamMb, sendMc, startMc, stopMc } from './mcProcess.js';
@@ -159,6 +160,35 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       const after = Number(url.searchParams.get('after') || 0);
       json(res, 200, { ...job, log: job.log.filter((l) => l.t > after) });
       return true;
+    }
+
+    /* ── Import bestehender Server ── */
+    if (pathname.startsWith('/api/mc/import')) {
+      if (!canManage) return deny() || true;
+      if (method === 'GET' && pathname === '/api/mc/import/scan') {
+        json(res, 200, { servers: scanServers(db) });
+        return true;
+      }
+      if (method === 'GET' && pathname === '/api/mc/import/analyze') {
+        json(res, 200, { server: await analyzeServer(db, url.searchParams.get('path') || '') });
+        return true;
+      }
+      const ij = pathname.match(/^\/api\/mc\/import\/jobs\/(\d+)$/);
+      if (method === 'GET' && ij) {
+        const job = getImportJob(ij[1]);
+        if (!job) { json(res, 404, { error: 'Job nicht gefunden.' }); return true; }
+        const after = Number(url.searchParams.get('after') || 0);
+        json(res, 200, { ...job, log: job.log.filter((l) => l.t > after) });
+        return true;
+      }
+      if (method === 'POST' && pathname === '/api/mc/import') {
+        const body = await readBody(req);
+        const out = await importServer(db, body, logLine);
+        audit(db, me.username, 'mc.import', `${out.instance.name} ← ${body.path} (${body.mode || 'copy'})`, ip);
+        json(res, 200, { instance: publicInstance(out.instance, publicHost(db)), jobId: out.jobId });
+        return true;
+      }
+      return false;
     }
 
     /* ── Assets: Item-Katalog, Texturen, Skins ── */
