@@ -96,7 +96,7 @@ import {
 import { runRecipeInstall } from './recipeInstall.js';
 import { runRecipeYaml } from './recipeRunner.js';
 import { fetchRecommendedBuild, installArtifact } from './artifacts.js';
-import { ensureMcTables, handleMinecraftApi, initMinecraft } from './minecraft/mcApi.js';
+import { ensureBackupTable, ensureMcTables, handleMinecraftApi, initMcBackups, initMinecraft } from './minecraft/mcApi.js';
 import { handlePlatformApi, initPlatform } from './platformApi.js';
 import { handleIngamePublicApi } from './ingameApi.js';
 import { primaryId, normalizeIdentifiers, mergeIdLists, cleanupPlayerDuplicates } from './playerIdentity.js';
@@ -3836,7 +3836,9 @@ const boot = (async () => {
     }
     try {
       ensureMcTables(db);
+      ensureBackupTable(db);
       initMinecraft(db, logLine);
+      initMcBackups(db, logLine);
     } catch (err) {
       auditSystem(db, 'mc.init.fail', err.message);
     }

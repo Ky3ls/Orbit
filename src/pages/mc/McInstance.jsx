@@ -6,6 +6,7 @@ import { toast } from '../../components/toast.jsx';
 import { Page } from '../../components/Ui.jsx';
 import { NavIcon } from '../../layout/icons.jsx';
 import { TYPE_META, fmtDur, fmtMb, phaseOf } from './mcShared.js';
+import McBackups from './McBackups.jsx';
 import McFiles from './McFiles.jsx';
 import McMods from './McMods.jsx';
 import McPlayers from './McPlayers.jsx';
@@ -18,6 +19,7 @@ const TABS = [
   { id: 'mods', label: 'Mods', icon: 'box' },
   { id: 'settings', label: 'Einstellungen', icon: 'cfg' },
   { id: 'files', label: 'Dateien', icon: 'folder' },
+  { id: 'backups', label: 'Backups', icon: 'archive' },
   { id: 'instance', label: 'Instanz', icon: 'gear' },
 ];
 const QUICK = ['list', 'save-all', 'time set day', 'weather clear', 'tps'];
@@ -228,8 +230,9 @@ function InstanceSettings({ inst, onChange }) {
     if (!files) return;
     const typed = window.prompt(`Zum Bestätigen den Namen eingeben: ${inst.name}`);
     if (typed !== inst.name) { toast.err('Abgebrochen — Name stimmt nicht.'); return; }
+    const backups = window.confirm('Auch alle Backups dieser Instanz löschen?\n\nOK = Backups löschen\nAbbrechen = Backups behalten (bleiben im Orbit-Datenordner)');
     try {
-      await api(`/api/mc/instances/${inst.id}`, { method: 'DELETE', body: { deleteFiles: true } });
+      await api(`/api/mc/instances/${inst.id}`, { method: 'DELETE', body: { deleteFiles: true, deleteBackups: backups } });
       toast.ok(`${inst.name} gelöscht`);
       navigate('/instances');
     } catch (e) { toast.err(e.message); }
@@ -430,6 +433,7 @@ export default function McInstance() {
       {tab === 'mods' && inst.modKind && <McMods inst={inst} noun={inst.modKind} onRestart={() => control('restart')} />}
       {(tab === 'settings' || tab === 'properties') && <McSettings inst={inst} />}
       {tab === 'files' && <McFiles inst={inst} />}
+      {tab === 'backups' && <McBackups inst={inst} />}
       {tab === 'instance' && <InstanceSettings inst={inst} onChange={setInst} />}
     </Page>
   );
