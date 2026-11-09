@@ -981,7 +981,7 @@ async function handleApi(req, res, url) {
       const token = createSession(db, user, req);
       audit(db, user.username, 'login', 'cfx', ip);
       logLine('ok', `${user.username} über Cfx.re angemeldet`);
-      return redirect(res, setupDone() ? '/panel' : '/setup', [[ 'Set-Cookie', cookieHeader(COOKIE, token, SESSION_MS / 1000, 'Lax') ]]);
+      return redirect(res, '/home', [[ 'Set-Cookie', cookieHeader(COOKIE, token, SESSION_MS / 1000, 'Lax') ]]);
     } catch (err) {
       console.error('cfx callback', err.message);
       return redirect(res, '/login?cfx=error');
