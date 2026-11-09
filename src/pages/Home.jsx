@@ -7,6 +7,7 @@ import { Page, PageHeader } from '../components/Ui.jsx';
 import { GAMES, GAME_ORDER, PHASE_LABEL } from '../games.js';
 import { NavIcon } from '../layout/icons.jsx';
 import { fmtDur, fmtMb } from './mc/mcShared.js';
+import LiveStats from './home/LiveStats.jsx';
 import './home.css';
 
 /** Startseite: alle Server dieses Hosts, egal welches Spiel */
@@ -107,6 +108,8 @@ export default function Home() {
           {ramPct != null && <i className="home-meter"><em style={{ width: `${Math.min(100, ramPct)}%` }} /></i>}
         </div>
       </div>
+
+      {canControl && <LiveStats servers={servers} />}
 
       {games.length > 1 && (
         <div className="seg home-filter">

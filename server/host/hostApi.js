@@ -2,7 +2,9 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { PORT } from '../config.js';
 import { audit, setSetting, settingMap } from '../db.js';
-import { getMcInstance } from '../minecraft/mcDb.js';
+import nodePath from 'node:path';
+import { getMcInstance, listMcInstances } from '../minecraft/mcDb.js';
+import { startStats, statsSnapshot } from './stats.js';
 import { getJob, listJobs } from './exec.js';
 import {
   ENGINES, connectionInfo, createDatabase, dropDatabase, dumpDatabase, engineOverview, ensureDbTables,
@@ -14,6 +16,17 @@ import {
   SITE_TYPES, WEBSERVERS, activeWebserver, checkDns, deleteSite, dnsGuide, ensureWebTables, getSite,
   installWebserver, listCertificates, listForeignSites, listSites, publicIp, saveSite, setSiteEnabled, siteConfig,
 } from './web.js';
+
+/** Live-Statistik starten — Zuordnung der Prozesse zu Servern über deren Ordner */
+export function initHostStats(db) {
+  startStats(() => {
+    let st = {};
+    try { st = settingMap(db); } catch { /* */ }
+    let mc = [];
+    try { mc = listMcInstances(db).map((i) => ({ id: i.id, name: i.name, path: nodePath.resolve(i.path) })); } catch { /* */ }
+    return { mc, fx: { name: st.serverLabel || st.hostname || 'FiveM', cwd: st.fxDataPath ? nodePath.resolve(st.fxDataPath) : null } };
+  });
+}
 
 export function ensureHostTables(db) {
   ensureDbTables(db);
@@ -72,6 +85,10 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
         host: hostFacts(), ip: addr, services, engines, webserver: ws,
         sites: listSites(db).length, jobs: listJobs(),
       });
+      return true;
+    }
+    if (method === 'GET' && p === '/stats') {
+      json(res, 200, statsSnapshot(Number(url.searchParams.get('since')) || 0));
       return true;
     }
     if (method === 'GET' && p === '/setup') {
