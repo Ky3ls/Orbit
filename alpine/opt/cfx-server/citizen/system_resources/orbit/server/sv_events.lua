@@ -96,9 +96,7 @@ HANDLERS.directMessage = function(data)
 end
 
 HANDLERS.announcement = function(data)
-  TriggerClientEvent('orbit:announce', -1, tostring(data.message or ''), {
-    author = data.author and tostring(data.author) or nil,
-  })
+  TriggerClientEvent('orbit:announce', -1, tostring(data.message or ''))
 end
 
 HANDLERS.serverShuttingDown = function(data)

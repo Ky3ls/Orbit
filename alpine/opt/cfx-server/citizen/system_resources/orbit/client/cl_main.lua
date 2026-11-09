@@ -10,80 +10,9 @@ local showIds = false
 local spectating = false
 local spectateTarget = nil
 
-local NOTIFY_OK = { ['top-left'] = true, ['top-right'] = true, ['bottom-left'] = true, ['bottom-right'] = true }
-local notifyPos = 'top-left'
--- Panel-Akzent (ESP + NUI) — Default Orange
-local accentR, accentG, accentB = 255, 122, 26
-local accentR2, accentG2, accentB2 = 255, 154, 77
-
-local function parseAccentRgb(rgb)
-  if type(rgb) ~= 'string' then return nil end
-  local r, g, b = rgb:match('(%d+)%s*,%s*(%d+)%s*,%s*(%d+)')
-  r, g, b = tonumber(r), tonumber(g), tonumber(b)
-  if not r or not g or not b then return nil end
-  return r, g, b
+local function chat(msg)
+  TriggerEvent('chat:addMessage', { color = { 255, 122, 26 }, args = { 'Orbit', msg } })
 end
-
-local function applyAccent(data)
-  if type(data) ~= 'table' then return end
-  local r, g, b = parseAccentRgb(data.accentRgb or data.rgb)
-  if r then accentR, accentG, accentB = r, g, b end
-  local r2, g2, b2 = parseAccentRgb(data.accentRgb2 or data.rgb2)
-  if r2 then
-    accentR2, accentG2, accentB2 = r2, g2, b2
-  else
-    accentR2 = math.min(255, math.floor(accentR + (255 - accentR) * 0.35))
-    accentG2 = math.min(255, math.floor(accentG + (255 - accentG) * 0.35))
-    accentB2 = math.min(255, math.floor(accentB + (255 - accentB) * 0.35))
-  end
-  SendNUIMessage({
-    action = 'accent',
-    accent = data.accent or data.id or 'orange',
-    hex = data.accentHex or data.hex,
-    hex2 = data.accentHex2 or data.hex2,
-    rgb = ('%d, %d, %d'):format(accentR, accentG, accentB),
-  })
-end
-
-local function applyNotifyPos(pos)
-  if type(pos) ~= 'string' or not NOTIFY_OK[pos] then return end
-  if pos == notifyPos then return end
-  notifyPos = pos
-  SendNUIMessage({ action = 'notifyPos', pos = notifyPos })
-end
-
--- Nie chat:addMessage — spamt Chat + bricht esx_rpchat (GetPlayerName null).
-local function toast(kind, title, message, duration)
-  SendNUIMessage({
-    action = 'toast',
-    kind = kind or 'info',
-    title = title or 'Orbit',
-    message = tostring(message or ''),
-    duration = duration,
-    pos = notifyPos,
-  })
-end
-
-RegisterNetEvent('orbit:toast', function(kind, title, message, duration)
-  toast(kind, title, message, duration)
-end)
-
-RegisterNetEvent('orbit:notifyPos', function(pos)
-  applyNotifyPos(pos)
-end)
-
-RegisterNetEvent('orbit:accent', function(data)
-  applyAccent(data)
-end)
-
-CreateThread(function()
-  SendNUIMessage({ action = 'notifyPos', pos = notifyPos })
-  while true do
-    local p = GlobalState.orbitNotifyPos
-    if type(p) == 'string' then applyNotifyPos(p) end
-    Wait(4000)
-  end
-end)
 
 local function closeMenu()
   menuOpen = false
@@ -91,54 +20,6 @@ local function closeMenu()
   SetNuiFocusKeepInput(false)
   SetNuiFocus(false, false)
   SendNUIMessage({ action = 'close' })
-end
-
-local function rotationToDir(rot)
-  local z = math.rad(rot.z)
-  local x = math.rad(rot.x)
-  local num = math.abs(math.cos(x))
-  return vector3(-math.sin(z) * num, math.cos(z) * num, math.sin(x))
-end
-
---- Fahrzeug: Sitz ODER Blickrichtung / Raycast (nicht nur im Fahrzeug)
-local function getTargetVehicle(maxDist)
-  maxDist = tonumber(maxDist) or 10.0
-  local ped = PlayerPedId()
-  local seated = GetVehiclePedIsIn(ped, false)
-  if seated ~= 0 then return seated end
-
-  local cam = GetGameplayCamCoord()
-  local dir = rotationToDir(GetGameplayCamRot(2))
-  local dest = cam + (dir * maxDist)
-  local ray = StartShapeTestRay(cam.x, cam.y, cam.z, dest.x, dest.y, dest.z, 10, ped, 0)
-  local _, hit, _, _, ent = GetShapeTestResult(ray)
-  if hit == 1 and ent and ent ~= 0 and IsEntityAVehicle(ent) then
-    return ent
-  end
-
-  local aiming, aimEnt = GetEntityPlayerIsFreeAimingAt(PlayerId())
-  if aiming and aimEnt and aimEnt ~= 0 and IsEntityAVehicle(aimEnt) then
-    return aimEnt
-  end
-
-  local my = GetEntityCoords(ped)
-  local best, bestDist = 0, maxDist
-  for _, veh in ipairs(GetGamePool('CVehicle')) do
-    local vc = GetEntityCoords(veh)
-    local dist = #(vc - my)
-    if dist < bestDist then
-      local to = vc - cam
-      local len = #to
-      if len > 0.05 then
-        local dot = (to.x * dir.x + to.y * dir.y + to.z * dir.z) / len
-        if dot > 0.55 then
-          best = veh
-          bestDist = dist
-        end
-      end
-    end
-  end
-  return best
 end
 
 -- Für „Zurück“-Teleport: Noclip speichert Startcoords wie txAdmin lastTpCoords
@@ -164,7 +45,7 @@ local function findZ(x, y)
   return 72.0
 end
 
-local function teleportTo(x, y, z, h)
+local function teleportTo(x, y, z)
   local ped = PlayerPedId()
   local veh = GetVehiclePedIsIn(ped, false)
   lastTp = GetEntityCoords(ped)
@@ -172,26 +53,9 @@ local function teleportTo(x, y, z, h)
   RequestCollisionAtCoord(x, y, z)
   if veh ~= 0 then
     SetEntityCoords(veh, x + 0.0, y + 0.0, z + 0.0, false, false, false, false)
-    if h ~= nil then SetEntityHeading(veh, h + 0.0) end
   else
     SetEntityCoords(ped, x + 0.0, y + 0.0, z + 0.0, false, false, false, false)
-    if h ~= nil then SetEntityHeading(ped, h + 0.0) end
   end
-end
-
--- vec3/vec4/vector3/vector4/v3/v4(...) oder "x, y, z[, h]" / spaces
-local function parseCoords(raw)
-  raw = tostring(raw or ''):gsub('^%s+', ''):gsub('%s+$', '')
-  if raw == '' then return nil end
-  local inner = raw:match('^[%a_][%w_]*%s*%((.+)%)$')
-  if inner then raw = inner end
-  local nums = {}
-  for tok in raw:gmatch('%-?%d+%.?%d*[Ee]?[+-]?%d*') do
-    local n = tonumber(tok)
-    if n ~= nil then nums[#nums + 1] = n end
-  end
-  if #nums < 2 then return nil end
-  return nums[1], nums[2], nums[3], nums[4]
 end
 
 -- —— Modes ——
@@ -202,13 +66,13 @@ local function setGod(state)
   end
   SetEntityInvincible(PlayerPedId(), god or (OrbitIsNoclip and OrbitIsNoclip()))
   notifyToggles()
-  toast('ok', 'Modus', god and 'Godmode an' or 'Godmode aus')
+  chat(god and 'Godmode an' or 'Godmode aus')
 end
 
 local function setSuperjump(state)
   superjump = state and true or false
   notifyToggles()
-  toast('ok', 'Modus', superjump and 'Superjump an' or 'Superjump aus')
+  chat(superjump and 'Superjump an' or 'Superjump aus')
 end
 
 local function setNoclip(state)
@@ -223,7 +87,7 @@ local function setNoclip(state)
     SetEntityInvincible(PlayerPedId(), god)
   end
   notifyToggles()
-  toast('ok', 'Modus', on and 'NoClip an' or 'NoClip aus')
+  chat(on and 'NoClip an' or 'NoClip aus')
 end
 
 CreateThread(function()
@@ -238,290 +102,33 @@ CreateThread(function()
   end
 end)
 
--- —— Player IDs + vertikale HP/Weste (Körper) + Skelett-ESP (durch Wände) ——
-local BONE_HEAD = 31086
-local BONE_NECK = 39317
-local BONE_SPINE = 24818
-local BONE_PELVIS = 11816
-local BONE_L_CLAV = 64729
-local BONE_L_UPARM = 45509
-local BONE_L_FORE = 61163
-local BONE_L_HAND = 18905
-local BONE_R_CLAV = 10706
-local BONE_R_UPARM = 40269
-local BONE_R_FORE = 28252
-local BONE_R_HAND = 57005
-local BONE_L_THIGH = 58271
-local BONE_L_CALF = 63931
-local BONE_L_FOOT = 14201
-local BONE_R_THIGH = 51826
-local BONE_R_CALF = 36864
-local BONE_R_FOOT = 52301
-
---- Knochen-Paare fürs Skelett
-local SKELETON = {
-  { BONE_HEAD, BONE_NECK },
-  { BONE_NECK, BONE_SPINE },
-  { BONE_SPINE, BONE_PELVIS },
-  { BONE_NECK, BONE_L_CLAV },
-  { BONE_L_CLAV, BONE_L_UPARM },
-  { BONE_L_UPARM, BONE_L_FORE },
-  { BONE_L_FORE, BONE_L_HAND },
-  { BONE_NECK, BONE_R_CLAV },
-  { BONE_R_CLAV, BONE_R_UPARM },
-  { BONE_R_UPARM, BONE_R_FORE },
-  { BONE_R_FORE, BONE_R_HAND },
-  { BONE_PELVIS, BONE_L_THIGH },
-  { BONE_L_THIGH, BONE_L_CALF },
-  { BONE_L_CALF, BONE_L_FOOT },
-  { BONE_PELVIS, BONE_R_THIGH },
-  { BONE_R_THIGH, BONE_R_CALF },
-  { BONE_R_CALF, BONE_R_FOOT },
-}
-
-local function pedHealthPct(ped)
-  local hp = GetEntityHealth(ped)
-  local maxHp = GetEntityMaxHealth(ped)
-  if maxHp <= 100 then maxHp = 200 end
-  local pct = ((hp - 100) / (maxHp - 100)) * 100.0
-  if pct < 0.0 then pct = 0.0 end
-  if pct > 100.0 then pct = 100.0 end
-  return pct
-end
-
-local function pedArmorPct(ped)
-  local a = GetPedArmour(ped) or 0
-  if a < 0 then a = 0 end
-  if a > 100 then a = 100 end
-  return a + 0.0
-end
-
-local function pedBoneXYZ(ped, bone)
-  local a, b, d = GetPedBoneCoords(ped, bone, 0.0, 0.0, 0.0)
-  if type(a) == 'number' and b then return a, b, d end
-  if a then return a.x, a.y, a.z end
-  return nil
-end
-
-local function boneScreen(ped, bone)
-  local bx, by, bz = pedBoneXYZ(ped, bone)
-  if not bx then return nil end
-  local ok, x, y = World3dToScreen2d(bx, by, bz)
-  if not ok then return nil end
-  return x, y
-end
-
---- Vertikaler Balken rechts am Körper (Fuß → Kopf), Füllung von unten
-local function drawVerticalBar(barX, topY, botY, pct, r, g, b, barW)
-  local height = botY - topY
-  if height < 0.015 then height = 0.015 end
-  local midY = topY + height * 0.5
-  DrawRect(barX, midY, barW, height, 18, 18, 22, 180)
-  local fill = math.max(0.0, math.min(1.0, pct / 100.0))
-  if fill > 0.01 then
-    local fillH = height * fill
-    local fillCy = botY - fillH * 0.5
-    DrawRect(barX, fillCy, barW * 0.62, fillH, r, g, b, 235)
-  end
-end
-
---- 2D-Linie aus wenigen farbigen DrawRects (Sprite-Rotation war kaputt → Querbalken)
-local function drawScreenLine(x1, y1, x2, y2, r, g, b, a)
-  local dx, dy = x2 - x1, y2 - y1
-  local len = math.sqrt(dx * dx + dy * dy)
-  if len < 0.0003 then return end
-  local steps = math.min(8, math.max(2, math.floor(len / 0.014 + 0.5)))
-  local w, h = 0.0019, 0.0029
-  for i = 0, steps do
-    local t = i / steps
-    DrawRect(x1 + dx * t, y1 + dy * t, w, h, r, g, b, a)
-  end
-end
-
-local function drawPedSkeleton(ped, r, g, b, a)
-  local cache = {}
-  local function scr(bone)
-    local hit = cache[bone]
-    if hit == false then return nil end
-    if hit then return hit[1], hit[2] end
-    local x, y = boneScreen(ped, bone)
-    if x then
-      cache[bone] = { x, y }
-      return x, y
-    end
-    cache[bone] = false
-    return nil
-  end
-  for i = 1, #SKELETON do
-    local pair = SKELETON[i]
-    local x1, y1 = scr(pair[1])
-    local x2, y2 = scr(pair[2])
-    if x1 and x2 then
-      drawScreenLine(x1, y1, x2, y2, r, g, b, a)
-    end
-  end
-end
-
--- TEMP: auch NPCs (einfach wieder auf false setzen)
-local ESP_NPC_TEMP = true
-
-local function drawEspEntity(ped, myPed, dist, label, tr, tg, tb, skR, skG, skB, textScale, barW, barGap, withSkeleton)
-  local headX, headY = boneScreen(ped, BONE_HEAD)
-
-  -- Bars zuerst (wenig Draws), dann Skeleton, Label zuletzt oben drauf
-  if headX and headY then
-    local topY, botY = headY, headY
-    local leftX, rightX = headX, headX
-    local function acc(bone)
-      local x, y = boneScreen(ped, bone)
-      if not x then return false end
-      if x < leftX then leftX = x end
-      if x > rightX then rightX = x end
-      if y < topY then topY = y end
-      if y > botY then botY = y end
-      return true
-    end
-    acc(BONE_PELVIS)
-    acc(BONE_L_UPARM)
-    acc(BONE_R_UPARM)
-    local gotFoot = acc(BONE_L_FOOT) or acc(BONE_R_FOOT)
-    if not gotFoot then
-      local ec = GetEntityCoords(ped)
-      local ok, x, y = World3dToScreen2d(ec.x, ec.y, ec.z - 0.95)
-      if ok then
-        if x < leftX then leftX = x end
-        if x > rightX then rightX = x end
-        if y > botY then botY = y end
-      else
-        botY = headY + 0.085
-      end
-    end
-    if (botY - topY) < 0.02 then
-      topY = headY - 0.04
-      botY = headY + 0.06
-    end
-    local barPad = 0.022
-    local barX = rightX + barPad
-    if barX > 0.985 then
-      barX = leftX - barPad - barGap
-    end
-    if barX < 0.01 then barX = 0.01 end
-    if barX > 0.99 then barX = 0.99 end
-    local hp = pedHealthPct(ped)
-    local armor = pedArmorPct(ped)
-    local hr, hg, hb = 80, 200, 90
-    if hp < 35.0 then hr, hg, hb = 230, 70, 70
-    elseif hp < 65.0 then hr, hg, hb = 230, 180, 60 end
-    drawVerticalBar(barX, topY, botY, hp, hr, hg, hb, barW)
-    drawVerticalBar(barX + barGap, topY, botY, armor, 70, 140, 230, barW)
-  end
-
-  if withSkeleton ~= false then
-    local alpha = ped == myPed and 220 or (dist < 40.0 and 230 or (dist < 100.0 and 180 or 130))
-    pcall(drawPedSkeleton, ped, skR, skG, skB, alpha)
-  end
-
-  if headX and headY and label then
-    SetTextFont(4)
-    SetTextScale(textScale, textScale)
-    SetTextProportional(true)
-    SetTextCentre(true)
-    SetTextColour(tr, tg, tb, 255)
-    SetTextOutline()
-    SetTextEntry('STRING')
-    AddTextComponentString(label)
-    DrawText(headX, headY - 0.052)
-  end
-end
-
-local function collectNpcPeds(myPed, myCoords, maxDist, maxCount)
-  local out = {}
-  local pool = GetGamePool('CPed')
-  if type(pool) == 'table' and #pool > 0 then
-    for i = 1, #pool do
-      local ped = pool[i]
-      if ped and ped ~= 0 and ped ~= myPed and DoesEntityExist(ped)
-        and not IsPedAPlayer(ped) and not IsEntityDead(ped) then
-        local coords = GetEntityCoords(ped)
-        local dist = #(coords - myCoords)
-        if dist < maxDist then
-          out[#out + 1] = { ped = ped, dist = dist }
-        end
-      end
-    end
-  else
-    -- Fallback falls GetGamePool leer/unavailable
-    local handle, ped = FindFirstPed()
-    local ok = true
-    while ok do
-      if ped and ped ~= 0 and ped ~= myPed and DoesEntityExist(ped)
-        and not IsPedAPlayer(ped) and not IsEntityDead(ped) then
-        local coords = GetEntityCoords(ped)
-        local dist = #(coords - myCoords)
-        if dist < maxDist then
-          out[#out + 1] = { ped = ped, dist = dist }
-        end
-      end
-      ok, ped = FindNextPed(handle)
-    end
-    EndFindPed(handle)
-  end
-  table.sort(out, function(a, b) return a.dist < b.dist end)
-  if #out > maxCount then
-    for i = #out, maxCount + 1, -1 do out[i] = nil end
-  end
-  return out
-end
-
+-- —— Player IDs ——
 CreateThread(function()
-  local textScale = 0.32
-  local barW = 0.0036
-  local barGap = 0.0055
-  local ESP_DIST = 220.0
-  local ESP_NPC_DIST = 80.0
-  local ESP_NPC_MAX = 10
-  local ESP_NPC_SKELETON_MAX = 6
   while true do
     if showIds then
-      pcall(function()
-        local myPed = PlayerPedId()
-        local myCoords = GetEntityCoords(myPed)
-        local seen = {}
-        for _, pid in ipairs(GetActivePlayers()) do
-          local ped = GetPlayerPed(pid)
-          if ped ~= 0 then
-            seen[ped] = true
-            local coords = GetEntityCoords(ped)
-            local dist = #(coords - myCoords)
-            if dist < ESP_DIST then
-              local sid = GetPlayerServerId(pid)
-              local label = ('[%s] %s'):format(sid, GetPlayerName(pid) or '')
-              drawEspEntity(ped, myPed, dist, label, accentR, accentG, accentB, accentR2, accentG2, accentB2, textScale, barW, barGap, true)
+      for _, pid in ipairs(GetActivePlayers()) do
+        local ped = GetPlayerPed(pid)
+        if ped ~= 0 then
+          local coords = GetEntityCoords(ped)
+          local my = GetEntityCoords(PlayerPedId())
+          if #(coords - my) < 150.0 then
+            local sid = GetPlayerServerId(pid)
+            local onScreen, sx, sy = World3dToScreen2d(coords.x, coords.y, coords.z + 1.1)
+            if onScreen then
+              SetTextScale(0.35, 0.35)
+              SetTextFont(4)
+              SetTextCentre(true)
+              SetTextColour(255, 122, 26, 220)
+              BeginTextCommandDisplayText('STRING')
+              AddTextComponentSubstringPlayerName(('[%s] %s'):format(sid, GetPlayerName(pid) or ''))
+              EndTextCommandDisplayText(sx, sy)
             end
           end
         end
-        if ESP_NPC_TEMP then
-          local npcs = collectNpcPeds(myPed, myCoords, ESP_NPC_DIST, ESP_NPC_MAX)
-          local nr = math.floor(accentR * 0.55 + 100)
-          local ng = math.floor(accentG * 0.55 + 100)
-          local nb = math.floor(accentB * 0.55 + 100)
-          local sr = math.floor(accentR2 * 0.5 + 90)
-          local sg = math.floor(accentG2 * 0.5 + 90)
-          local sb = math.floor(accentB2 * 0.5 + 90)
-          local skCount = 0
-          for i = 1, #npcs do
-            local e = npcs[i]
-            if not seen[e.ped] then
-              skCount = skCount + 1
-              local full = skCount <= ESP_NPC_SKELETON_MAX
-              drawEspEntity(e.ped, myPed, e.dist, '[NPC]', nr, ng, nb, sr, sg, sb, textScale, barW, barGap, full)
-            end
-          end
-        end
-      end)
+      end
       Wait(0)
     else
-      Wait(400)
+      Wait(500)
     end
   end
 end)
@@ -538,21 +145,21 @@ local function stopSpectate()
     -- stay near last pos
   end
   spectateTarget = nil
-  toast('info', 'Spectate', 'Beendet')
+  chat('Spectate beendet')
 end
 
 local function startSpectate(serverId)
   local target = GetPlayerFromServerId(tonumber(serverId))
-  if target == -1 then toast('warn', 'Spectate', 'Spieler nicht gefunden') return end
+  if target == -1 then chat('Spieler nicht gefunden') return end
   local tped = GetPlayerPed(target)
-  if tped == 0 then toast('warn', 'Spectate', 'Ped fehlt') return end
+  if tped == 0 then chat('Ped fehlt') return end
   spectating = true
   spectateTarget = serverId
   local me = PlayerPedId()
   SetEntityVisible(me, false, false)
   SetEntityCollision(me, false, false)
   NetworkSetInSpectatorMode(true, tped)
-  toast('info', 'Spectate', 'Esc im Menü / erneut Spectate zum Beenden')
+  chat('Spectate · Esc im Menü / erneut Spectate zum Beenden')
 end
 
 -- —— Events ——
@@ -565,9 +172,7 @@ RegisterNetEvent('orbit:openMenu', function(payload)
   menuOpen = true
   menuCursor = false
   local game = payload and payload.game or {}
-  if type(game.notifyPos) == 'string' then applyNotifyPos(game.notifyPos) end
-  if game.accent or game.accentRgb or game.accentHex then applyAccent(game) end
-  -- Main: Tastatur-Menü + laufen/umschauen (KeepInput)
+  -- Main: kein Cursor, Kamera/Bewegung per Maus+WASD; Spieler-Tab schaltet Cursor separat
   SetNuiFocus(true, false)
   SetNuiFocusKeepInput(true)
   SendNUIMessage({
@@ -578,7 +183,6 @@ RegisterNetEvent('orbit:openMenu', function(payload)
     game = game,
     alignRight = game.alignRight == true,
     pageKey = game.pageKey or 'Tab',
-    notifyPos = notifyPos,
   })
   notifyToggles()
 end)
@@ -589,15 +193,12 @@ end)
 
 RegisterNetEvent('orbit:announce', function(msg, meta)
   local hide = type(meta) == 'table' and meta.hide
-  if hide then return end
-  local author = type(meta) == 'table' and meta.author or nil
-  if type(meta) == 'table' and meta.hideAdmin then author = nil end
-  SendNUIMessage({
-    action = 'announceUi',
-    message = tostring(msg or ''),
-    author = author and tostring(author) or nil,
-    duration = 8000,
-  })
+  if not hide then
+    chat(msg or '')
+    BeginTextCommandThefeedPost('STRING')
+    AddTextComponentSubstringPlayerName(('~o~Orbit~s~\n%s'):format(tostring(msg or '')))
+    EndTextCommandThefeedPostTicker(false, true)
+  end
 end)
 
 RegisterNetEvent('orbit:dm', function(author, message, meta)
@@ -605,15 +206,7 @@ RegisterNetEvent('orbit:dm', function(author, message, meta)
   local hideNotif = type(meta) == 'table' and meta.hide
   if hideNotif then return end
   local who = hideName and 'Admin' or tostring(author or 'Admin')
-  SendNUIMessage({
-    action = 'toast',
-    kind = 'dm',
-    title = 'DM',
-    message = tostring(message or ''),
-    meta = ('von %s'):format(who),
-    duration = 6000,
-    pos = notifyPos,
-  })
+  chat(('DM von %s: %s'):format(who, tostring(message or '')))
 end)
 
 RegisterNetEvent('orbit:showWarning', function(payload)
@@ -623,15 +216,7 @@ RegisterNetEvent('orbit:showWarning', function(payload)
   local hideNotif = type(payload) == 'table' and payload.hide
   if hideNotif then return end
   local who = hideName and 'Admin' or tostring(author)
-  SendNUIMessage({
-    action = 'toast',
-    kind = 'warn',
-    title = 'Verwarnung',
-    message = tostring(reason),
-    meta = ('von %s'):format(who),
-    duration = 7000,
-    pos = notifyPos,
-  })
+  chat(('WARNUNG von %s: %s'):format(who, tostring(reason)))
 end)
 
 RegisterNetEvent('orbit:heal', function()
@@ -639,19 +224,7 @@ RegisterNetEvent('orbit:heal', function()
   SetEntityHealth(ped, GetEntityMaxHealth(ped))
   SetPedArmour(ped, 100)
   ClearPedBloodDamage(ped)
-  -- ESX: Hunger + Durst voll (esx_basicneeds / esx_status)
-  if GetResourceState('esx_basicneeds') == 'started' then
-    TriggerEvent('esx_basicneeds:healPlayer')
-  elseif GetResourceState('esx_status') == 'started' then
-    TriggerEvent('esx_status:set', 'hunger', 1000000)
-    TriggerEvent('esx_status:set', 'thirst', 1000000)
-  end
-  toast('ok', 'Heilung', 'HP, Weste, Essen & Trinken voll')
-end)
-
-RegisterNetEvent('orbit:armor', function()
-  SetPedArmour(PlayerPedId(), 100)
-  toast('ok', 'Weste', 'Rüstung voll')
+  chat('Geheilt.')
 end)
 
 RegisterNetEvent('orbit:tpCoords', function(x, y, z)
@@ -660,7 +233,7 @@ end)
 
 RegisterNetEvent('orbit:freeze', function(state)
   FreezeEntityPosition(PlayerPedId(), state and true or false)
-  toast('info', 'Freeze', state and 'Eingefroren' or 'Aufgetaut')
+  chat(state and 'Eingefroren' or 'Aufgetaut')
 end)
 
 RegisterNetEvent('orbit:drunk', function()
@@ -685,7 +258,7 @@ RegisterNetEvent('orbit:clearArea', function(radius)
   ClearAreaOfVehicles(c.x, c.y, c.z, radius, false, false, false, false, false)
   ClearAreaOfPeds(c.x, c.y, c.z, radius, 1)
   ClearAreaOfObjects(c.x, c.y, c.z, radius, 0)
-  toast('ok', 'Area', ('Bereinigt (%.0fm)'):format(radius))
+  chat(('Area gecleared (%.0fm)'):format(radius))
 end)
 
 -- —— NUI ——
@@ -699,16 +272,14 @@ RegisterNUICallback('setCursor', function(data, cb)
   if not menuOpen then cb(0) return end
   local want = data and data.enabled and true or false
   menuCursor = want
+  -- Players/Modal: Cursor fürs Menü. Main: keine Maus-UI, Kamera frei drehen.
   SetNuiFocus(true, want)
-  -- Ohne Maus: Spiel-Input behalten (laufen/gucken). Mit Maus: nur NUI.
   SetNuiFocusKeepInput(not want)
   cb(1)
 end)
 
 RegisterNUICallback('healSelf', function(_, cb) TriggerServerEvent('orbit:adminHeal') cb(1) end)
 RegisterNUICallback('healAll', function(_, cb) TriggerServerEvent('orbit:adminHealAll') cb(1) end)
-RegisterNUICallback('armorSelf', function(_, cb) TriggerServerEvent('orbit:adminArmor') cb(1) end)
-RegisterNUICallback('armorAll', function(_, cb) TriggerServerEvent('orbit:adminArmorAll') cb(1) end)
 RegisterNUICallback('announce', function(data, cb)
   TriggerServerEvent('orbit:adminAnnounce', data and data.message or '')
   cb(1)
@@ -727,21 +298,22 @@ RegisterNUICallback('toggleIds', function(data, cb)
 end)
 RegisterNUICallback('tpWaypoint', function(_, cb)
   local blip = GetFirstBlipInfoId(8)
-  if not DoesBlipExist(blip) then toast('warn', 'Teleport', 'Kein Wegpunkt') cb(1) return end
+  if not DoesBlipExist(blip) then chat('Kein Wegpunkt') cb(1) return end
   local c = GetBlipInfoIdCoord(blip)
   teleportTo(c.x, c.y, 0.0)
   cb(1)
 end)
 RegisterNUICallback('tpBack', function(_, cb)
-  if not lastTp then toast('warn', 'Teleport', 'Kein Rücksprung') cb(1) return end
+  if not lastTp then chat('Kein Rücksprung') cb(1) return end
   teleportTo(lastTp.x, lastTp.y, lastTp.z)
   cb(1)
 end)
 RegisterNUICallback('tpCoords', function(data, cb)
-  local x, y, z, h = parseCoords(data and data.coords)
-  if not x or not y then toast('warn', 'Teleport', 'Coords ungültig') cb(1) return end
-  teleportTo(x, y, z, h)
-  toast('ok', 'Teleport', h and ('%.1f, %.1f, %.1f (h %.0f)'):format(x, y, z or 0.0, h) or ('%.1f, %.1f, %.1f'):format(x, y, z or 0.0))
+  local raw = tostring(data and data.coords or '')
+  local x, y, z = raw:match('([^,%s]+)%s*,%s*([^,%s]+)%s*,%s*([^,%s]+)')
+  x, y, z = tonumber(x), tonumber(y), tonumber(z)
+  if not x or not y then chat('Coords ungültig') cb(1) return end
+  teleportTo(x, y, z or 0.0)
   cb(1)
 end)
 RegisterNUICallback('copyCoords', function(_, cb)
@@ -755,36 +327,34 @@ RegisterNUICallback('clearArea', function(_, cb)
 end)
 
 RegisterNUICallback('vehRepair', function(_, cb)
-  local veh = getTargetVehicle(12.0)
-  if veh == 0 then toast('warn', 'Fahrzeug', 'Kein Fahrzeug im Blick / Sitz') cb(1) return end
+  local veh = GetVehiclePedIsIn(PlayerPedId(), false)
+  if veh == 0 then chat('Kein Fahrzeug') cb(1) return end
   SetVehicleFixed(veh)
   SetVehicleDirtLevel(veh, 0.0)
-  SetVehicleEngineOn(veh, true, true, false)
-  toast('ok', 'Fahrzeug', 'Repariert')
+  chat('Fahrzeug repariert')
   cb(1)
 end)
 RegisterNUICallback('vehBoost', function(_, cb)
-  local veh = getTargetVehicle(12.0)
-  if veh == 0 then toast('warn', 'Fahrzeug', 'Kein Fahrzeug im Blick / Sitz') cb(1) return end
+  local veh = GetVehiclePedIsIn(PlayerPedId(), false)
+  if veh == 0 then chat('Kein Fahrzeug') cb(1) return end
   SetVehicleEnginePowerMultiplier(veh, 25.0)
-  toast('ok', 'Fahrzeug', 'Boost aktiv')
+  chat('Boost aktiv')
   cb(1)
 end)
 RegisterNUICallback('vehFlip', function(_, cb)
-  local veh = getTargetVehicle(12.0)
-  if veh == 0 then toast('warn', 'Fahrzeug', 'Kein Fahrzeug im Blick / Sitz') cb(1) return end
+  local veh = GetVehiclePedIsIn(PlayerPedId(), false)
+  if veh == 0 then chat('Kein Fahrzeug') cb(1) return end
   local c = GetEntityCoords(veh)
   SetEntityRotation(veh, 0.0, 0.0, GetEntityHeading(veh), 2, true)
   SetEntityCoords(veh, c.x, c.y, c.z + 0.5, false, false, false, false)
-  toast('ok', 'Fahrzeug', 'Aufgerichtet')
   cb(1)
 end)
 RegisterNUICallback('vehDelete', function(_, cb)
-  local veh = getTargetVehicle(12.0)
-  if veh == 0 then toast('warn', 'Fahrzeug', 'Kein Fahrzeug im Blick / Sitz') cb(1) return end
+  local veh = GetVehiclePedIsIn(PlayerPedId(), false)
+  if veh == 0 then chat('Kein Fahrzeug') cb(1) return end
   SetEntityAsMissionEntity(veh, true, true)
   DeleteVehicle(veh)
-  toast('ok', 'Fahrzeug', 'Gelöscht')
+  chat('Fahrzeug gelöscht')
   cb(1)
 end)
 
@@ -844,39 +414,39 @@ end, false)
 RegisterKeyMapping('orbit', 'Orbit Admin-Menü', 'keyboard', '')
 RegisterKeyMapping('orbitnoclip', 'Orbit NoClip umschalten', 'keyboard', '')
 
--- Menü offen: Main → laufen/gucken; Spieler-Tab (Maus) → Look sperren
+-- Menü offen: Main → Kamera/Bewegen; Players → Cursor, Blick blocken
 CreateThread(function()
   while true do
     if menuOpen then
+      if menuCursor then
+        -- Spieler-Tab: Maus bedient NUI, nicht die Kamera
+        DisableControlAction(0, 1, true)   -- Look LR
+        DisableControlAction(0, 2, true)   -- Look UD
+      end
       DisableControlAction(0, 24, true)  -- Attack
       DisableControlAction(0, 25, true)  -- Aim
       DisableControlAction(0, 37, true)  -- Weapon wheel
       DisableControlAction(0, 44, true)  -- Cover
-      DisableControlAction(0, 47, true)
-      DisableControlAction(0, 58, true)
-      DisableControlAction(0, 140, true)
+      DisableControlAction(0, 47, true)  -- Detonate
+      DisableControlAction(0, 58, true)  -- Throw
+      DisableControlAction(0, 140, true) -- Melee
       DisableControlAction(0, 141, true)
       DisableControlAction(0, 142, true)
       DisableControlAction(0, 143, true)
       DisableControlAction(0, 199, true) -- Pause
       DisableControlAction(0, 200, true)
       DisableControlAction(0, 245, true) -- Chat
-      DisableControlAction(0, 257, true)
+      DisableControlAction(0, 257, true) -- Attack2
       DisableControlAction(0, 263, true)
       DisableControlAction(0, 264, true)
-      -- Pfeile nur für Menü, nicht Radio/Phone
+      -- Pfeiltasten dem NUI; Leertaste = Springen
+      DisableControlAction(0, 23, true)  -- Enter vehicle
+      DisableControlAction(0, 75, true)  -- Exit vehicle
       DisableControlAction(0, 172, true)
       DisableControlAction(0, 173, true)
       DisableControlAction(0, 174, true)
       DisableControlAction(0, 175, true)
-      DisableControlAction(0, 27, true)
-      if menuCursor then
-        DisableControlAction(0, 1, true)  -- Look LR
-        DisableControlAction(0, 2, true)  -- Look UD
-        DisableControlAction(0, 106, true)
-        DisableControlAction(0, 23, true)
-        DisableControlAction(0, 75, true)
-      end
+      DisableControlAction(0, 27, true) -- Phone up (arrow-ish)
       Wait(0)
     else
       Wait(200)

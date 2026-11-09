@@ -22,7 +22,6 @@ server_scripts {
     'server/sv_connect.lua',
     'server/sv_events.lua',
     'server/sv_actions.lua',
-    'server/sv_options.lua',
 }
 
 client_scripts {
@@ -37,5 +36,4 @@ client_scripts {
     'client/cl_ptfx.lua', -- vor noclip (Ptfx-API)
     'client/cl_noclip.lua',
     'client/cl_main.lua',
-    'client/cl_options.lua',
 }

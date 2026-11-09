@@ -61,8 +61,6 @@ const selectors = {
     options: [
       { id: 'self', label: 'Selbst', act: 'healSelf', perm: 'healSelf' },
       { id: 'all', label: 'Alle', act: 'healAll', perm: 'healAll' },
-      { id: 'armorSelf', label: 'Weste', act: 'armorSelf', perm: 'healSelf' },
-      { id: 'armorAll', label: 'Weste alle', act: 'armorAll', perm: 'healAll' },
     ],
   },
   veh: {
@@ -81,7 +79,7 @@ const selectors = {
 const MAIN_ACTIONS = [
   { id: 'announce', label: 'Ankündigung', ico: 'megaphone', act: 'promptAnnounce', perm: 'announce' },
   { id: 'area', label: 'Area bereinigen', ico: 'broom', act: 'clearArea', perm: 'clearArea' },
-  { id: 'ids', label: 'IDs / ESP', ico: 'ids', act: 'toggleIds', perm: 'ids', toggle: 'ids' },
+  { id: 'ids', label: 'Spieler-IDs', ico: 'ids', act: 'toggleIds', perm: 'ids', toggle: 'ids' },
 ];
 
 const PACT_MOD = [
@@ -105,9 +103,9 @@ const MENU_I18N = {
   de: {
     mode: 'Modus', noclip: 'NoClip', god: 'Godmode', superjump: 'Superjump',
     tp: 'Teleport', wp: 'Wegpunkt', back: 'Zurück', coords: 'Koordinaten…',
-    heal: 'Heilung', self: 'Selbst', all: 'Alle', armorSelf: 'Weste', armorAll: 'Weste alle',
+    heal: 'Heilung', self: 'Selbst', all: 'Alle',
     veh: 'Fahrzeug', repair: 'Reparieren', boost: 'Boost', flip: 'Aufrichten', del: 'Löschen',
-    announce: 'Ankündigung', area: 'Area bereinigen', ids: 'IDs / ESP',
+    announce: 'Ankündigung', area: 'Area bereinigen', ids: 'Spieler-IDs',
     drunk: 'Betrunken', fire: 'Feuer',
     announceTitle: 'Ankündigung', announcePh: 'Nachricht an alle…',
     coordsTitle: 'Koordinaten', admin: 'Admin',
@@ -115,9 +113,9 @@ const MENU_I18N = {
   en: {
     mode: 'Mode', noclip: 'NoClip', god: 'Godmode', superjump: 'Superjump',
     tp: 'Teleport', wp: 'Waypoint', back: 'Back', coords: 'Coordinates…',
-    heal: 'Heal', self: 'Self', all: 'All', armorSelf: 'Armor', armorAll: 'Armor all',
+    heal: 'Heal', self: 'Self', all: 'All',
     veh: 'Vehicle', repair: 'Repair', boost: 'Boost', flip: 'Flip', del: 'Delete',
-    announce: 'Announce', area: 'Clear area', ids: 'IDs / ESP',
+    announce: 'Announce', area: 'Clear area', ids: 'Player IDs',
     drunk: 'Drunk', fire: 'Fire',
     announceTitle: 'Announcement', announcePh: 'Message to everyone…',
     coordsTitle: 'Coordinates', admin: 'Admin',
@@ -142,8 +140,6 @@ function applyMenuLang(lang) {
   selectors.heal.label = mt('heal');
   selectors.heal.options[0].label = mt('self');
   selectors.heal.options[1].label = mt('all');
-  if (selectors.heal.options[2]) selectors.heal.options[2].label = mt('armorSelf');
-  if (selectors.heal.options[3]) selectors.heal.options[3].label = mt('armorAll');
   selectors.veh.label = mt('veh');
   selectors.veh.options[0].label = mt('repair');
   selectors.veh.options[1].label = mt('boost');
@@ -154,8 +150,6 @@ function applyMenuLang(lang) {
   MAIN_ACTIONS[2].label = mt('ids');
   const tabPlayers = document.querySelector('.tabs button[data-tab="players"]');
   if (tabPlayers) tabPlayers.textContent = menuLang === 'de' ? 'Spieler' : 'Players';
-  const tabOptions = document.querySelector('.tabs button[data-tab="options"]');
-  if (tabOptions) tabOptions.textContent = menuLang === 'de' ? 'Optionen' : 'Options';
   if (PACT_TROLL[0]) PACT_TROLL[0].label = mt('drunk');
   if (PACT_TROLL[1]) PACT_TROLL[1].label = mt('fire');
 }
@@ -273,120 +267,8 @@ function buildMenus() {
 }
 
 function syncMenuCursor() {
-  // Main: nur Tasten. Spieler/Optionen/Modal/Prompt → Maus.
-  const menuOpen = app && !app.classList.contains('hidden');
-  if (!menuOpen) {
-    app?.classList.remove('kb-nav', 'mouse-nav', 'wide');
-    post('setCursor', { enabled: false });
-    return;
-  }
-  const tab = activeTabId();
-  const onMouseTab = tab === 'players' || tab === 'options';
-  const wantMouse = onMouseTab || isModalOpen() || isPromptOpen();
-  app.classList.toggle('kb-nav', !onMouseTab && !isModalOpen());
-  app.classList.toggle('mouse-nav', onMouseTab || isModalOpen());
-  app.classList.toggle('wide', tab === 'options');
+  const wantMouse = activeTabId() === 'players' || isModalOpen() || isPromptOpen();
   post('setCursor', { enabled: wantMouse });
-}
-
-/** Main-Tab: echte Mausklicks/Hover ignorieren (programmatische .click() durchlassen) */
-function blockMainMouse(e) {
-  if (!app || !app.classList.contains('kb-nav')) return;
-  if (e.isTrusted === false) return;
-  e.preventDefault();
-  e.stopPropagation();
-  e.stopImmediatePropagation();
-}
-['click', 'mousedown', 'mouseup', 'auxclick', 'contextmenu', 'dblclick', 'pointerdown', 'pointerup'].forEach((type) => {
-  app?.addEventListener(type, blockMainMouse, true);
-});
-
-const NOTIFY_POS = new Set(['top-left', 'top-right', 'bottom-left', 'bottom-right']);
-
-function applyNotifyPos(pos) {
-  const root = document.getElementById('orbitToasts');
-  if (!root) return;
-  const p = NOTIFY_POS.has(pos) ? pos : 'top-left';
-  root.classList.remove('pos-top-left', 'pos-top-right', 'pos-bottom-left', 'pos-bottom-right');
-  root.classList.add(`pos-${p}`);
-}
-
-function applyAccent(data) {
-  if (!data) return;
-  const root = document.documentElement;
-  const hex = data.hex || data.accentHex;
-  const hex2 = data.hex2 || data.accentHex2;
-  const rgb = data.rgb || data.accentRgb;
-  if (hex) root.style.setProperty('--accent', hex);
-  if (hex2) root.style.setProperty('--accent-2', hex2);
-  if (rgb) {
-    root.style.setProperty('--accent-rgb', rgb);
-    root.style.setProperty('--accent-dim', `rgba(${rgb}, 0.14)`);
-  }
-  if (data.accent) root.dataset.accent = data.accent;
-}
-
-function showOrbitToast(payload) {
-  const root = document.getElementById('orbitToasts');
-  if (!root || !payload) return;
-  if (payload.pos) applyNotifyPos(payload.pos);
-  const kind = payload.kind || 'info';
-  const el = document.createElement('div');
-  el.className = `orbit-toast kind-${kind}`;
-  const title = payload.title ? `<div class="ot-title">${escapeHtml(payload.title)}</div>` : '';
-  const body = `<div class="ot-body">${escapeHtml(String(payload.message || ''))}</div>`;
-  const meta = payload.meta ? `<div class="ot-meta">${escapeHtml(String(payload.meta))}</div>` : '';
-  el.innerHTML = `<div class="ot-bar" aria-hidden="true"></div><div class="ot-content">${title}${body}${meta}</div>`;
-  // Max. 4 Toasts — älteste entfernen
-  while (root.children.length >= 4) root.firstElementChild?.remove();
-  root.appendChild(el);
-  const ms = Number(payload.duration) > 0 ? Number(payload.duration) : (kind === 'announce' ? 6000 : 3800);
-  requestAnimationFrame(() => el.classList.add('in'));
-  setTimeout(() => {
-    el.classList.remove('in');
-    el.classList.add('out');
-    setTimeout(() => el.remove(), 240);
-  }, ms);
-}
-
-function showOrbitAnnounce(payload) {
-  const root = document.getElementById('orbitAnnounce');
-  if (!root) return;
-  root.innerHTML = '';
-  root.classList.remove('hidden', 'out');
-  const card = document.createElement('div');
-  card.className = 'orbit-announce-card';
-  const who = payload && payload.author
-    ? `<div class="oa-meta">${escapeHtml(String(payload.author))}</div>`
-    : '';
-  card.innerHTML = `
-    <div class="oa-bar" aria-hidden="true"></div>
-    <div class="oa-body">
-      <div class="oa-brand">ORBIT · ANKÜNDIGUNG</div>
-      <div class="oa-msg">${escapeHtml(String((payload && payload.message) || ''))}</div>
-      ${who}
-    </div>
-  `;
-  root.appendChild(card);
-  requestAnimationFrame(() => root.classList.add('in'));
-  const ms = Number(payload && payload.duration) > 0 ? Number(payload.duration) : 8000;
-  clearTimeout(showOrbitAnnounce._t);
-  showOrbitAnnounce._t = setTimeout(() => {
-    root.classList.remove('in');
-    root.classList.add('out');
-    setTimeout(() => {
-      root.classList.add('hidden');
-      root.innerHTML = '';
-    }, 360);
-  }, ms);
-}
-
-function escapeHtml(s) {
-  return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 function paintAllSelectors() {
@@ -443,7 +325,7 @@ function runAction(act) {
     return;
   }
   if (act === 'promptCoords') {
-    openPrompt('coords', mt('coordsTitle'), 'vec4(x, y, z, h) / vec3 / x, y, z');
+    openPrompt('coords', mt('coordsTitle'), 'x, y, z');
     post('copyCoords').then(async (r) => {
       try {
         const d = await r.json();
@@ -495,7 +377,6 @@ function applyPerms() {
     el.disabled = !can(el.dataset.perm);
   });
   renderPactButtons();
-  if (typeof applyOptPerms === 'function') applyOptPerms();
 }
 
 function activeTabId() {
@@ -624,32 +505,12 @@ function cycleFocused(dir) {
   return false;
 }
 
-function activateTab(btn) {
-  if (!btn) return;
-  document.querySelectorAll('.tabs button').forEach((b) => b.classList.remove('active'));
-  btn.classList.add('active');
-  document.querySelectorAll('.tab').forEach((t) => t.classList.add('hidden'));
-  const pane = document.getElementById(`tab-${btn.dataset.tab}`);
-  if (pane) pane.classList.remove('hidden');
-  if (btn.dataset.tab !== 'players') closePlayer();
-  if (btn.dataset.tab === 'options') {
-    post('optStatus');
-    if (can('banList')) post('optBansList');
-    if (can('console')) post('optConsoleTail');
-    if (can('weather')) post('optWeatherGet');
-  }
-  syncMenuCursor();
-  requestAnimationFrame(() => {
-    setKbFocus(0, { domFocus: false });
-  });
-}
-
 function switchTab(dir) {
   const tabs = [...document.querySelectorAll('.tabs button')];
   if (!tabs.length) return;
   let i = tabs.findIndex((t) => t.classList.contains('active'));
   i = (i + dir + tabs.length) % tabs.length;
-  activateTab(tabs[i]);
+  tabs[i].click();
 }
 
 function setPmTab(name) {
@@ -662,94 +523,18 @@ function setPmTab(name) {
   if (pane) pane.classList.remove('hidden');
 }
 
-const ID_LABELS = {
-  license: 'License',
-  license2: 'License 2',
-  discord: 'Discord',
-  steam: 'Steam',
-  fivem: 'Cfx.re',
-  xbl: 'Xbox',
-  live: 'Microsoft',
-  ip: 'IP',
-  hardware: 'HWID',
-};
-const ID_ORDER = ['license', 'license2', 'discord', 'steam', 'fivem', 'xbl', 'live', 'ip', 'hardware'];
-
-function idKind(raw) {
-  const s = String(raw || '');
-  const i = s.indexOf(':');
-  return i > 0 ? s.slice(0, i) : 'id';
-}
-
-function idValue(raw) {
-  const s = String(raw || '');
-  const i = s.indexOf(':');
-  return i > 0 ? s.slice(i + 1) : s;
-}
-
-function groupPlayerIds(ids) {
-  const map = new Map();
-  for (const raw of ids || []) {
-    const s = String(raw || '').trim();
-    if (!s) continue;
-    const kind = idKind(s);
-    const value = idValue(s) || s;
-    if (!map.has(kind)) map.set(kind, []);
-    const list = map.get(kind);
-    if (!list.includes(value)) list.push(value);
-  }
-  return [...map.keys()]
-    .sort((a, b) => {
-      const ia = ID_ORDER.indexOf(a);
-      const ib = ID_ORDER.indexOf(b);
-      return (ia < 0 ? 1000 : ia) - (ib < 0 ? 1000 : ib) || a.localeCompare(b);
-    })
-    .map((kind) => ({
-      kind,
-      label: ID_LABELS[kind] || kind,
-      values: map.get(kind),
-    }));
-}
-
-function shortIdHint(p) {
-  const groups = groupPlayerIds(p.identifiers || []);
-  const lic = groups.find((g) => g.kind === 'license' || g.kind === 'license2');
-  if (lic && lic.values[0]) {
-    const v = lic.values[0];
-    return v.length > 12 ? `${v.slice(0, 8)}…` : v;
-  }
-  const disc = groups.find((g) => g.kind === 'discord');
-  if (disc && disc.values[0]) return `dc:${disc.values[0]}`;
-  return '';
-}
-
-function playerMatchesQuery(p, q) {
-  if (!q) return true;
-  if (String(p.id).includes(q)) return true;
-  if (String(p.name || '').toLowerCase().includes(q)) return true;
-  if (String(p.endpoint || '').toLowerCase().includes(q)) return true;
-  for (const id of p.identifiers || []) {
-    if (String(id).toLowerCase().includes(q)) return true;
-  }
-  return false;
-}
-
 function renderPlayers(list) {
   players = list || [];
   const q = (playerFilter.value || '').trim().toLowerCase();
   plist.innerHTML = '';
   players
-    .filter((p) => playerMatchesQuery(p, q))
+    .filter((p) => !q || String(p.name || '').toLowerCase().includes(q) || String(p.id).includes(q))
     .forEach((p) => {
       const li = document.createElement('li');
       li.dataset.pid = String(p.id);
       li.setAttribute('role', 'button');
       li.tabIndex = -1;
-      const hint = shortIdHint(p);
-      const meta = hint
-        ? `${p.ping ?? 0} ms · ${escapeHtml(hint)}`
-        : `${p.ping ?? 0} ms`;
-      li.innerHTML = `<div><div class="name">#${p.id} ${escapeHtml(p.name || '')}</div><div class="meta">${meta}</div></div>`;
+      li.innerHTML = `<div><div class="name">#${p.id} ${p.name || ''}</div><div class="meta">${p.ping ?? 0} ms</div></div>`;
       li.onclick = () => openPlayer(p);
       plist.appendChild(li);
     });
@@ -765,21 +550,11 @@ function openPlayer(p) {
   selectedPlayer = p;
   pmName.textContent = p.name || `Spieler #${p.id}`;
   pmIdBadge.textContent = `[${p.id}]`;
-  const rows = [
-    ['Server-ID', String(p.id)],
-    ['Name', p.name || '—'],
-    ['Ping', `${p.ping ?? 0} ms`],
-  ];
-  if (p.endpoint) rows.push(['Endpoint', p.endpoint]);
-  for (const g of groupPlayerIds(p.identifiers || [])) {
-    rows.push([g.label, g.values.join('\n')]);
-  }
-  if (rows.length <= 3) {
-    rows.push(['IDs', 'Keine Identifier']);
-  }
-  pmInfo.innerHTML = rows.map(([k, v]) => (
-    `<dt>${escapeHtml(k)}</dt><dd class="pm-id">${escapeHtml(v)}</dd>`
-  )).join('');
+  pmInfo.innerHTML = `
+    <dt>ID</dt><dd>${p.id}</dd>
+    <dt>Name</dt><dd>${p.name || '—'}</dd>
+    <dt>Ping</dt><dd>${p.ping ?? 0} ms</dd>
+  `;
   setPmTab('actions');
   playerModal.classList.remove('hidden');
   playerModal.setAttribute('aria-hidden', 'false');
@@ -796,7 +571,19 @@ function closePlayer() {
 }
 
 document.querySelectorAll('.tabs button').forEach((btn) => {
-  btn.onclick = () => activateTab(btn);
+  btn.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab').forEach((t) => t.classList.add('hidden'));
+    const pane = document.getElementById(`tab-${btn.dataset.tab}`);
+    if (pane) pane.classList.remove('hidden');
+    if (btn.dataset.tab !== 'players') closePlayer();
+    else syncMenuCursor();
+    requestAnimationFrame(() => {
+      const items = focusables();
+      setKbFocus(0, { domFocus: false });
+    });
+  };
 });
 
 document.querySelectorAll('.pm-nav-btn').forEach((btn) => {
@@ -832,9 +619,6 @@ window.addEventListener('message', (e) => {
   if (d.action === 'open') {
     app.classList.remove('hidden');
     app.classList.toggle('align-right', !!(d.alignRight || (d.game && d.game.alignRight)));
-    if (d.game && d.game.notifyPos) applyNotifyPos(d.game.notifyPos);
-    else if (d.notifyPos) applyNotifyPos(d.notifyPos);
-    if (d.game && (d.game.accent || d.game.accentRgb || d.game.accentHex)) applyAccent(d.game);
     if (d.game && d.game.language) applyMenuLang(d.game.language);
     else if (d.language) applyMenuLang(d.language);
     who.textContent = d.name ? `${mt('admin')} · ${d.name}` : mt('admin');
@@ -863,56 +647,7 @@ window.addEventListener('message', (e) => {
     toggles = { ...toggles, ...d.toggles };
     paintAllSelectors();
   }
-  if (d.action === 'toast') showOrbitToast(d);
-  if (d.action === 'notifyPos') applyNotifyPos(d.pos);
-  if (d.action === 'accent') applyAccent(d);
-  if (d.action === 'announceUi') showOrbitAnnounce(d);
-  if (d.action === 'optWeather') fillWeatherUi(d.weather);
-  if (d.action === 'optNpc') {
-    const el = document.getElementById('optNpcStatus');
-    if (el) el.textContent = `Status: ${d.enabled ? 'An' : 'Aus'}`;
-    document.querySelectorAll('[data-opt="npcOn"],[data-opt="npcOff"]').forEach((b) => {
-      b.classList.toggle('active',
-        (b.dataset.opt === 'npcOn' && d.enabled) || (b.dataset.opt === 'npcOff' && !d.enabled));
-    });
-  }
-  if (d.action === 'optGiveaway') {
-    const el = document.getElementById('optGvStatus');
-    const g = d.giveaway;
-    if (el) {
-      el.textContent = g && g.active
-        ? `Aktiv · ${g.prize}$ · ${g.count || 0} Teilnehmer · /gv`
-        : 'Kein aktives Gewinnspiel';
-    }
-  }
-  if (d.action === 'optBans') renderBanList(d.bans);
-  if (d.action === 'optConsoleLine') appendConsoleLines([d.line]);
-  if (d.action === 'optConsoleTail') {
-    const box = document.getElementById('optConsoleLog');
-    if (box) box.textContent = '';
-    appendConsoleLines(d.lines || []);
-  }
-  if (d.action === 'optStatus' && d.status) {
-    if (d.status.weather) fillWeatherUi(d.status.weather);
-    if (d.status.npc != null) {
-      const el = document.getElementById('optNpcStatus');
-      if (el) el.textContent = `Status: ${d.status.npc ? 'An' : 'Aus'}`;
-      document.querySelectorAll('[data-opt="npcOn"],[data-opt="npcOff"]').forEach((b) => {
-        b.classList.toggle('active',
-          (b.dataset.opt === 'npcOn' && d.status.npc) || (b.dataset.opt === 'npcOff' && !d.status.npc));
-      });
-    }
-    const gvEl = document.getElementById('optGvStatus');
-    const g = d.status.giveaway;
-    if (gvEl) {
-      gvEl.textContent = g && g.active
-        ? `Aktiv · ${g.prize}$ · ${g.count || 0} Teilnehmer · /gv`
-        : 'Kein aktives Gewinnspiel';
-    }
-  }
 });
-
-applyNotifyPos('top-left');
 
 document.addEventListener('keydown', (e) => {
   if (app.classList.contains('hidden') && !isModalOpen() && !isPromptOpen()) return;
@@ -985,202 +720,3 @@ document.addEventListener('keydown', (e) => {
     activateFocused();
   }
 });
-
-/* —— Optionen-Tab —— */
-let optWxMode = 'manual';
-let optClimate = 'med';
-
-function activeTabIsOptions() {
-  return activeTabId() === 'options';
-}
-
-function applyOptPerms() {
-  document.querySelectorAll('#tab-options [data-opt-perm]').forEach((card) => {
-    const key = card.dataset.optPerm;
-    card.dataset.denied = can(key) ? '0' : '1';
-  });
-  document.querySelectorAll('#tab-options [data-perm]').forEach((el) => {
-    const ok = can(el.dataset.perm);
-    if ('disabled' in el) el.disabled = !ok;
-  });
-  const tabOpt = document.querySelector('.tabs button[data-tab="options"]');
-  if (tabOpt) tabOpt.classList.toggle('hidden', perms.options === false);
-}
-
-function paintWxMode() {
-  document.getElementById('optWxManual')?.classList.toggle('hidden', optWxMode !== 'manual');
-  document.getElementById('optWxRealtime')?.classList.toggle('hidden', optWxMode !== 'realtime');
-  document.querySelectorAll('[data-opt="wxModeManual"],[data-opt="wxModeRealtime"]').forEach((b) => {
-    b.classList.toggle('active',
-      (b.dataset.opt === 'wxModeManual' && optWxMode === 'manual')
-      || (b.dataset.opt === 'wxModeRealtime' && optWxMode === 'realtime'));
-  });
-}
-
-function collectWeatherPayload() {
-  return {
-    mode: optWxMode,
-    weather: document.getElementById('optWxType')?.value || 'EXTRASUNNY',
-    hour: Number(document.getElementById('optWxHour')?.value || 12),
-    minute: Number(document.getElementById('optWxMin')?.value || 0),
-    freeze: !!document.getElementById('optWxFreeze')?.checked,
-    lon: Number(document.getElementById('optWxLon')?.value || 0),
-    lat: Number(document.getElementById('optWxLat')?.value || 0),
-    climate: optClimate,
-    seasonal: !!document.getElementById('optWxSeason')?.checked,
-    blackout: !!document.getElementById('optWxBlackout')?.checked,
-    interval: Number(document.getElementById('optWxInterval')?.value || 60),
-    city: document.querySelector('#optWxCities .seg.active')?.dataset.city || 'berlin',
-  };
-}
-
-function fillWeatherUi(st) {
-  if (!st) return;
-  optWxMode = st.mode === 'realtime' ? 'realtime' : 'manual';
-  paintWxMode();
-  const type = document.getElementById('optWxType');
-  if (type && st.weather) type.value = st.weather;
-  const hour = document.getElementById('optWxHour');
-  const min = document.getElementById('optWxMin');
-  if (hour) hour.value = st.hour ?? 12;
-  if (min) min.value = st.minute ?? 0;
-  const freeze = document.getElementById('optWxFreeze');
-  if (freeze) freeze.checked = !!st.freeze;
-  const lon = document.getElementById('optWxLon');
-  const lat = document.getElementById('optWxLat');
-  if (lon && st.lon != null) lon.value = st.lon;
-  if (lat && st.lat != null) lat.value = st.lat;
-  if (st.climate) optClimate = st.climate;
-  document.querySelectorAll('#optWxClimate .seg').forEach((b) => {
-    b.classList.toggle('active', b.dataset.climate === optClimate);
-  });
-  const season = document.getElementById('optWxSeason');
-  const blackout = document.getElementById('optWxBlackout');
-  if (season) season.checked = st.seasonal !== false;
-  if (blackout) blackout.checked = !!st.blackout;
-  const interval = document.getElementById('optWxInterval');
-  if (interval && st.interval) interval.value = st.interval;
-  if (st.city) {
-    document.querySelectorAll('#optWxCities .seg').forEach((b) => {
-      b.classList.toggle('active', b.dataset.city === st.city);
-    });
-  }
-  const live = document.getElementById('optWxLive');
-  if (live) {
-    const hh = String(st.hour ?? 0).padStart(2, '0');
-    const mm = String(st.minute ?? 0).padStart(2, '0');
-    live.textContent = `LIVE · ${st.weather || '—'} · ${hh}:${mm} · ${st.mode === 'realtime' ? 'Echtzeit' : 'Manuell'}`;
-  }
-}
-
-function renderBanList(bans) {
-  const ul = document.getElementById('optBanList');
-  if (!ul) return;
-  ul.innerHTML = '';
-  const list = Array.isArray(bans) ? bans : [];
-  if (!list.length) {
-    ul.innerHTML = '<li><span class="meta">Keine aktiven Bans</span></li>';
-    return;
-  }
-  list.forEach((b) => {
-    const li = document.createElement('li');
-    const exp = b.expires ? new Date(b.expires).toLocaleString() : 'Permanent';
-    li.innerHTML = `<div><strong>${escapeHtml(b.name || b.identifier || '#' + b.id)}</strong>
-      <div class="meta">#${b.id} · ${escapeHtml(b.reason || '')} · ${escapeHtml(exp)}</div></div>`;
-    if (can('banRevoke')) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = 'Aufheben';
-      btn.onclick = () => post('optBanRevoke', { id: b.id });
-      li.appendChild(btn);
-    }
-    ul.appendChild(li);
-  });
-}
-
-function appendConsoleLines(lines) {
-  const box = document.getElementById('optConsoleLog');
-  if (!box) return;
-  const arr = Array.isArray(lines) ? lines : [lines];
-  arr.forEach((line) => {
-    if (!line) return;
-    box.textContent += `${String(line).replace(/\s+$/, '')}\n`;
-  });
-  box.scrollTop = box.scrollHeight;
-}
-
-function runOpt(act) {
-  if (act === 'moneyPlayer') {
-    post('optGiveMoney', {
-      id: Number(document.getElementById('optMoneyId')?.value || 0),
-      amount: Number(document.getElementById('optMoneyAmt')?.value || 0),
-    });
-    return;
-  }
-  if (act === 'moneyAll') {
-    post('optGiveMoneyAll', { amount: Number(document.getElementById('optMoneyAmt')?.value || 0) });
-    return;
-  }
-  if (act === 'gvStart') {
-    post('optGiveawayStart', {
-      prize: Number(document.getElementById('optGvPrize')?.value || 0),
-      seconds: Number(document.getElementById('optGvSec')?.value || 60),
-    });
-    return;
-  }
-  if (act === 'gvStop') { post('optGiveawayStop'); return; }
-  if (act === 'npcOn') { post('optNpc', { enabled: true }); return; }
-  if (act === 'npcOff') { post('optNpc', { enabled: false }); return; }
-  if (act === 'worldClear') {
-    post('optWorldClear', { radius: Number(document.getElementById('optClearR')?.value || 120) });
-    return;
-  }
-  if (act === 'banRefresh') { post('optBansList'); return; }
-  if (act === 'consoleSend') {
-    const cmd = (document.getElementById('optConsoleCmd')?.value || '').trim();
-    if (!cmd) return;
-    post('optConsoleCmd', { command: cmd });
-    document.getElementById('optConsoleCmd').value = '';
-    return;
-  }
-  if (act === 'wxModeManual') { optWxMode = 'manual'; paintWxMode(); return; }
-  if (act === 'wxModeRealtime') { optWxMode = 'realtime'; paintWxMode(); return; }
-  if (act === 'wxRefresh') { post('optWeatherGet'); return; }
-  if (act === 'wxSave') { post('optWeatherSet', collectWeatherPayload()); return; }
-}
-
-function bindOptionsUi() {
-  document.querySelectorAll('#tab-options [data-opt]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.perm && !can(btn.dataset.perm)) return;
-      runOpt(btn.dataset.opt);
-    });
-  });
-  document.querySelectorAll('#optWxCities .seg').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#optWxCities .seg').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      const lon = document.getElementById('optWxLon');
-      const lat = document.getElementById('optWxLat');
-      if (lon) lon.value = btn.dataset.lon || lon.value;
-      if (lat) lat.value = btn.dataset.lat || lat.value;
-    });
-  });
-  document.querySelectorAll('#optWxClimate .seg').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      optClimate = btn.dataset.climate || 'med';
-      document.querySelectorAll('#optWxClimate .seg').forEach((b) => {
-        b.classList.toggle('active', b.dataset.climate === optClimate);
-      });
-    });
-  });
-  document.getElementById('optConsoleCmd')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      runOpt('consoleSend');
-    }
-  });
-  paintWxMode();
-}
-
-bindOptionsUi();
