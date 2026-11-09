@@ -209,7 +209,7 @@
 .mci-tabs button svg { width: 15px; height: 15px; }
 
 .mci-overview { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
-.mci-console { display: flex; flex-direction: column; height: 600px; border-radius: var(--radius-lg); overflow: hidden; }
+.mci-console { display: flex; flex-direction: column; height: clamp(600px, calc(100vh - 180px), 1100px); min-height: 360px; resize: vertical; border-radius: var(--radius-lg); overflow: hidden; }
 .mci-console > header { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); }
 .mci-quick { display: flex; gap: 5px; flex: 1; flex-wrap: wrap; }
 .mci-on { color: var(--accent-ink); border-color: rgba(var(--accent-rgb), 0.5); background: var(--accent-dim); }
@@ -283,7 +283,7 @@
   .mcx-facts { grid-template-columns: repeat(2, 1fr); }
   .mci-kpis { grid-template-columns: 1fr 1fr; }
   .mcx-sum-grid { grid-template-columns: 1fr 1fr; }
-  .mci-console { height: 480px; }
+  .mci-console { height: 70vh; min-height: 420px; resize: none; }
   .mci-quick { display: none; }
   .mcx-steps button { font-size: 0; gap: 0; padding: 0 4px; }
 }
