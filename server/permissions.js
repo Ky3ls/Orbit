@@ -3,37 +3,81 @@
 export const PERMISSION_GROUPS = [
   {
     id: 'panel',
-    label: 'Panel & System',
+    label: 'Panel & Team',
+    icon: 'dashboard',
     permissions: [
       { id: 'all_permissions', label: 'Alle Rechte', sensitive: true },
+      { id: 'overview', label: 'Übersicht & Live-Statistik' },
+      { id: 'audit', label: 'Audit-Log ansehen' },
       { id: 'manage.admins', label: 'Team verwalten', sensitive: true },
-      { id: 'settings', label: 'Einstellungen: Ansehen', sensitive: false },
+      { id: 'settings', label: 'Einstellungen: Ansehen' },
       { id: 'settings.write', label: 'Einstellungen: Ändern', sensitive: true },
-      { id: 'console', label: 'Konsole: Lesen' },
-      { id: 'console.write', label: 'Konsole: Schreiben', sensitive: true },
-      { id: 'control', label: 'Server Start/Stop + Automationen', sensitive: true },
-      { id: 'announcement', label: 'Ankündigungen senden' },
-      { id: 'resources', label: 'Ressourcen Start/Stop' },
-      { id: 'cfg', label: 'server.cfg lesen/schreiben', sensitive: true },
-      { id: 'audit', label: 'System-Logs / Audit' },
-      { id: 'server.log', label: 'Server-Logs' },
-      { id: 'database', label: 'Datenbank-Tool', sensitive: true },
       { id: 'sessions', label: 'Eigene Sitzungen' },
-      { id: 'system', label: 'System-Tools (Clean/Backup)', sensitive: true },
+      { id: 'system', label: 'Panel-Wartung (Backup, Bereinigen)', sensitive: true },
     ],
   },
   {
-    id: 'cockpit',
-    label: 'Cockpit',
+    id: 'host',
+    label: 'Host',
+    icon: 'cpu',
     permissions: [
-      { id: 'overview', label: 'Übersicht & Command' },
+      { id: 'host.view', label: 'Host-Seiten ansehen (Dienste, Datenbanken, Domains)' },
+      { id: 'host.services', label: 'Dienste starten / stoppen / neu laden', sensitive: true },
+      { id: 'host.db', label: 'Datenbanken & Benutzer verwalten', sensitive: true },
+      { id: 'host.db.studio', label: 'Datenbank-Studio: Daten & Struktur bearbeiten', sensitive: true },
+      { id: 'host.web', label: 'Domains & Webserver verwalten', sensitive: true },
+      { id: 'host.install', label: 'Software installieren (Datenbanken, Webserver)', sensitive: true },
+    ],
+  },
+  {
+    id: 'servers',
+    label: 'Gameserver',
+    icon: 'layers',
+    permissions: [
+      { id: 'servers.create', label: 'Server anlegen, importieren und löschen', sensitive: true },
+    ],
+  },
+  {
+    id: 'minecraft',
+    label: 'Minecraft',
+    icon: 'cube',
+    game: 'minecraft',
+    permissions: [
+      { id: 'mc.view', label: 'Server sehen & Konsole lesen' },
+      { id: 'mc.control', label: 'Starten / Stoppen / Neustart' },
+      { id: 'mc.console', label: 'Konsolenbefehle ausführen', sensitive: true },
+      { id: 'mc.players', label: 'Spieler: Whitelist, OP, Kick, Bann, Teleport' },
+      { id: 'mc.inventory', label: 'Inventare bearbeiten & Items geben' },
+      { id: 'mc.files', label: 'Dateien & Konfiguration bearbeiten', sensitive: true },
+      { id: 'mc.mods', label: 'Mods / Plugins verwalten' },
+      { id: 'mc.backups', label: 'Backups erstellen & herunterladen' },
+      { id: 'mc.backups.restore', label: 'Backups wiederherstellen & löschen', sensitive: true },
+      { id: 'mc.settings', label: 'Instanz-Einstellungen (RAM, Port, Java)', sensitive: true },
+    ],
+  },
+  {
+    id: 'fivem',
+    label: 'FiveM-Server',
+    icon: 'power',
+    game: 'fivem',
+    permissions: [
+      { id: 'console', label: 'Konsole lesen' },
+      { id: 'console.write', label: 'Konsole schreiben', sensitive: true },
+      { id: 'control', label: 'Start / Stop / Neustart', sensitive: true },
       { id: 'monitor', label: 'Monitoring' },
       { id: 'schedule', label: 'Automationen (Zeitplan)' },
+      { id: 'announcement', label: 'Ankündigungen senden' },
+      { id: 'resources', label: 'Ressourcen starten / stoppen' },
+      { id: 'cfg', label: 'server.cfg lesen / schreiben', sensitive: true },
+      { id: 'server.log', label: 'Server-Log' },
+      { id: 'database', label: 'Datenbank-Tool (FiveM)', sensitive: true },
     ],
   },
   {
     id: 'players',
-    label: 'Spieler & Moderation',
+    label: 'FiveM: Spieler & Moderation',
+    icon: 'users',
+    game: 'fivem',
     permissions: [
       { id: 'players', label: 'Spieler-Hub' },
       { id: 'history', label: 'Historie / Drops' },
@@ -55,7 +99,9 @@ export const PERMISSION_GROUPS = [
   },
   {
     id: 'menu',
-    label: 'Ingame-Menü',
+    label: 'FiveM: Ingame-Menü',
+    icon: 'gamepad',
+    game: 'fivem',
     permissions: [
       { id: 'menu.vehicle', label: 'Fahrzeuge spawnen/reparieren' },
       { id: 'menu.clear_area', label: 'Weltbereich zurücksetzen' },
@@ -68,6 +114,10 @@ export const PERMISSION_GROUPS = [
     ],
   },
 ];
+
+/** Rechte, die zum FiveM-Server gehören (für die Server-Beschränkung) */
+export const FIVEM_PERMISSION_IDS = new Set(PERMISSION_GROUPS.filter((g) => g.game === 'fivem').flatMap((g) => g.permissions.map((p) => p.id)));
+const SCOPE_RE = /^server:(minecraft:\d+|fivem:[\w-]+)$/;
 
 export const ALL_PERMISSION_IDS = PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.id));
 
@@ -101,6 +151,20 @@ const IMPLIES = {
   ],
   bans: ['players.ban'],
   control: ['announcement', 'schedule'],
+  'mc.control': ['mc.view'],
+  'mc.console': ['mc.view'],
+  'mc.players': ['mc.view'],
+  'mc.inventory': ['mc.players'],
+  'mc.files': ['mc.view'],
+  'mc.mods': ['mc.view'],
+  'mc.backups': ['mc.view'],
+  'mc.backups.restore': ['mc.backups'],
+  'mc.settings': ['mc.view'],
+  'host.services': ['host.view'],
+  'host.db': ['host.view'],
+  'host.db.studio': ['host.db'],
+  'host.web': ['host.view'],
+  'host.install': ['host.view'],
 };
 
 export const ROLE_TEMPLATES = {
@@ -110,6 +174,7 @@ export const ROLE_TEMPLATES = {
     'players.warn', 'players.kick', 'players.dm', 'players.freeze',
     'players.heal', 'players.spectate', 'players.teleport',
     'menu.viewids', 'sessions',
+    'mc.view', 'mc.players',
   ],
   admin: [
     'overview', 'monitor', 'console', 'console.write', 'control', 'announcement',
@@ -120,6 +185,8 @@ export const ROLE_TEMPLATES = {
     'menu.money', 'menu.money_all', 'menu.giveaway', 'menu.npc', 'menu.weather',
     'resources', 'schedule', 'cfg', 'settings', 'settings.write',
     'database', 'audit', 'server.log', 'sessions', 'system',
+    'mc.view', 'mc.control', 'mc.console', 'mc.players', 'mc.inventory', 'mc.files', 'mc.mods',
+    'mc.backups', 'mc.backups.restore', 'mc.settings', 'servers.create', 'host.view',
   ],
   custom: [],
 };
@@ -211,6 +278,7 @@ export function permissionsCatalog(db) {
   roleTemplateCache = templates;
   return {
     groups: PERMISSION_GROUPS,
+    scopeHint: 'server:minecraft:<id> oder server:fivem:active',
     templates,
     templateList: list,
     all: ALL_PERMISSION_IDS,
@@ -237,7 +305,7 @@ export function normalizePermissionList(list) {
       set.add('all_permissions');
       continue;
     }
-    if (ALL_PERMISSION_IDS.includes(id)) set.add(id);
+    if (ALL_PERMISSION_IDS.includes(id) || SCOPE_RE.test(id)) set.add(id);
   }
   return [...set];
 }
@@ -280,15 +348,33 @@ export function resolveUserPermissions(user) {
   const custom = parseStoredPermissions(user.permissions);
   if (custom) {
     const expanded = expandImplied(custom);
-    if (expanded.includes('*') || custom.includes('all_permissions')) return ['*'];
+    if (custom.includes('all_permissions')) return ['*', ...custom.filter((x) => SCOPE_RE.test(x))];
+    if (expanded.includes('*')) return ['*'];
     return expanded;
   }
   if (user.role === 'custom') return [];
   return expandImplied(templatePermsForRole(user.role));
 }
 
+/** Server-Beschränkung: ohne server:-Einträge gilt der Zugriff für alle Server */
+export function serverScopes(user) {
+  if (!user || user.role === 'owner') return null;
+  const list = parseStoredPermissions(user.permissions) || [];
+  const scopes = list.filter((x) => SCOPE_RE.test(x)).map((x) => x.slice(7));
+  return scopes.length ? scopes : null;
+}
+
+export function canAccessServer(user, key) {
+  const scopes = serverScopes(user);
+  if (!scopes) return true;
+  if (String(key).startsWith('fivem')) return scopes.some((s) => s.startsWith('fivem'));
+  return scopes.includes(key);
+}
+
 export function hasPermission(user, perm) {
   const want = canonicalize(perm);
+  // FiveM-Rechte greifen nur, wenn der FiveM-Server im Zugriff liegt
+  if (FIVEM_PERMISSION_IDS.has(want) && !canAccessServer(user, 'fivem:active')) return false;
   const list = resolveUserPermissions(user);
   if (list.includes('*')) return true;
   if (list.includes(want)) return true;
@@ -300,4 +386,45 @@ export function hasPermission(user, perm) {
 export function serializePermissions(list) {
   const norm = normalizePermissionList(list);
   return norm.length ? JSON.stringify(norm) : '';
+}
+
+/**
+ * Einmalige Umstellung auf spielunabhängige Rechte: bestehende Konten und gespeicherte
+ * Vorlagen bekommen Minecraft-/Host-Rechte passend zu ihren bisherigen FiveM-Rechten,
+ * damit niemand Zugriff verliert.
+ */
+export function migratePermissionsV2(db) {
+  try {
+    if (db.prepare("SELECT v FROM settings WHERE k = 'permsV2'").get()?.v === '1') return 0;
+  } catch { return 0; }
+  const map = (list) => {
+    const set = new Set(list);
+    const has = (x) => set.has(x);
+    if (has('overview') || has('console') || has('control')) set.add('mc.view');
+    if (has('control')) { set.add('mc.control'); set.add('mc.backups'); }
+    if (has('console.write')) set.add('mc.console');
+    if (has('players')) set.add('mc.players');
+    if (has('players.troll') || has('menu.money')) set.add('mc.inventory');
+    if (has('cfg')) { set.add('mc.files'); set.add('mc.mods'); set.add('mc.settings'); }
+    if (has('control') && has('cfg')) { set.add('servers.create'); set.add('mc.backups.restore'); }
+    if (has('settings.write') || has('system')) set.add('host.view');
+    return [...set];
+  };
+  let n = 0;
+  for (const u of db.prepare("SELECT id, permissions FROM users WHERE role != 'owner' AND permissions IS NOT NULL AND permissions != ''").all()) {
+    const cur = parseStoredPermissions(u.permissions);
+    if (!cur || cur.includes('all_permissions')) continue;
+    const next = map(cur);
+    if (next.length !== cur.length) { db.prepare('UPDATE users SET permissions = ? WHERE id = ?').run(JSON.stringify(next), u.id); n += 1; }
+  }
+  try {
+    const raw = db.prepare("SELECT v FROM settings WHERE k = 'roleTemplates'").get()?.v;
+    if (raw) {
+      const list = JSON.parse(raw).map((t) => ({ ...t, permissions: map(t.permissions || []) }));
+      db.prepare("UPDATE settings SET v = ? WHERE k = 'roleTemplates'").run(JSON.stringify(list));
+      roleTemplateCache = null;
+    }
+  } catch { /* */ }
+  db.prepare("INSERT INTO settings (k, v) VALUES ('permsV2', '1') ON CONFLICT(k) DO UPDATE SET v = excluded.v").run();
+  return n;
 }

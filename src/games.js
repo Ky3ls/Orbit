@@ -20,8 +20,22 @@ export const PHASE_LABEL = {
   installing: 'Installiert', crashed: 'Abgestürzt', failed: 'Fehler', offline: 'Offline', stopped: 'Offline',
 };
 
-/** Seiten-Navigation pro Spiel. `path` relativ zur Server-Basis. */
-export function serverNav(server) {
+const NAV_PERM = {
+  fivem: { players: 'players', resources: 'resources', cfg: 'cfg', log: 'server.log', database: 'database', monitoring: 'monitor', schedule: 'schedule' },
+  minecraft: { files: 'mc.files', settings: 'mc.files', backups: 'mc.backups', mods: 'mc.mods', instance: 'mc.settings' },
+};
+
+/** Seiten-Navigation pro Spiel, gefiltert nach Rechten (user optional) */
+export function serverNav(server, user = null) {
+  const items = serverNavAll(server);
+  if (!user || !server) return items;
+  const list = user.permissions || [];
+  const ok = (perm) => user.role === 'owner' || list.includes('*') || list.includes(perm);
+  const map = NAV_PERM[server.game] || {};
+  return items.filter((i) => !map[i.id] || ok(map[i.id]));
+}
+
+function serverNavAll(server) {
   if (!server) return [];
   if (server.game === 'fivem') {
     if (!server.active) return [{ id: 'manage', label: 'Verwalten', icon: 'gear', to: '/settings?section=host&tab=servers' }];

@@ -27,7 +27,7 @@ function score(hay, q) {
 /**
  * Befehlspalette (Strg/⌘ + K): Seiten, Server-Aktionen, Spielersuche, Darstellung.
  */
-export default function CommandPalette({ open, onClose, user, prefs, setAppearance, canControl, status, onLogout, onShortcuts, refreshStatus, groups = [], servers = [] }) {
+export default function CommandPalette({ open, onClose, user, prefs, setAppearance, canControl, status, onLogout, onShortcuts, refreshStatus, groups = [], servers = [], canCreate = false }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
@@ -102,7 +102,7 @@ export default function CommandPalette({ open, onClose, user, prefs, setAppearan
         run: () => { navigate(s.to); return true; },
       });
     }
-    if (user.role === 'owner' || user.role === 'admin') {
+    if (canCreate) {
       out.push({ id: 'srv:new', section: 'Server', icon: 'plus', label: 'Neuen Server erstellen', hint: 'Minecraft, FiveM, …', hay: 'neu neuer server erstellen instanz minecraft fivem terraria rust paper fabric forge', run: () => { navigate('/instances/new'); return true; } });
       out.push({ id: 'srv:import', section: 'Server', icon: 'switch', label: 'Server importieren', hint: 'Bestehenden Server übernehmen', hay: 'import importieren übernehmen bestehend server', run: () => { navigate('/instances/import'); return true; } });
     }
@@ -150,7 +150,7 @@ export default function CommandPalette({ open, onClose, user, prefs, setAppearan
     out.push({ id: 'ui:keys', section: t('palette.help'), icon: 'keyboard', label: t('palette.shortcuts'), hay: 'shortcuts tastenkürzel hilfe keyboard', kbd: ['?'], run: () => { onShortcuts(); return true; } });
     out.push({ id: 'ui:logout', section: t('palette.help'), icon: 'logout', label: t('common.logout'), hay: 'logout abmelden ausloggen', run: () => { onLogout(); return true; } });
     return out;
-  }, [t, user.role, canControl, status, prefs, armed, q, navigate, setAppearance, onLogout, onShortcuts, groups, servers]);
+  }, [t, user.role, canControl, status, prefs, armed, q, navigate, setAppearance, onLogout, onShortcuts, groups, servers, canCreate]);
 
   const results = useMemo(() => {
     const scored = items

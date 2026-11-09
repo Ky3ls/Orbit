@@ -12,6 +12,7 @@ import {
 } from './databases.js';
 import { KNOWN, controlService, listServices, serviceLog } from './services.js';
 import * as studio from './dbStudio.js';
+import { hasPermission } from '../permissions.js';
 import {
   SITE_TYPES, WEBSERVERS, activeWebserver, checkDns, deleteSite, dnsGuide, ensureWebTables, getSite,
   installWebserver, listCertificates, listForeignSites, listSites, publicIp, saveSite, setSiteEnabled, siteConfig,
@@ -72,11 +73,11 @@ function hostFacts() {
 
 export async function handleHostApi({ req, res, url, method, pathname, me, db, ip, json, readBody }) {
   if (!pathname.startsWith('/api/host/')) return false;
-  const isOwner = me.role === 'owner';
-  const canView = isOwner || me.role === 'admin';
-  const deny = () => { json(res, 403, { error: 'Nur der Inhaber darf den Host verwalten.' }); return true; };
-  if (!canView) return deny();
+  const can = (perm) => hasPermission(me, perm);
+  const deny = () => { json(res, 403, { error: 'Dafür fehlt dir die Berechtigung.' }); return true; };
   const p = pathname.slice('/api/host'.length);
+  // Live-Statistik gehört zur Übersicht, alles andere braucht host.view
+  if (!(p === '/stats' && can('overview')) && !can('host.view')) return deny();
 
   try {
     if (method === 'GET' && p === '/overview') {
@@ -100,7 +101,7 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
       return true;
     }
     if (method === 'POST' && p === '/setup/done') {
-      if (!isOwner) return deny();
+      if (!(can('host.install') || can('settings.write'))) return deny();
       setSetting(db, 'orbitSetupDone', '1');
       audit(db, me.username, 'host.setup.done', '', ip);
       json(res, 200, { ok: true });
@@ -118,7 +119,7 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
         return true;
       }
       if (method !== 'POST') return false;
-      if (!isOwner) return deny();
+      if (!can('host.services')) return deny();
       const st = await controlService(sm[1], sm[2]);
       audit(db, me.username, `host.service.${sm[2]}`, sm[1], ip);
       json(res, 200, { service: st });
@@ -146,13 +147,14 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
         return true;
       }
       if (method === 'GET' && action === 'dump') {
-        if (!isOwner) return deny();
+        if (!can('host.db')) return deny();
         audit(db, me.username, 'host.db.dump', `${engine}/${name}`, ip);
         await dumpDatabase(db, engine, name, res);
         return true;
       }
-      if (!isOwner) return deny();
+      if (!can('host.db')) return deny();
       if (method === 'POST' && name === 'install') {
+        if (!can('host.install')) return deny();
         const body = await readBody(req);
         const job = installEngine(engine, body.variant);
         audit(db, me.username, 'host.db.install', `${engine} ${body.variant || ''}`.trim(), ip);
@@ -207,12 +209,13 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
 
     /* ── Datenbank-Studio (MySQL/MariaDB) ── */
     if (p.startsWith('/studio/')) {
-      if (!isOwner) return deny();
+      if (!can('host.db')) return deny();
       if (method === 'GET' && p === '/studio/server') {
         json(res, 200, await studio.serverInfo());
         return true;
       }
       if (method === 'POST' && p === '/studio/server/kill') {
+        if (!can('host.db.studio')) return deny();
         const body = await readBody(req);
         await studio.killProcess(body.id);
         audit(db, me.username, 'host.db.kill', String(body.id), ip);
@@ -226,7 +229,11 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
       studio.ident(dbName, 'Datenbank');
       const managed = !!db.prepare("SELECT 1 FROM host_databases WHERE engine = 'mysql' AND name = ?").get(dbName);
       const unlocked = req.headers['x-orbit-unlock'] === '1' || url.searchParams.get('unlock') === '1';
-      const write = (what) => { studio.assertWritable(dbName, { managed, unlocked }); audit(db, me.username, `host.db.${what}`, dbName, ip); };
+      const write = (what) => {
+        if (!can('host.db.studio')) throw Object.assign(new Error('Dafür fehlt dir die Berechtigung (Datenbank-Studio bearbeiten).'), { status: 403 });
+        studio.assertWritable(dbName, { managed, unlocked });
+        audit(db, me.username, `host.db.${what}`, dbName, ip);
+      };
       if (sm2) {
         const action = sm2[2] || '';
         if (method === 'GET' && !action) { json(res, 200, { ...(await studio.dbOverview(dbName)), managed }); return true; }
@@ -308,7 +315,7 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
       return true;
     }
     if (method === 'POST' && p === '/web/install') {
-      if (!isOwner) return deny();
+      if (!can('host.install')) return deny();
       const body = await readBody(req);
       const job = installWebserver(String(body.id || ''));
       audit(db, me.username, 'host.web.install', String(body.id), ip);
@@ -316,7 +323,7 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
       return true;
     }
     if (method === 'POST' && p === '/web/sites') {
-      if (!isOwner) return deny();
+      if (!can('host.web')) return deny();
       const body = await readBody(req);
       if (body.email) setSetting(db, 'acmeEmail', String(body.email).trim().slice(0, 120));
       const job = saveSite(db, body, { email: String(body.email || settingMap(db).acmeEmail || '') });
@@ -339,7 +346,7 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
         json(res, 200, { config: siteConfig(db, site.id) });
         return true;
       }
-      if (!isOwner) return deny();
+      if (!can('host.web')) return deny();
       if (method === 'PUT' && !wm[2]) {
         const body = await readBody(req);
         if (body.email) setSetting(db, 'acmeEmail', String(body.email).trim().slice(0, 120));
@@ -363,7 +370,7 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
     }
     return false;
   } catch (e) {
-    if (!res.headersSent) json(res, 400, { error: e.message || String(e) });
+    if (!res.headersSent) json(res, e.status === 403 ? 403 : 400, { error: e.message || String(e) });
     return true;
   }
 }

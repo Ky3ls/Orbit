@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { audit } from '../db.js';
+import { canAccessServer } from '../permissions.js';
 import { gameDomain } from '../host/hostApi.js';
 import { MC_ROOT, deleteMcInstanceRow, ensureMcTables, getMcInstance, listMcInstances, updateMcInstance } from './mcDb.js';
 import { createInstance, getJob, isPortAvailable, suggestPort } from './mcInstall.js';
@@ -55,10 +56,11 @@ function publicInstance(inst, host = '', db = null) {
  */
 export async function handleMinecraftApi({ req, res, url, method, pathname, me, db, ip, json, hasPerm, readBody, logLine }) {
   if (!pathname.startsWith('/api/mc/')) return false;
-  const canView = hasPerm(me, 'overview') || hasPerm(me, 'console') || hasPerm(me, 'control');
-  const canControl = hasPerm(me, 'control');
-  const canManage = canControl && (me.role === 'owner' || me.role === 'admin');
-  const canConsole = hasPerm(me, 'console.write') || canControl;
+  // Spielunabhängige Rechte (mc.*) + Server-Beschränkung pro Konto
+  const can = (perm) => hasPerm(me, perm);
+  const canCreate = can('servers.create');
+  const canView = can('mc.view') || canCreate;
+  const scoped = (id) => canAccessServer(me, `minecraft:${id}`);
   const deny = () => json(res, 403, { error: 'Keine Berechtigung.' });
   const fail = (e, code = 400) => {
     if (res.headersSent) { try { res.end(); } catch { /* */ } return; }
@@ -117,7 +119,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
     /* ── Öffentliche Adresse ── */
     if (pathname === '/api/mc/address') {
       if (method === 'PUT') {
-        if (!canManage) return deny() || true;
+        if (!canCreate) return deny() || true;
         const body = await readBody(req);
         const host = setPublicHost(db, body.host);
         audit(db, me.username, 'mc.address', host, ip);
@@ -135,11 +137,11 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
 
     /* ── Instanzen ── */
     if (method === 'GET' && pathname === '/api/mc/instances') {
-      json(res, 200, { instances: listMcInstances(db).map((i) => publicInstance(i, publicHost(db), db)), host: { ...hostMemory(), reservedMb: runningRamMb(db) } });
+      json(res, 200, { instances: listMcInstances(db).filter((i) => scoped(i.id)).map((i) => publicInstance(i, publicHost(db), db)), host: { ...hostMemory(), reservedMb: runningRamMb(db) } });
       return true;
     }
     if (method === 'POST' && pathname === '/api/mc/instances') {
-      if (!canManage) return deny() || true;
+      if (!canCreate) return deny() || true;
       const body = await readBody(req);
       const out = await createInstance(db, {
         name: body.name,
@@ -168,7 +170,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
 
     /* ── Import bestehender Server ── */
     if (pathname.startsWith('/api/mc/import')) {
-      if (!canManage) return deny() || true;
+      if (!canCreate) return deny() || true;
       if (method === 'GET' && pathname === '/api/mc/import/scan') {
         json(res, 200, { servers: scanServers(db) });
         return true;
@@ -229,6 +231,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
     if (!im) return false;
     const inst = getMcInstance(db, im[1]);
     if (!inst) { json(res, 404, { error: 'Instanz nicht gefunden.' }); return true; }
+    if (!scoped(inst.id) || !can('mc.view')) { json(res, 403, { error: 'Kein Zugriff auf diesen Server.' }); return true; }
     const sub = im[2] || '';
 
     if (method === 'GET' && sub === '') {
@@ -236,7 +239,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (method === 'PATCH' && sub === '') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.settings')) return deny() || true;
       const body = await readBody(req);
       const patch = {};
       if (body.name !== undefined) {
@@ -265,7 +268,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (method === 'DELETE' && sub === '') {
-      if (me.role !== 'owner') return deny() || true;
+      if (!canCreate) return deny() || true;
       if (isRunning(inst.id)) throw new Error('Server zuerst stoppen.');
       const body = await readBody(req).catch(() => ({}));
       const target = path.resolve(inst.path);
@@ -281,7 +284,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (method === 'POST' && sub === '/control') {
-      if (!canControl) return deny() || true;
+      if (!can('mc.control')) return deny() || true;
       const body = await readBody(req);
       const action = String(body.action || '');
       if (action === 'start') await startMc(db, inst.id, logLine);
@@ -298,7 +301,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (method === 'POST' && sub === '/command') {
-      if (!canConsole) return deny() || true;
+      if (!can('mc.console')) return deny() || true;
       const body = await readBody(req);
       const cmd = String(body.command || '').slice(0, 300);
       sendMc(inst, cmd);
@@ -312,7 +315,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
         return true;
       }
       if (method === 'PUT') {
-        if (!canManage) return deny() || true;
+        if (!can('mc.files')) return deny() || true;
         const body = await readBody(req);
         const patch = {};
         for (const [k, v] of Object.entries(body.values || {})) {
@@ -344,7 +347,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
         return true;
       }
       if (method === 'PUT') {
-        if (!canManage) return deny() || true;
+        if (!can('mc.files')) return deny() || true;
         const body = await readBody(req, 4 * 1048576);
         const file = body.raw !== undefined ? writeConfigRaw(inst, cm[1], body.raw) : writeConfigValues(inst, cm[1], body.values);
         chownForRun(file);
@@ -355,13 +358,14 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
     }
 
     /* ── Dateimanager ── */
+    if (sub.startsWith('/files') && !can('mc.files')) return deny() || true;
     if (sub === '/files') {
       const rel = url.searchParams.get('path') || '';
       if (method === 'GET') {
         json(res, 200, url.searchParams.get('read') ? readText(inst, rel) : listDir(inst, rel));
         return true;
       }
-      if (!canManage) return deny() || true;
+      if (!can('mc.files')) return deny() || true;
       if (method === 'PUT') {
         const body = await readBody(req, 3 * 1048576);
         chownForRun(writeText(inst, body.path, body.content));
@@ -377,14 +381,14 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       }
     }
     if (sub === '/files/mkdir' && method === 'POST') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.files')) return deny() || true;
       const body = await readBody(req);
       chownForRun(makeDir(inst, body.path));
       json(res, 200, { ok: true });
       return true;
     }
     if (sub === '/files/rename' && method === 'POST') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.files')) return deny() || true;
       const body = await readBody(req);
       chownForRun(renamePath(inst, body.from, body.to), true);
       audit(db, me.username, 'mc.file.rename', `${inst.name}: ${body.from} → ${body.to}`, ip);
@@ -392,7 +396,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (sub === '/files/upload' && method === 'POST') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.files')) return deny() || true;
       const up = await uploadFile(inst, url.searchParams.get('path') || '', url.searchParams.get('name'), req);
       chownForRun(up.abs);
       audit(db, me.username, 'mc.file.upload', `${inst.name}: ${up.rel}`, ip);
@@ -410,8 +414,10 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (sub === '/players/action' && method === 'POST') {
-      if (!canControl) return deny() || true;
+      if (!can('mc.players')) return deny() || true;
       const body = await readBody(req);
+      if (['give', 'clear', 'kill', 'xp'].includes(String(body.action)) && !can('mc.inventory')) return deny() || true;
+      if (['broadcast', 'message'].includes(String(body.action)) && !can('mc.players')) return deny() || true;
       const out = await playerAction(inst, body, me.username);
       const who = body.name || body.ip || '';
       audit(db, me.username, `mc.player.${String(body.action).slice(0, 24)}`, `${inst.name}: ${who}${body.reason ? ` (${String(body.reason).slice(0, 80)})` : ''}`, ip);
@@ -424,7 +430,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (pm && pm[2] && method === 'POST') {
-      if (!canControl) return deny() || true;
+      if (!can('mc.inventory')) return deny() || true;
       const body = await readBody(req);
       const out = await editInventory(inst, pm[1], body);
       audit(db, me.username, 'mc.player.inventory', `${inst.name}: ${pm[1].slice(0, 8)} ${body.op} ${body.slot || ''} ${body.id || ''}`.trim(), ip);
@@ -438,7 +444,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (sub === '/backups' && method === 'POST') {
-      if (!canControl) return deny() || true;
+      if (!can('mc.backups')) return deny() || true;
       const body = await readBody(req);
       const job = createBackup(db, inst, { scope: body.scope, note: body.note, by: me.username, announce: body.announce !== false });
       audit(db, me.username, 'mc.backup.create', `${inst.name}: ${body.scope || 'full'}`, ip);
@@ -453,7 +459,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (sub === '/backups/settings' && method === 'PUT') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.backups')) return deny() || true;
       const body = await readBody(req);
       const cfg = setBackupCfg(db, inst, body);
       audit(db, me.username, 'mc.backup.settings', `${inst.name}: ${cfg.enabled ? `alle ${cfg.everyHours} h, ${cfg.scope}, behalten ${cfg.keep}` : 'aus'}`, ip);
@@ -461,7 +467,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (sub === '/backups/restore' && method === 'POST') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.backups.restore')) return deny() || true;
       const body = await readBody(req);
       const job = restoreBackup(db, inst, {
         file: body.file,
@@ -484,27 +490,27 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       return true;
     }
     if (sub === '/backups/download' && method === 'GET') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.backups')) return deny() || true;
       audit(db, me.username, 'mc.backup.download', `${inst.name}: ${String(url.searchParams.get('file')).slice(0, 80)}`, ip);
       streamBackup(inst, url.searchParams.get('file'), res);
       return true;
     }
     if (sub === '/backups/upload' && method === 'POST') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.backups.restore')) return deny() || true;
       const out = await uploadBackup(inst, req, url.searchParams.get('name'), me.username);
       audit(db, me.username, 'mc.backup.upload', `${inst.name}: ${out.file}`, ip);
       json(res, 200, { ok: true, ...out });
       return true;
     }
     if (sub === '/backups/file' && method === 'PATCH') {
-      if (!canControl) return deny() || true;
+      if (!can('mc.backups')) return deny() || true;
       const body = await readBody(req);
       updateBackup(inst, url.searchParams.get('file'), body);
       json(res, 200, { ok: true });
       return true;
     }
     if (sub === '/backups/file' && method === 'DELETE') {
-      if (!canManage) return deny() || true;
+      if (!can('mc.backups.restore')) return deny() || true;
       const file = url.searchParams.get('file');
       deleteBackup(inst, file);
       audit(db, me.username, 'mc.backup.delete', `${inst.name}: ${String(file).slice(0, 80)}`, ip);
@@ -525,7 +531,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       json(res, 200, { updates: await checkUpdates(inst) });
       return true;
     }
-    if (sub.startsWith('/mods') && method !== 'GET' && !canManage) return deny() || true;
+    if (sub.startsWith('/mods') && method !== 'GET' && !can('mc.mods')) return deny() || true;
     if (sub === '/mods/install' && method === 'POST') {
       const body = await readBody(req);
       const added = await installMod(inst, String(body.projectId || ''), logLine);

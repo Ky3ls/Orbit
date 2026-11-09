@@ -118,7 +118,7 @@ import {
   isWhitelisted,
   findActiveBan,
 } from './moderation.js';
-import {
+import { migratePermissionsV2,
   permissionsCatalog,
   serializePermissions,
   parseStoredPermissions,
@@ -3872,6 +3872,7 @@ const boot = (async () => {
     }
     try {
       ensureMcTables(db);
+      try { const n = migratePermissionsV2(db); if (n) logLine('ok', `Rechte auf spielunabhängige Rechte umgestellt (${n} Konten)`); } catch (e) { logLine('warn', `Rechte-Umstellung: ${e.message}`); }
       ensureBackupTable(db);
       ensureHostTables(db);
       initHostStats(db);

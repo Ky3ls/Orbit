@@ -9,6 +9,7 @@ import { roleLabel } from '../format.js';
 import { GAMES, PHASE_LABEL, navMatches, serverNav } from '../games.js';
 import { useAppearance } from '../hooks/useAppearance.js';
 import { useServers } from '../hooks/useServers.js';
+import { can, canSeeServer } from '../perm.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 import { NavIcon } from '../layout/icons.jsx';
 import { GLOBAL_NAV, HOST_NAV, MANAGE_NAV, locate, navGroups, navLabel } from '../layout/modules.js';
@@ -36,7 +37,8 @@ export default function Shell({ user, onLogout }) {
   const navigate = useNavigate();
   const loc = useLocation();
   const [prefs, setAppearance] = useAppearance();
-  const { servers, fx, mcList, refresh, refreshFx } = useServers();
+  const { servers: allServers, fx, mcList, refresh, refreshFx } = useServers();
+  const servers = useMemo(() => allServers.filter((s) => canSeeServer(user, s.key)), [allServers, user]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   const [powerOpen, setPowerOpen] = useState(false);
@@ -48,12 +50,13 @@ export default function Shell({ user, onLogout }) {
   const gPending = useRef(0);
 
   const isOwner = user.role === 'owner';
-  const canControl = user.role === 'owner' || user.role === 'admin';
+  const canCreate = can(user, 'servers.create');
+  const canHost = can(user, 'host.view');
   const collapsed = !!prefs.sidebarCollapsed;
   const isLight = prefs.theme === 'light';
   const here = locate(loc.pathname, loc.search, servers);
   const server = here.server;
-  const groups = useMemo(() => navGroups(t, server), [t, server]);
+  const groups = useMemo(() => navGroups(t, server, { host: can(user, 'host.view'), user }), [t, server, user]);
   const online = servers.filter((s) => s.phase === 'running');
   const totalPlayers = online.reduce((n, s) => n + (s.players || 0), 0);
 
@@ -107,7 +110,7 @@ export default function Shell({ user, onLogout }) {
       if (gPending.current && Date.now() - gPending.current < 1200) {
         gPending.current = 0;
         for (const g of groups) {
-          const hit = g.items.find((i) => i.key === k.toLowerCase() && (!i.owner || isOwner) && (!i.admin || canControl));
+          const hit = g.items.find((i) => i.key === k.toLowerCase() && (!i.owner || isOwner) && (!i.admin || canHost));
           if (hit) { e.preventDefault(); navigate(hit.to); return; }
         }
       }
@@ -152,11 +155,11 @@ export default function Shell({ user, onLogout }) {
         <div className="sb-group">
           <div className="sb-group-head">
             <span className="sb-group-label">Server</span>
-            {canControl && <Link to="/instances/new" className="sb-group-add" title="Neuer Server" aria-label="Neuer Server"><NavIcon name="plus" /></Link>}
+            {canCreate && <Link to="/instances/new" className="sb-group-add" title="Neuer Server" aria-label="Neuer Server"><NavIcon name="plus" /></Link>}
           </div>
           {serverOrder.map((s) => {
             const open = here.key === s.key;
-            const items = open ? serverNav(s) : [];
+            const items = open ? serverNav(s, user) : [];
             return (
               <div key={s.key} className={`sb-srv${open ? ' open' : ''}`}>
                 <Link to={s.to} className={`sb-srv-row tone-${s.tone}`} title={`${s.name} — ${PHASE_LABEL[s.phase] || s.phase}`}>
@@ -187,11 +190,11 @@ export default function Shell({ user, onLogout }) {
             );
           })}
           {servers.length === 0 && (
-            <Link to="/instances/new" className="sb-item sb-empty"><span className="sb-ico"><NavIcon name="plus" /></span><span className="sb-label">Ersten Server anlegen</span></Link>
+            <Link to={canCreate ? '/instances/new' : '/home'} className="sb-item sb-empty"><span className="sb-ico"><NavIcon name="plus" /></span><span className="sb-label">Ersten Server anlegen</span></Link>
           )}
         </div>
 
-        {canControl && (
+        {canHost && (
           <div className="sb-group">
             <span className="sb-group-label">Host</span>
             {HOST_NAV.map((item) => (
@@ -247,14 +250,14 @@ export default function Shell({ user, onLogout }) {
     </aside>
   );
 
-  const ctxItems = server ? serverNav(server) : [];
+  const ctxItems = server ? serverNav(server, user) : [];
   const playersItem = ctxItems.find((i) => i.id === 'players');
   const fallback = servers.find((s) => s.key === lastServer) || serverOrder[0];
   const mobileTabs = [
     { to: '/home', end: true, label: t('nav.overview'), icon: 'dashboard' },
     server
       ? { to: server.to, label: 'Server', icon: 'layers', match: true }
-      : fallback ? { to: fallback.to, label: 'Server', icon: 'layers' } : { to: '/instances/new', label: 'Neu', icon: 'plus' },
+      : fallback ? { to: fallback.to, label: 'Server', icon: 'layers' } : canCreate ? { to: '/instances/new', label: 'Neu', icon: 'plus' } : { to: '/settings', label: t('nav.settings'), icon: 'gear' },
     playersItem ? { to: playersItem.to, label: playersItem.label, icon: 'users' } : { to: '/settings', label: t('nav.settings'), icon: 'gear' },
   ];
 
@@ -305,7 +308,7 @@ export default function Shell({ user, onLogout }) {
               </Link>
             )}
 
-            {canControl && server && (server.game === 'minecraft' || server.active) && (
+            {server && ((server.game === 'minecraft' && can(user, 'mc.control')) || (server.game === 'fivem' && server.active && can(user, 'control'))) && (
               <div className="tb-pop-wrap" ref={powerRef}>
                 <button
                   type="button"
@@ -327,7 +330,7 @@ export default function Shell({ user, onLogout }) {
                         compact
                         status={fx.status}
                         controlEnabled={fx.controlEnabled}
-                        canControl={canControl}
+                        canControl
                         fxControlMode={fx.fxControlMode}
                         fxCommandReady={fx.fxCommandReady}
                         onDone={() => { refreshFx(); setPowerOpen(false); }}
@@ -403,7 +406,8 @@ export default function Shell({ user, onLogout }) {
         user={user}
         prefs={prefs}
         setAppearance={setAppearance}
-        canControl={canControl}
+        canControl={can(user, 'control')}
+        canCreate={canCreate}
         status={fx.status}
         onLogout={onLogout}
         onShortcuts={() => setKeysOpen(true)}

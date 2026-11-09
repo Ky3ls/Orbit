@@ -23,11 +23,11 @@ export const MANAGE_NAV = [
 export const navLabel = (t, item) => (item.labelKey ? t(item.labelKey) : item.label);
 
 /** Navigation als Gruppen (für Tastenkürzel-Hilfe und Befehlspalette) */
-export function navGroups(t, server) {
+export function navGroups(t, server, { host = true, user = null } = {}) {
   const groups = [{ id: 'global', label: 'Orbit', items: GLOBAL_NAV.map((i) => ({ ...i, label: navLabel(t, i) })) }];
-  const sn = serverNav(server);
+  const sn = serverNav(server, user);
   if (sn.length) groups.push({ id: 'server', label: server.name, items: sn });
-  groups.push({ id: 'host', label: 'Host', items: HOST_NAV });
+  if (host) groups.push({ id: 'host', label: 'Host', items: HOST_NAV });
   groups.push({ id: 'manage', label: t('nav.manage'), items: MANAGE_NAV.map((i) => ({ ...i, label: navLabel(t, i) })) });
   return groups;
 }

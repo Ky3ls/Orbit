@@ -8,6 +8,7 @@ import { GAMES, GAME_ORDER, PHASE_LABEL } from '../games.js';
 import { NavIcon } from '../layout/icons.jsx';
 import { fmtDur, fmtMb } from './mc/mcShared.js';
 import LiveStats from './home/LiveStats.jsx';
+import { can } from '../perm.js';
 import './home.css';
 
 /** Startseite: alle Server dieses Hosts, egal welches Spiel */
@@ -20,7 +21,8 @@ export default function Home() {
   const [fxProc, setFxProc] = useState(null);
   const [filter, setFilter] = useState('all');
   const [busy, setBusy] = useState('');
-  const canControl = user.role === 'owner' || user.role === 'admin';
+  const canControl = can(user, 'servers.create');
+  const canPower = (s) => (s.game === 'minecraft' ? can(user, 'mc.control') : can(user, 'control'));
 
   const load = useCallback(() => {
     if (document.hidden) return;
@@ -80,7 +82,7 @@ export default function Home() {
         ) : null}
       />
 
-      {servers.length === 0 && canControl && (
+      {servers.length === 0 && can(user, 'settings.write') && (
         <Link to="/welcome" className="card home-setup">
           <span className="home-setup-ico"><NavIcon name="sparkle" /></span>
           <span><b>Orbit einrichten</b><small>Datenbanken, Webserver, Panel-Domain und der erste Gameserver — in drei Schritten.</small></span>
@@ -109,7 +111,7 @@ export default function Home() {
         </div>
       </div>
 
-      {canControl && <LiveStats servers={servers} />}
+      {(can(user, 'overview') || can(user, 'host.view')) && <LiveStats servers={servers} />}
 
       {games.length > 1 && (
         <div className="seg home-filter">
@@ -162,7 +164,7 @@ export default function Home() {
                     <NavIcon name="globe" /><span className="mono">{s.address || inst.address}</span>
                   </button>
                 ) : <span className="grow" />}
-                {canControl && (s.game === 'minecraft' ? inst?.state === 'ready' : fxActive) && (running ? (
+                {canPower(s) && (s.game === 'minecraft' ? inst?.state === 'ready' : fxActive) && (running ? (
                   <>
                     <button type="button" className="o-icon-btn" title="Neustart" disabled={!!busy} onClick={() => control(s, 'restart')}><NavIcon name="restart" /></button>
                     <button type="button" className="o-icon-btn danger" title="Stoppen" disabled={!!busy || (s.game === 'fivem' && serverStatus !== 'online')} onClick={() => control(s, 'stop')}><NavIcon name="stop" /></button>

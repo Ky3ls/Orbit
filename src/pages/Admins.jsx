@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavIcon } from '../layout/icons.jsx';
+import GameMark from '../components/GameMark.jsx';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtFull, roleLabel } from '../format.js';
@@ -102,7 +103,41 @@ async function copyText(text) {
   }
 }
 
-function PermsAside({ t, permGroups, form, hasAllPerms, togglePerm, onClose }) {
+function ServerScope({ form, setScopes }) {
+  const [servers, setServers] = useState([]);
+  useEffect(() => {
+    Promise.all([
+      api('/api/mc/instances').then((d) => (d.instances || []).map((i) => ({ key: `minecraft:${i.id}`, name: i.name, game: 'minecraft', sub: `${i.type} ${i.mcVersion}` }))).catch(() => []),
+      api('/api/server/status').then((d) => (d.hostname || d.serverLabel ? [{ key: 'fivem:active', name: d.serverLabel || d.hostname, game: 'fivem', sub: 'FiveM' }] : [])).catch(() => []),
+    ]).then(([mc, fx]) => setServers([...fx, ...mc]));
+  }, []);
+  const scopes = form.permissions.filter((x) => x.startsWith('server:')).map((x) => x.slice(7));
+  const limited = scopes.length > 0;
+  const toggle = (key) => setScopes((scopes.includes(key) ? scopes.filter((k) => k !== key) : [...scopes, key]).map((k) => `server:${k}`));
+  return (
+    <fieldset className="tm-perm-group tm-scope">
+      <legend>Server-Zugriff</legend>
+      <div className="seg tm-scope-seg">
+        <button type="button" className={!limited ? 'active' : ''} onClick={() => setScopes([])}>Alle Server</button>
+        <button type="button" className={limited ? 'active' : ''} onClick={() => { if (!limited && servers[0]) setScopes([`server:${servers[0].key}`]); }}>Nur ausgewählte</button>
+      </div>
+      {limited && (
+        <div className="tm-scope-list">
+          {servers.map((s) => (
+            <label key={s.key} className={`tm-scope-item${scopes.includes(s.key) ? ' on' : ''}`}>
+              <input type="checkbox" checked={scopes.includes(s.key)} onChange={() => toggle(s.key)} />
+              <GameMark game={s.game} size={22} />
+              <span><b>{s.name}</b><small>{s.sub}</small></span>
+            </label>
+          ))}
+          <p className="tm-perms-hint muted">Die Rechte unten gelten nur für diese Server. Andere Server sieht das Mitglied nicht; FiveM-Rechte greifen nur mit FiveM in der Liste.</p>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+function PermsAside({ t, permGroups, form, hasAllPerms, togglePerm, onClose, setScopes }) {
   return (
     <aside className="tm-perms-aside" aria-label={t('team.perms')}>
       <div className="tm-perms-head">
@@ -123,9 +158,10 @@ function PermsAside({ t, permGroups, form, hasAllPerms, togglePerm, onClose }) {
         )}
       </div>
       <div className="tm-perms-body">
+        {setScopes && <ServerScope form={form} setScopes={setScopes} />}
         {permGroups.map((g) => (
           <fieldset key={g.id} className="tm-perm-group">
-            <legend>{groupLabel(t, g.id, g.label)}</legend>
+            <legend>{g.icon && <NavIcon name={g.icon} />}{groupLabel(t, g.id, g.label)}</legend>
             <div className="tm-perm-grid">
               {(g.permissions || []).map((perm) => {
                 const isAll = perm.id === 'all_permissions';
@@ -287,11 +323,23 @@ export default function Admins({ user: me }) {
       }
       return { ...f, role: 'custom', permissions };
     };
+    // Server-Beschränkungen (server:…) bleiben beim Umschalten einzelner Rechte erhalten
+    const keepScopes = (f) => {
+      const scopes = f.permissions.filter((x) => x.startsWith('server:'));
+      const next = apply({ ...f, permissions: f.permissions.filter((x) => !x.startsWith('server:')) });
+      return { ...next, permissions: [...next.permissions, ...scopes] };
+    };
     if (tplEdit) {
-      setTplEdit((f) => apply(f));
+      setTplEdit((f) => keepScopes(f));
       return;
     }
-    setForm((f) => apply(f));
+    setForm((f) => keepScopes(f));
+  }
+
+  function setScopes(scopes) {
+    const apply = (f) => ({ ...f, role: f.role === 'owner' ? f.role : 'custom', permissions: [...f.permissions.filter((x) => !x.startsWith('server:')), ...scopes] });
+    if (tplEdit) setTplEdit((f) => apply(f));
+    else setForm((f) => apply(f));
   }
 
   async function create(e) {
@@ -563,6 +611,7 @@ export default function Admins({ user: me }) {
                       <span className="tmx-fact"><NavIcon name="clock" />{last ? fmtAgoShort(last) : 'Nie angemeldet'}</span>
                       {user.cfx_name || user.cfx_id ? <span className="tmx-fact link"><NavIcon name="gamepad" />{user.cfx_name || `fivem:${user.cfx_id}`}</span> : null}
                       {user.discord_id ? <span className="tmx-fact link"><NavIcon name="chat" />Discord</span> : null}
+                      {(() => { const sc = (Array.isArray(user.permissions) ? user.permissions : []).filter((x) => String(x).startsWith('server:')); return sc.length ? <span className="tmx-fact scope" title={sc.map((x) => x.slice(7)).join(', ')}><NavIcon name="layers" />Nur {sc.length} Server</span> : null; })()}
                     </div>
                     {user.role === 'owner' ? (
                       <p className="tmx-perm-all">Voller Zugriff auf alles — Server, Host, Team und Einstellungen.</p>
@@ -669,6 +718,7 @@ export default function Admins({ user: me }) {
             <PermsAside
               t={t}
               permGroups={permGroups}
+              setScopes={setScopes}
               form={form}
               hasAllPerms={hasAllPerms}
               togglePerm={togglePerm}
@@ -744,6 +794,7 @@ export default function Admins({ user: me }) {
             <PermsAside
               t={t}
               permGroups={permGroups}
+              setScopes={setScopes}
               form={activeForm}
               hasAllPerms={hasAllPerms}
               togglePerm={togglePerm}
