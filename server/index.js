@@ -97,6 +97,7 @@ import { runRecipeInstall } from './recipeInstall.js';
 import { runRecipeYaml } from './recipeRunner.js';
 import { fetchRecommendedBuild, installArtifact } from './artifacts.js';
 import { ensureBackupTable, ensureMcTables, handleMinecraftApi, initMcBackups, initMinecraft } from './minecraft/mcApi.js';
+import { ensureHostTables, handleHostApi } from './host/hostApi.js';
 import { handlePlatformApi, initPlatform } from './platformApi.js';
 import { handleIngamePublicApi } from './ingameApi.js';
 import { primaryId, normalizeIdentifiers, mergeIdLists, cleanupPlayerDuplicates } from './playerIdentity.js';
@@ -779,6 +780,34 @@ async function handleApi(req, res, url) {
     ]]);
   }
 
+  /* Inhaber ohne Cfx.re anlegen — Orbit ist ein allgemeines Server-Panel, nicht nur für FiveM */
+  if (method === 'POST' && pathname === '/api/bootstrap/owner') {
+    if (!hit(`boot:${ip}`, 6, 15 * 60_000)) return json(res, 429, { error: 'Zu viele Versuche.' });
+    if (dbHasUsers(db)) return json(res, 409, { error: 'Es gibt schon ein Inhaberkonto. Bitte anmelden.' });
+    ensureBootstrapPin(db);
+    const body = await readBody(req);
+    const pin = typeof body.pin === 'string' ? body.pin : String(body.pin || '');
+    if (!verifyBootstrapPin(pin)) return json(res, 401, { error: 'PIN ungültig. Schau in die Terminal-/Dienst-Ausgabe.' });
+    const username = String(body.username || '').trim();
+    if (!/^[a-zA-Z0-9._-]{3,24}$/.test(username)) return json(res, 400, { error: 'Benutzername: 3–24 Zeichen (Buchstaben, Zahlen, . _ -).' });
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (password.length < 8) return json(res, 400, { error: 'Passwort mindestens 8 Zeichen.' });
+    const now = Date.now();
+    const info = db.prepare(`
+      INSERT INTO users (username, password_hash, role, must_change, created)
+      VALUES (?, ?, 'owner', 0, ?)
+    `).run(username, await hashPassword(password), now);
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+    clearBootstrapPin();
+    const token = createSession(db, user, req);
+    audit(db, username, 'master.create', 'Passwort', ip);
+    logLine('ok', `Inhaberkonto ${username} angelegt`);
+    return json(res, 200, { user: publicUser(user), setup: false }, [
+      ['Set-Cookie', cookieHeader(COOKIE, token, SESSION_MS / 1000)],
+      ['Set-Cookie', cookieHeader('orbit_pin', '', 0, 'Lax')],
+    ]);
+  }
+
   if (method === 'POST' && pathname === '/api/bootstrap/master') {
     if (!hit(`boot:${ip}`, 4, 15 * 60_000)) return json(res, 429, { error: 'Zu viele Versuche.' });
     if (dbHasUsers(db)) return json(res, 409, { error: 'Master existiert bereits. Bitte anmelden.' });
@@ -968,6 +997,10 @@ async function handleApi(req, res, url) {
 
   if (await handleMinecraftApi({
     req, res, url, method, pathname, me, db, ip, json, hasPerm, readBody, logLine,
+  })) return;
+
+  if (await handleHostApi({
+    req, res, url, method, pathname, me, db, ip, json, readBody,
   })) return;
 
   if (method === 'POST' && pathname === '/api/auth/logout') {
@@ -3837,6 +3870,7 @@ const boot = (async () => {
     try {
       ensureMcTables(db);
       ensureBackupTable(db);
+      ensureHostTables(db);
       initMinecraft(db, logLine);
       initMcBackups(db, logLine);
     } catch (err) {

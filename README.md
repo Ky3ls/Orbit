@@ -1,46 +1,49 @@
 # Orbit
 
-Web-Panel **und** FiveM/FXServer in einem. Auf einem frischen Linux-Server reicht die Installation — danach im Browser einen Server anlegen. FX wird automatisch nach `/opt/orbit/artifacts` geladen, Server-Daten liegen unter `/opt/orbit/servers`.
-
-## Voraussetzungen
-
-- Linux (root/sudo)
-- Git, Node.js 20+, npm, unzip, xz-utils
-- Internet (FX-Artifact-Download beim Setup)
+**Kontrollzentrum für deinen Server** — Gameserver (Minecraft, FiveM), Datenbanken (MySQL/MariaDB, PostgreSQL, Redis), Websites und Domains (nginx, Apache, Caddy) in einem Panel. Ein Befehl installiert alles, den Rest erledigt ein Assistent im Browser.
 
 ## Installation
 
+Auf einem frischen Ubuntu/Debian-Server (als root):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ky3ls/Orbit/main/scripts/install-orbit.sh | sudo bash
+```
+
+Der Installer holt Node.js 22, baut Orbit, richtet den Dienst `orbit` ein (Port **40220**, Firewall wird bei aktivem ufw freigegeben) und zeigt am Ende einen Link mit PIN.
+
+Aus einem Klon geht es genauso:
+
 ```bash
 sudo git clone https://github.com/Ky3ls/Orbit.git /opt/orbit
-cd /opt/orbit
-sudo bash scripts/install-orbit.sh
+cd /opt/orbit && sudo bash scripts/install-orbit.sh
 ```
 
-Einzeiler:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Ky3ls/Orbit/main/scripts/install-orbit.sh \
-  | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/Orbit.git bash
-```
-
-Danach alles unter einem Pfad:
+Optionen: `ORBIT_PORT`, `ORBIT_INSTALL_DIR`, `ORBIT_PUBLIC_URL` als Umgebungsvariablen.
 
 ```
 /opt/orbit/              Panel + Code
-/opt/orbit/data/         Panel-DB
-/opt/orbit/artifacts/    FXServer-Builds (wird beim Setup geladen)
-/opt/orbit/servers/      deine FiveM-Server (cfg, resources, …)
+/opt/orbit/data/         Panel-DB, Backups
+/opt/orbit/servers/      Gameserver (Minecraft, FiveM)
+/opt/orbit/artifacts/    FXServer-Builds
 ```
 
-Dienst: `orbit` · Port: **40220** · läuft als **root** (wie txAdmin, kein eigener Systemuser)
+## Ersteinrichtung
 
-## Ersteinrichtung (frischer Server)
+1. Link aus der Installer-Ausgabe öffnen (`http://DEINE-IP:40220/install?pin=…`) — PIN steht auch in `journalctl -u orbit`
+2. **Inhaberkonto** anlegen: Benutzername + Passwort (oder mit Cfx.re-Konto)
+3. **Einrichtungs-Assistent**:
+   - Server-Check (System, RAM, Speicher, IP, vorhandene Dienste)
+   - **Datenbanken** auswählen und installieren (MariaDB/MySQL, PostgreSQL, Redis)
+   - **Webserver** wählen (nginx, Apache, Caddy) und optional eine **Domain fürs Panel**
+   - **Ersten Server** anlegen: Minecraft, FiveM oder einen bestehenden importieren
+4. Danach nur noch die angezeigten DNS-Einträge bei Cloudflare anlegen
 
-1. Dienst starten → **PIN** erscheint im Terminal / `journalctl -u orbit`
-2. Browser: `http://DEINE-IP:40220` → PIN → **Cfx.re verknüpfen**
-3. Backup-Passwort → Master-Account (danach eingeloggt)
-4. Setup-Wizard inkl. **Panel-Zugang** (IP:Port **oder Domain**)
-5. Bei Domain: nach Abschluss automatische Weiterleitung auf die neue URL
+## Host-Verwaltung
+
+- **Datenbanken** — Server installieren, Datenbanken mit eigenem Benutzer anlegen, Passwort zurücksetzen, SQL-Export, externer Zugriff. Zugangsdaten fertig formatiert für FiveM (oxmysql), Minecraft-Plugins (JDBC) und Laravel/.env. Bestehende Datenbanken werden angezeigt, aber nie verändert.
+- **Domains & Web** — Reverse-Proxy (Apps, Panel), statische Website, PHP-Website, Weiterleitung oder **Gameserver-Adresse** (inkl. SRV-Record, damit Spieler keinen Port eintippen). HTTPS per Let's Encrypt, vorhandenem Zertifikat oder Cloudflare. DNS-Prüfung erkennt Cloudflare-Proxy. Orbit schreibt nur eigene `orbit-site-*`-Dateien, testet jede Änderung (`nginx -t` usw.) und rollt bei Fehlern zurück.
+- **Dienste** — Status, RAM, Laufzeit und Logs von Webserver, Datenbanken und PHP-FPM; Start, Stopp, Neustart, Reload.
 
 Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram` (Pfad-Policy im Panel).
 
@@ -57,7 +60,7 @@ Gesperrt bleiben `/root/Rechnungen` und `/root/Telegram` (Pfad-Policy im Panel).
 
 ## Multi-Game: Minecraft
 
-Unter **Instanzen** laufen Minecraft-Server parallel zu FiveM — der Umschalter oben in der Sidebar wechselt zwischen allen Instanzen.
+Minecraft-Server laufen parallel zu FiveM und allen anderen Diensten — jeder Server steht in der Sidebar unter **Server** mit eigenen Seiten.
 
 - **Typen:** Vanilla, Paper, Purpur (Plugins), Fabric, Forge, NeoForge (Mods) — jede Version, inkl. Loader-Auswahl
 - **Java automatisch:** benötigte Version laut Mojang; fehlende Versionen lädt Orbit als Eclipse Temurin nach `/opt/orbit/runtimes`

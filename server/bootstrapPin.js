@@ -103,11 +103,9 @@ export async function bootstrapPinPublicInfo(db) {
   const pinState = ensureBootstrapPin(db);
   if (!pinState) return null;
   const panelUrl = await resolveSetupPanelUrl();
-  return {
-    pin: pinState.pin,
-    panelUrl,
-    link: `${panelUrl}/install?pin=${pinState.pin}`,
-  };
+  // Die PIN selbst nie an den Browser geben — sonst könnte jeder, der die frische
+  // Installation zuerst aufruft, das Panel übernehmen. Sie steht nur im Terminal/Log.
+  return { pin: null, length: 4, panelUrl };
 }
 
 export async function printBootstrapBanner(db) {
@@ -127,7 +125,7 @@ export async function printBootstrapBanner(db) {
     `  PIN:     ${pinState.pin}`,
     `  Panel:   ${panelUrl}`,
     `  Link:    ${link}`,
-    '  → PIN im Browser eingeben → Cfx.re verknüpfen',
+    '  → Link öffnen → Inhaberkonto anlegen → Einrichtung startet',
     line,
     '',
   ].join('\n');

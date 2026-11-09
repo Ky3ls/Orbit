@@ -11,7 +11,7 @@ import { useAppearance } from '../hooks/useAppearance.js';
 import { useServers } from '../hooks/useServers.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 import { NavIcon } from '../layout/icons.jsx';
-import { GLOBAL_NAV, MANAGE_NAV, locate, navGroups, navLabel } from '../layout/modules.js';
+import { GLOBAL_NAV, HOST_NAV, MANAGE_NAV, locate, navGroups, navLabel } from '../layout/modules.js';
 import CommandPalette from './CommandPalette.jsx';
 import ShortcutsDialog from './ShortcutsDialog.jsx';
 import './shell.css';
@@ -107,7 +107,7 @@ export default function Shell({ user, onLogout }) {
       if (gPending.current && Date.now() - gPending.current < 1200) {
         gPending.current = 0;
         for (const g of groups) {
-          const hit = g.items.find((i) => i.key === k.toLowerCase() && (!i.owner || isOwner));
+          const hit = g.items.find((i) => i.key === k.toLowerCase() && (!i.owner || isOwner) && (!i.admin || canControl));
           if (hit) { e.preventDefault(); navigate(hit.to); return; }
         }
       }
@@ -190,6 +190,18 @@ export default function Shell({ user, onLogout }) {
             <Link to="/instances/new" className="sb-item sb-empty"><span className="sb-ico"><NavIcon name="plus" /></span><span className="sb-label">Ersten Server anlegen</span></Link>
           )}
         </div>
+
+        {canControl && (
+          <div className="sb-group">
+            <span className="sb-group-label">Host</span>
+            {HOST_NAV.map((item) => (
+              <NavLink key={item.to} to={item.to} title={item.label} className={({ isActive }) => `sb-item${isActive ? ' active' : ''}`}>
+                <span className="sb-ico"><NavIcon name={item.icon} /></span>
+                <span className="sb-label">{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        )}
 
         <div className="sb-group">
           <span className="sb-group-label">{t('nav.manage')}</span>

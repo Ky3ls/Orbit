@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Mark } from '../components/Ui.jsx';
+import { Brand } from '../components/Ui.jsx';
 import './install.css';
 
 const CFX_HINTS = {
@@ -28,6 +28,10 @@ export default function Install({
   const [accept, setAccept] = useState(false);
   const [err, setErr] = useState(CFX_HINTS[params.get('cfx')] || '');
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState('password');
+  const [owner, setOwner] = useState('');
+  const [ownerPw, setOwnerPw] = useState('');
+  const [ownerPw2, setOwnerPw2] = useState('');
 
   const createMode = phase === 'create' || params.get('step') === 'create';
   const pinOk = useMemo(() => /^\d{4}$/.test(pin), [pin]);
@@ -41,8 +45,26 @@ export default function Install({
     if (params.get('step') === 'create') onPhaseRefresh?.();
   }, [params]);
 
+  async function createOwner() {
+    if (ownerPw !== ownerPw2) { setErr('Passwörter stimmen nicht überein.'); return; }
+    setBusy(true);
+    try {
+      const data = await api('/api/bootstrap/owner', { method: 'POST', body: { pin, username: owner, password: ownerPw } });
+      onMasterDone?.(data);
+    } catch (error) {
+      setErr(error.message);
+      setBusy(false);
+    }
+  }
+
   async function linkAccount(e) {
     e.preventDefault();
+    if (mode === 'password') {
+      setErr('');
+      if (!pinOk) { setErr('PIN muss 4 Ziffern haben.'); return; }
+      createOwner();
+      return;
+    }
     setErr('');
     if (!pinOk) {
       setErr('PIN muss 4 Ziffern haben.');
@@ -87,7 +109,7 @@ export default function Install({
       <div className="orb-boot">
         <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
         <form className="orb-boot-card" onSubmit={createMaster}>
-          <div className="brand-link"><Mark /> Orbit</div>
+          <Brand size={40} sub="Game Server Panel" />
           <div className="orb-cfx-id">
             <div className="orb-cfx-avatar" aria-hidden="true">
               {(pendingCfx?.name || 'C').slice(0, 1).toUpperCase()}
@@ -142,12 +164,16 @@ export default function Install({
     <div className="orb-boot">
       <div className="aurora" aria-hidden="true"><i /><i /><i /></div>
       <form className="orb-boot-card" onSubmit={linkAccount}>
-        <div className="brand-link"><Mark /> Orbit</div>
+        <Brand size={40} sub="Game Server Panel" />
         <p className="orb-boot-status">Ersteinrichtung</p>
-        <h1>PIN &amp; Cfx.re</h1>
+        <h1>Inhaberkonto anlegen</h1>
         <p className="lede">
-          PIN eingeben und mit Cfx.re verknüpfen.
+          Die 4-stellige PIN steht in der Ausgabe des Installers (oder <span className="mono">journalctl -u orbit</span>).
         </p>
+        <div className="seg orb-mode">
+          <button type="button" className={mode === 'password' ? 'active' : ''} onClick={() => setMode('password')}>Benutzername &amp; Passwort</button>
+          <button type="button" className={mode === 'cfx' ? 'active' : ''} onClick={() => setMode('cfx')}>Mit Cfx.re-Konto</button>
+        </div>
         {err && <div className="err">{err}</div>}
         <label className="field">
           <span>PIN</span>
@@ -165,9 +191,17 @@ export default function Install({
             {pinOk && <span className="orb-pin-ok" aria-hidden="true">✓</span>}
           </div>
         </label>
-        <button className="btn btn-primary" disabled={busy || !pinOk} type="submit">
-          {busy ? 'Weiter zu Cfx.re…' : 'Konto verknüpfen'}
+        {mode === 'password' && (
+          <>
+            <label className="field"><span>Benutzername</span><input autoComplete="username" value={owner} onChange={(e) => setOwner(e.target.value.replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 24))} placeholder="z. B. admin" /></label>
+            <label className="field"><span>Passwort</span><input type="password" autoComplete="new-password" value={ownerPw} onChange={(e) => setOwnerPw(e.target.value)} placeholder="mind. 8 Zeichen" /></label>
+            <label className="field"><span>Passwort wiederholen</span><input type="password" autoComplete="new-password" value={ownerPw2} onChange={(e) => setOwnerPw2(e.target.value)} /></label>
+          </>
+        )}
+        <button className="btn btn-primary" disabled={busy || !pinOk || (mode === 'password' && (owner.length < 3 || ownerPw.length < 8))} type="submit">
+          {mode === 'password' ? (busy ? 'Wird angelegt…' : 'Konto anlegen') : (busy ? 'Weiter zu Cfx.re…' : 'Mit Cfx.re verknüpfen')}
         </button>
+        {mode === 'cfx' && <p className="orb-mode-hint">Praktisch für FiveM-Server: Anmeldung später mit deinem Cfx.re-Konto.</p>}
       </form>
     </div>
   );

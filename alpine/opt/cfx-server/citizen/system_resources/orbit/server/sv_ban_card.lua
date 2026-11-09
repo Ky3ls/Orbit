@@ -20,94 +20,103 @@ local function safeDone(deferrals, msg)
   end)
 end
 
---- Minimale Adaptive Card (v1.0): NUR TextBlocks + optional OpenUrl/Submit.
---- Kein FactSet/Container/$schema — FiveM-Renderer ist streng.
+local function tb(text, opts)
+  local t = { type = 'TextBlock', text = text, wrap = true }
+  if opts then for k, v in pairs(opts) do t[k] = v end end
+  return t
+end
+
+local function infoCell(label, value, color)
+  return {
+    type = 'Column',
+    width = 'stretch',
+    items = {
+      tb(label, { size = 'Small', weight = 'Bolder', color = 'Accent', spacing = 'None' }),
+      tb(value, { size = 'Medium', weight = 'Bolder', color = color or 'Default', spacing = 'Small' }),
+    },
+  }
+end
+
+--- Adaptive Card 1.2 — FiveM rendert Container-Styles (attention/emphasis) nicht farbig,
+--- daher nur TextBlock/ColumnSet mit Farben + Separatoren (kein Image/$schema).
 function OrbitBuildBanCard(payload)
   payload = type(payload) == 'table' and payload or {}
-  local serverName = trim(payload.serverName)
-  local reason = truncate(trim(payload.banReason) ~= '' and payload.banReason or 'Kein Grund angegeben', 220)
-  local expiresLabel = trim(payload.banExpiresLabel)
-  if expiresLabel == '' then
-    expiresLabel = payload.permanent and 'Permanent' or '-'
-  end
-  if payload.permanent or expiresLabel:lower() == 'permanent' then
-    expiresLabel = 'Permanent'
-  end
-  local banId = payload.banId and ('#' .. tostring(payload.banId)) or '-'
-  local appeal = truncate(trim(payload.appealMessage), 280)
+  local serverName = truncate(trim(payload.serverName), 48)
+  local reason = truncate(trim(payload.banReason) ~= '' and payload.banReason or 'Kein Grund angegeben', 260)
+  local permanent = payload.permanent == true
+  local untilLabel = trim(payload.banExpiresShort)
+  if untilLabel == '' then untilLabel = trim(payload.banExpiresLabel) end
+  if permanent or untilLabel == '' or untilLabel:lower() == 'permanent' then untilLabel = 'Permanent' end
+  local remaining = trim(payload.banRemainingLabel)
+  local created = trim(payload.banCreatedLabel)
+  local author = truncate(trim(payload.banAuthor), 32)
+  local banId = payload.banId and ('#' .. tostring(payload.banId)) or '—'
+  local appeal = truncate(trim(payload.appealMessage), 300)
   local invite = trim(payload.discordInvite)
-  if invite ~= '' and not invite:match('^https?://') then
-    invite = ''
+  if invite ~= '' and not invite:match('^https?://') then invite = '' end
+
+  local header = 'ORBIT'
+  if serverName ~= '' then header = header .. '  ·  ' .. serverName end
+
+  local status
+  if permanent then
+    status = 'Permanenter Ban'
+  elseif remaining ~= '' then
+    status = 'Läuft noch ' .. remaining
+  else
+    status = 'Vorübergehender Ban'
   end
 
   local body = {
+    tb(header, { size = 'Small', weight = 'Bolder', color = 'Accent', spacing = 'None' }),
+    tb('Du bist gebannt', { size = 'ExtraLarge', weight = 'Bolder', color = 'Attention', spacing = 'Medium' }),
+    tb(status, { size = 'Medium', weight = 'Bolder', color = permanent and 'Attention' or 'Warning', spacing = 'Small' }),
+
     {
-      type = 'TextBlock',
-      text = 'ORBIT',
-      weight = 'Bolder',
-      size = 'Medium',
+      type = 'Container',
+      separator = true,
+      spacing = 'Large',
+      items = {
+        tb('GRUND', { size = 'Small', weight = 'Bolder', color = 'Accent', spacing = 'None' }),
+        tb(reason, { size = 'Large', weight = 'Bolder', spacing = 'Small' }),
+      },
+    },
+
+    {
+      type = 'ColumnSet',
+      spacing = 'Large',
+      columns = {
+        infoCell('GÜLTIG BIS', untilLabel, permanent and 'Attention' or 'Default'),
+        infoCell('GEBANNT AM', created ~= '' and created or '—'),
+      },
     },
     {
-      type = 'TextBlock',
-      text = 'Du bist gebannt',
-      weight = 'Bolder',
-      size = 'Large',
-    },
-  }
-
-  if serverName ~= '' then
-    body[#body + 1] = {
-      type = 'TextBlock',
-      text = serverName,
-      wrap = true,
-    }
-  end
-
-  body[#body + 1] = {
-    type = 'TextBlock',
-    text = ('Grund: %s'):format(reason),
-    wrap = true,
-  }
-  body[#body + 1] = {
-    type = 'TextBlock',
-    text = ('Bis: %s'):format(expiresLabel),
-    wrap = true,
-  }
-  body[#body + 1] = {
-    type = 'TextBlock',
-    text = ('Ban-ID: %s'):format(banId),
-    wrap = true,
-  }
-
-  if appeal ~= '' then
-    body[#body + 1] = {
-      type = 'TextBlock',
-      text = appeal,
-      wrap = true,
-    }
-  end
-
-  local card = {
-    type = 'AdaptiveCard',
-    version = '1.0',
-    body = body,
-    actions = {
-      {
-        type = 'Action.Submit',
-        title = 'OK',
+      type = 'ColumnSet',
+      spacing = 'Medium',
+      columns = {
+        infoCell('VON', author ~= '' and author or '—'),
+        infoCell('BAN-ID', banId),
       },
     },
   }
 
-  if invite ~= '' then
-    card.actions[#card.actions + 1] = {
-      type = 'Action.OpenUrl',
-      title = 'Discord',
-      url = invite,
-    }
-  end
+  local hint = appeal ~= '' and appeal
+    or (invite ~= '' and 'Ban ungerechtfertigt? Öffne ein Ticket auf unserem Discord und nenne deine Ban-ID ' .. banId .. '.'
+      or 'Ban ungerechtfertigt? Melde dich beim Server-Team und nenne deine Ban-ID ' .. banId .. '.')
+  body[#body + 1] = tb(hint, { size = 'Default', separator = true, spacing = 'Large' })
 
-  return card
+  local actions = {}
+  if invite ~= '' then
+    actions[#actions + 1] = { type = 'Action.OpenUrl', title = 'Ban anfechten (Discord)', url = invite }
+  end
+  actions[#actions + 1] = { type = 'Action.Submit', title = 'Schließen' }
+
+  return {
+    type = 'AdaptiveCard',
+    version = '1.2',
+    body = body,
+    actions = actions,
+  }
 end
 
 local function shortReject(payload, fallbackText)
@@ -140,12 +149,6 @@ function OrbitPresentBanCard(deferrals, payload, fallbackText)
     return false
   end
 
-  -- Einmalig exakte JSON-Payload loggen (Debug)
-  if not _G.__orbitBanCardJsonLogged then
-    _G.__orbitBanCardJsonLogged = true
-    print(('^3[Orbit] Ban-Card JSON: %s^0'):format(cardJson))
-  end
-
   local rejectMsg = shortReject(payload, fallbackText)
   local finished = false
 
@@ -167,6 +170,5 @@ function OrbitPresentBanCard(deferrals, payload, fallbackText)
     return false
   end
 
-  print('^2[Orbit] Ban-Card via presentCard angezeigt^0')
   return true
 end

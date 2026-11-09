@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { audit } from '../db.js';
+import { gameDomain } from '../host/hostApi.js';
 import { MC_ROOT, deleteMcInstanceRow, ensureMcTables, getMcInstance, listMcInstances, updateMcInstance } from './mcDb.js';
 import { createInstance, getJob, isPortAvailable, suggestPort } from './mcInstall.js';
 import { ensureJava, listJavas } from './mcJava.js';
@@ -19,7 +20,8 @@ import { MC_TYPES, listVersions, requiredJava } from './mcSources.js';
 
 export { ensureMcTables, initMinecraft, initMcBackups, ensureBackupTable };
 
-function publicInstance(inst, host = '') {
+function publicInstance(inst, host = '', db = null) {
+  const domain = db ? gameDomain(db, `minecraft:${inst.id}`) : null;
   let launch = {};
   try { launch = JSON.parse(inst.launch || '{}'); } catch { /* */ }
   return {
@@ -33,7 +35,8 @@ function publicInstance(inst, host = '') {
     path: inst.path,
     port: inst.port,
     host,
-    address: host ? `${host}:${inst.port}` : null,
+    address: domain ? (inst.port === 25565 ? domain : `${domain}:${inst.port}`) : host ? `${host}:${inst.port}` : null,
+    domain,
     ramMb: inst.ram_mb,
     javaMajor: inst.java_major,
     javaPath: inst.java_path,
@@ -132,7 +135,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
 
     /* ── Instanzen ── */
     if (method === 'GET' && pathname === '/api/mc/instances') {
-      json(res, 200, { instances: listMcInstances(db).map((i) => publicInstance(i, publicHost(db))), host: { ...hostMemory(), reservedMb: runningRamMb(db) } });
+      json(res, 200, { instances: listMcInstances(db).map((i) => publicInstance(i, publicHost(db), db)), host: { ...hostMemory(), reservedMb: runningRamMb(db) } });
       return true;
     }
     if (method === 'POST' && pathname === '/api/mc/instances') {
@@ -151,7 +154,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
         properties: body.properties && typeof body.properties === 'object' ? body.properties : undefined,
       }, logLine);
       audit(db, me.username, 'mc.create', `${out.instance.name} (${body.type} ${body.mcVersion})`, ip);
-      json(res, 200, { instance: publicInstance(out.instance, publicHost(db)), jobId: out.jobId });
+      json(res, 200, { instance: publicInstance(out.instance, publicHost(db), db), jobId: out.jobId });
       return true;
     }
     const jm = pathname.match(/^\/api\/mc\/jobs\/(\d+)$/);
@@ -186,7 +189,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
         const body = await readBody(req);
         const out = await importServer(db, body, logLine);
         audit(db, me.username, 'mc.import', `${out.instance.name} ← ${body.path} (${body.mode || 'copy'})`, ip);
-        json(res, 200, { instance: publicInstance(out.instance, publicHost(db)), jobId: out.jobId });
+        json(res, 200, { instance: publicInstance(out.instance, publicHost(db), db), jobId: out.jobId });
         return true;
       }
       return false;
@@ -229,7 +232,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
     const sub = im[2] || '';
 
     if (method === 'GET' && sub === '') {
-      json(res, 200, { instance: publicInstance(inst, publicHost(db)) });
+      json(res, 200, { instance: publicInstance(inst, publicHost(db), db) });
       return true;
     }
     if (method === 'PATCH' && sub === '') {
@@ -258,7 +261,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       }
       const next = updateMcInstance(db, inst.id, patch);
       audit(db, me.username, 'mc.update', `${inst.name}: ${Object.keys(patch).join(', ')}`, ip);
-      json(res, 200, { instance: publicInstance(next, publicHost(db)) });
+      json(res, 200, { instance: publicInstance(next, publicHost(db), db) });
       return true;
     }
     if (method === 'DELETE' && sub === '') {

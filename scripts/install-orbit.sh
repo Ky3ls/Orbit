@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Orbit — Systemdienst als root (wie txAdmin), alles unter /opt/orbit
+# Orbit — Kontrollzentrum für Gameserver, Datenbanken und Websites
+# Läuft als systemd-Dienst (root), alles unter /opt/orbit.
 #
-#   sudo git clone https://github.com/Ky3ls/Orbit.git /opt/orbit
-#   cd /opt/orbit && sudo bash scripts/install-orbit.sh
+# Einzeiler (frischer Ubuntu/Debian-Server):
+#   curl -fsSL https://raw.githubusercontent.com/Ky3ls/Orbit/main/scripts/install-orbit.sh | sudo bash
 #
-# Einzeiler:
-#   curl -fsSL https://raw.githubusercontent.com/Ky3ls/Orbit/main/scripts/install-orbit.sh \
-#     | sudo ORBIT_GIT_URL=https://github.com/Ky3ls/Orbit.git bash
+# Aus einem Klon:
+#   sudo git clone https://github.com/Ky3ls/Orbit.git /opt/orbit && cd /opt/orbit && sudo bash scripts/install-orbit.sh
+#
+# Optionen (Umgebungsvariablen): ORBIT_PORT (40220), ORBIT_INSTALL_DIR (/opt/orbit), ORBIT_PUBLIC_URL
 set -euo pipefail
 
 INSTALL_DIR="${ORBIT_INSTALL_DIR:-/opt/orbit}"
@@ -29,19 +31,43 @@ need_root() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+if [[ -t 1 ]]; then C_O=$'\e[38;5;208m'; C_G=$'\e[32m'; C_D=$'\e[2m'; C_B=$'\e[1m'; C_0=$'\e[0m'; else C_O=; C_G=; C_D=; C_B=; C_0=; fi
+STEP=0
+step() { STEP=$((STEP + 1)); echo; echo "${C_O}[$STEP/5]${C_0} ${C_B}$*${C_0}"; }
+ok() { echo "  ${C_G}✓${C_0} $*"; }
+
+# node:sqlite braucht Node 22.5 oder neuer
+node_ok() {
+  have node || return 1
+  local v major rest minor
+  v="$(node -p 'process.versions.node' 2>/dev/null || echo 0.0)"
+  major="${v%%.*}"; rest="${v#*.}"; minor="${rest%%.*}"
+  (( major > 22 || (major == 22 && minor >= 5) ))
+}
+
 ensure_pkgs() {
   if have apt-get; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
-    apt-get install -y -qq git curl ca-certificates unzip xz-utils rsync >/dev/null
-    if ! have node || ! have npm; then
-      apt-get install -y -qq nodejs npm >/dev/null || true
+    apt-get install -y -qq git curl ca-certificates unzip xz-utils rsync zstd openssl iproute2 gnupg >/dev/null
+    ok "Grundpakete (git, curl, zstd, …)"
+    if ! node_ok; then
+      echo "  ${C_D}Node.js 22 wird über NodeSource installiert …${C_0}"
+      curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
+      apt-get install -y -qq nodejs >/dev/null
+    fi
+  elif have dnf; then
+    dnf install -y -q git curl ca-certificates unzip xz rsync zstd openssl iproute >/dev/null
+    if ! node_ok; then
+      curl -fsSL https://rpm.nodesource.com/setup_22.x | bash - >/dev/null
+      dnf install -y -q nodejs >/dev/null
     fi
   fi
   have git || { echo "git fehlt."; exit 1; }
-  have node || { echo "Node.js fehlt (apt install nodejs npm / Node 20+)."; exit 1; }
+  node_ok || { echo "Node.js 22.5+ fehlt (gefunden: $(node -v 2>/dev/null || echo keins))."; exit 1; }
   have npm || { echo "npm fehlt."; exit 1; }
   have unzip || { echo "unzip fehlt."; exit 1; }
+  ok "Node.js $(node -v)"
 }
 
 resolve_source() {
@@ -62,16 +88,20 @@ resolve_source() {
 }
 
 need_root
-echo "==> Orbit Installer (Systemdienst als root)"
+echo
+echo "${C_O}   ●  Orbit${C_0}"
+echo "   Kontrollzentrum für Gameserver, Datenbanken und Websites"
+step "Pakete prüfen"
 ensure_pkgs
 mkdir -p "$INSTALL_DIR" "$ARTIFACTS" "$SERVERS" "$DATA_DIR"
 
+step "Orbit herunterladen"
 resolve_source
 
 # Laufender Dienst hält oft Dateien in node_modules → TAR_ENTRY_ERROR / ENOTEMPTY
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
-echo "==> Dateien → $INSTALL_DIR (nur Code; kein Root-rsync --delete)"
+echo "  Dateien → $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 # WICHTIG: Niemals rsync --delete auf den ganzen INSTALL_DIR-Tree.
 # Persistenz (data/artifacts/servers/alpine) bleibt unberührt.
@@ -98,15 +128,16 @@ for f in package.json package-lock.json index.html vite.config.js README.md .git
 done
 
 cd "$INSTALL_DIR"
-echo "==> npm ci + build"
+step "Abhängigkeiten installieren und bauen (1–2 Minuten)"
 # Kaputte/teilweise node_modules von fehlgeschlagenen Installs weg
 rm -rf "$INSTALL_DIR/node_modules"
 export HOME="${HOME:-/root}"
 export npm_config_cache="${ORBIT_NPM_CACHE:-$INSTALL_DIR/.npm-cache}"
 export npm_config_update_notifier=false
 mkdir -p "$npm_config_cache"
-npm ci
-npm run build
+npm ci --no-audit --no-fund --loglevel=error
+npm run build --silent >/dev/null
+ok "Oberfläche gebaut"
 
 DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 DEFAULT_IP="${DEFAULT_IP:-127.0.0.1}"
@@ -165,6 +196,11 @@ cat > "/etc/systemd/system/${SERVICE_NAME}.service.d/fx-survive.conf" <<'EOF'
 KillMode=process
 EOF
 
+step "Dienst einrichten"
+# Firewall: Panel-Port freigeben, wenn ufw aktiv ist
+if have ufw && ufw status 2>/dev/null | grep -q "Status: active"; then
+  ufw allow "$PANEL_PORT/tcp" >/dev/null && ok "Firewall: Port $PANEL_PORT freigegeben (ufw)"
+fi
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl restart "$SERVICE_NAME"
@@ -189,15 +225,12 @@ fi
 cat <<EOF
 
 ========================================
- Orbit installiert
+ Orbit ist installiert
 ========================================
  Panel:    $HOST_HINT
- Port:     $PANEL_PORT
  Pfad:     $INSTALL_DIR
  Daten:    $DATA_DIR
- FX:       $ARTIFACTS
  Server:   $SERVERS
- Dienst:   root (systemd, wie txAdmin)
 EOF
 if [[ -n "$PIN_VAL" ]]; then
   if [[ -f "$BANNER_FILE" ]]; then
@@ -210,9 +243,8 @@ if [[ -n "$PIN_VAL" ]]; then
   Orbit · Ersteinrichtung
 ====================================================
   PIN:     $PIN_VAL
-  Panel:   $HOST_HINT
   Link:    $HOST_HINT/install?pin=$PIN_VAL
-  → Browser öffnen → Cfx.re verknüpfen
+  → Link öffnen → Inhaberkonto anlegen → Einrichtung startet
 ====================================================
 EOF
   fi

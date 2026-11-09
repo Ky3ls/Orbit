@@ -79,6 +79,14 @@ export default function Home() {
         ) : null}
       />
 
+      {servers.length === 0 && canControl && (
+        <Link to="/welcome" className="card home-setup">
+          <span className="home-setup-ico"><NavIcon name="sparkle" /></span>
+          <span><b>Orbit einrichten</b><small>Datenbanken, Webserver, Panel-Domain und der erste Gameserver — in drei Schritten.</small></span>
+          <NavIcon name="arrowRight" />
+        </Link>
+      )}
+
       <div className="home-kpis">
         <div className="home-kpi tone-ok">
           <span className="home-kpi-ico"><NavIcon name="layers" /></span>

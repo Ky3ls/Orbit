@@ -76,11 +76,32 @@ function OrbitPlayerList()
     if src then
       local okName, pname = pcall(GetPlayerName, id)
       local okPing, ping = pcall(GetPlayerPing, id)
+      local ids = GetPlayerIdentifiers(id) or {}
+      local endpoint = ''
+      if type(GetPlayerEndpoint) == 'function' then
+        local okEp, ep = pcall(GetPlayerEndpoint, id)
+        if okEp and type(ep) == 'string' and ep ~= '' then
+          endpoint = ep
+          -- IP als Identifier ergänzen, falls nicht schon drin
+          local hasIp = false
+          for _, v in ipairs(ids) do
+            if type(v) == 'string' and v:sub(1, 3) == 'ip:' then
+              hasIp = true
+              break
+            end
+          end
+          if not hasIp then
+            local ipOnly = ep:match('^([^:]+)') or ep
+            ids[#ids + 1] = 'ip:' .. ipOnly
+          end
+        end
+      end
       list[#list + 1] = {
         id = src,
         name = (okName and pname) or ('#' .. id),
         ping = (okPing and ping) or 0,
-        identifiers = GetPlayerIdentifiers(id) or {},
+        identifiers = ids,
+        endpoint = endpoint,
       }
     end
   end
@@ -190,12 +211,23 @@ RegisterNetEvent('orbit:checkAdmin', function()
   end)
 end)
 
+local function pushNotifyPos(pos)
+  if type(pos) ~= 'string' then return end
+  local p = pos:lower()
+  if p ~= 'top-left' and p ~= 'top-right' and p ~= 'bottom-left' and p ~= 'bottom-right' then return end
+  GlobalState.orbitNotifyPos = p
+  TriggerClientEvent('orbit:notifyPos', -1, p)
+end
+
 RegisterNetEvent('orbit:requestMenu', function()
   local src = source
   OrbitAuth(src, function(ok, info, perms, game)
     if not ok then
-      TriggerClientEvent('chat:addMessage', src, { args = { 'Orbit', tostring(info) } })
+      TriggerClientEvent('orbit:toast', src, 'warn', 'Orbit', tostring(info or 'Kein Zugriff'))
       return
+    end
+    if type(game) == 'table' and game.notifyPos then
+      pushNotifyPos(game.notifyPos)
     end
     TriggerClientEvent('orbit:openMenu', src, {
       name = info,
@@ -205,6 +237,56 @@ RegisterNetEvent('orbit:requestMenu', function()
     })
   end)
 end)
+
+-- Konsole (Panel nach Settings-Save): orbit_setNotifyPos top-left
+RegisterCommand('orbit_setNotifyPos', function(src, args)
+  if src ~= 0 then return end
+  pushNotifyPos(args[1] or 'top-left')
+end, true)
+
+-- Panel-Akzent an Ingame-Admin pushen: orbit_setAccent license:xxx orange
+-- oder: orbit_setAccent id:12 violet
+RegisterCommand('orbit_setAccent', function(src, args)
+  if src ~= 0 then return end
+  local who = tostring(args[1] or '')
+  local accentId = tostring(args[2] or 'orange')
+  if who == '' then return end
+  local hex = tostring(args[3] or '')
+  local hex2 = tostring(args[4] or '')
+  if hex ~= '' and hex:sub(1, 1) ~= '#' then hex = '#' .. hex end
+  if hex2 ~= '' and hex2:sub(1, 1) ~= '#' then hex2 = '#' .. hex2 end
+  local rgb = tostring(args[5] or ''):gsub('_', ', ')
+  local rgb2 = tostring(args[6] or ''):gsub('_', ', ')
+  local payload = {
+    accent = accentId,
+    accentHex = hex ~= '' and hex or nil,
+    accentHex2 = hex2 ~= '' and hex2 or nil,
+    accentRgb = rgb ~= '' and rgb or nil,
+    accentRgb2 = rgb2 ~= '' and rgb2 or nil,
+  }
+  local targetSrc = nil
+  if who:sub(1, 3) == 'id:' then
+    targetSrc = tonumber(who:sub(4))
+  else
+    local needle = who
+    if not needle:find(':', 1, true) then needle = 'license:' .. needle end
+    for _, id in ipairs(GetPlayers()) do
+      local pid = tonumber(id)
+      if pid then
+        for _, ident in ipairs(GetPlayerIdentifiers(pid) or {}) do
+          if ident == needle then
+            targetSrc = pid
+            break
+          end
+        end
+      end
+      if targetSrc then break end
+    end
+  end
+  if targetSrc and GetPlayerName(targetSrc) then
+    TriggerClientEvent('orbit:accent', targetSrc, payload)
+  end
+end, true)
 
 RegisterNetEvent('orbit:requestPlayerList', function()
   local src = source

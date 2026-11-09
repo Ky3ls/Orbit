@@ -370,6 +370,7 @@ export default function McInstance() {
             <button type="button" className="mci-addr" title="Adresse kopieren" onClick={() => navigator.clipboard?.writeText(addr).then(() => toast.ok('Adresse kopiert', { text: addr }))}>
               <NavIcon name="globe" /><span className="mono">{addr}</span><NavIcon name="copy" />
             </button>
+            {!inst.domain && <Link to={`/host/web?add=game&server=minecraft:${inst.id}`} className="mci-domain"><NavIcon name="plus" />Domain verbinden</Link>}
           </div>
         </div>
         <div className="mci-hero-ctl">

@@ -11,6 +11,10 @@ import CfgEditor from './pages/CfgEditor.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Home from './pages/Home.jsx';
 import NewServer from './pages/NewServer.jsx';
+import Welcome from './pages/Welcome.jsx';
+import HostDatabases from './pages/host/Databases.jsx';
+import HostServices from './pages/host/Services.jsx';
+import HostWeb from './pages/host/Web.jsx';
 import Ingame from './pages/Ingame.jsx';
 import Install from './pages/Install.jsx';
 import Login from './pages/Login.jsx';
@@ -28,7 +32,7 @@ import McInstance from './pages/mc/McInstance.jsx';
 import Setup from './pages/Setup.jsx';
 
 const PANEL_PREFIXES = [
-  '/home', '/panel', '/monitoring', '/console', '/players', '/history', '/drops',
+  '/home', '/welcome', '/host', '/panel', '/monitoring', '/console', '/players', '/history', '/drops',
   '/bans', '/whitelist', '/resources', '/schedule', '/server-log', '/cfg',
   '/audit', '/admins', '/ingame', '/database', '/more', '/setup', '/settings', '/instances', '/mc',
 ];
@@ -116,6 +120,7 @@ export default function App() {
               onMasterDone={(data) => {
                 setBoot({ ...boot, needsMaster: false, hasUsers: true, masterPhase: 'done', setupPin: null });
                 setSession({ user: data.user, setup: false });
+                window.history.replaceState(null, '', '/welcome');
               }}
             />
           )}
@@ -134,7 +139,8 @@ export default function App() {
         path="/"
         element={<Navigate to={authed ? '/home' : '/login'} replace />}
       />
-      <Route path="/install" element={<Navigate to={authed ? '/home' : '/login'} replace />} />
+      <Route path="/install" element={<Navigate to={authed ? '/welcome' : '/login'} replace />} />
+      <Route path="/welcome" element={authed ? <Welcome user={session.user} /> : <Navigate to="/login" replace />} />
       <Route
         path="/login"
         element={
@@ -164,6 +170,10 @@ export default function App() {
           <Route path="platform" element={<Navigate to="/settings?section=host&tab=servers" replace />} />
           <Route path="database" element={setupOk ? <Database user={session.user} /> : <FxNotSetup />} />
           <Route path="home" element={<Home />} />
+          <Route path="host" element={<Navigate to="/host/services" replace />} />
+          <Route path="host/databases" element={<HostDatabases />} />
+          <Route path="host/web" element={<HostWeb />} />
+          <Route path="host/services" element={<HostServices />} />
           <Route path="instances" element={<Navigate to="/home" replace />} />
           <Route path="instances/new" element={<NewServer />} />
           <Route path="instances/new/minecraft" element={<McCreate />} />
@@ -220,6 +230,9 @@ function Authed({ session, setSession }) {
   function finishSetup() {
     setSession({ ...session, setup: true });
     navigate('/panel', { replace: true });
+  }
+  if (location.pathname === '/welcome') {
+    return <Welcome user={session.user} />;
   }
   if (!session.setup && location.pathname === '/setup') {
     return <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={finishSetup} />;
