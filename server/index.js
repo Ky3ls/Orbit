@@ -992,9 +992,10 @@ async function handleApi(req, res, url) {
   if (!session) return json(res, 401, { error: 'Nicht angemeldet.' });
   const me = session;
 
+  // platformApi antwortet mit `return json(...)` (undefined) — daher zusätzlich headersSent prüfen
   if (await handlePlatformApi({
     req, res, url, method, pathname, me, db, ip, json, hasPerm, readBody, logLine,
-  })) return;
+  }) || res.headersSent) return;
 
   if (await handleMinecraftApi({
     req, res, url, method, pathname, me, db, ip, json, hasPerm, readBody, logLine,
@@ -3775,6 +3776,7 @@ async function handleApi(req, res, url) {
     return json(res, 200, { ok: true });
   }
 
+  if (res.headersSent) return undefined;
   return json(res, 404, { error: 'Nicht gefunden.' });
 }
 
