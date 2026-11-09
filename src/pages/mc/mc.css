@@ -5,8 +5,6 @@
 .mcx-page .tone-idle { --tone: var(--faint); --tone-rgb: 120, 120, 120; }
 
 /* Spiel-Logo */
-.gm { flex: 0 0 auto; display: grid; place-items: center; border-radius: 28%; color: var(--gm); background: color-mix(in srgb, var(--gm) 14%, transparent); border: 1px solid color-mix(in srgb, var(--gm) 30%, transparent); }
-.gm svg { width: 62%; height: 62%; }
 
 .mcx-state { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 620; color: var(--tone); background: rgba(var(--tone-rgb), 0.1); border: 1px solid rgba(var(--tone-rgb), 0.25); white-space: nowrap; }
 .mcx-state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -546,3 +544,5 @@
 .mim-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
 .mim-foot .btn svg { width: 15px; height: 15px; }
 @media (max-width: 900px) { .mim-facts { grid-template-columns: 1fr 1fr; } .mim-modes, .mim-fields { grid-template-columns: 1fr; } }
+
+.mci-av { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--text-2); background: var(--surface-3); flex: 0 0 auto; }

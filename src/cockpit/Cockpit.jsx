@@ -8,6 +8,7 @@ import ServerControls, { statusLabel, statusTone } from '../components/ServerCon
 import Sparkline from '../components/Sparkline.jsx';
 import { useNow } from '../components/Ui.jsx';
 import { useI18n } from '../i18n/I18nProvider.jsx';
+import GameMark from '../components/GameMark.jsx';
 import { NavIcon } from '../layout/icons.jsx';
 import './cockpit.css';
 
@@ -163,7 +164,7 @@ export default function Cockpit() {
       {/* ── Hero ── */}
       <section className={`dash-hero card tone-${tone}`}>
         <div className="dash-hero-glow" aria-hidden="true" />
-        <div className="dash-hero-orbit" aria-hidden="true"><i /><i /><b /></div>
+        <span className="dash-hero-game" aria-hidden="true"><GameMark game="fivem" size={120} /></span>
         <div className="dash-hero-main">
           <p className="dash-greet">{t(greetingKey(now))}, <b>{user?.username}</b></p>
           <h1 className="dash-title">{serverName}</h1>

@@ -138,7 +138,7 @@ export default function McImport() {
         eyebrow="Instanzen"
         title="Server importieren"
         description="Bestehende Minecraft-Server übernehmen: Welten, Plugins/Mods, Spieler, OPs, Whitelist und alle Einstellungen."
-        actions={<Link to="/instances" className="btn btn-sm btn-ghost">Abbrechen</Link>}
+        actions={<Link to="/instances/new" className="btn btn-sm btn-ghost">Abbrechen</Link>}
       />
 
       <section className="mim-find card">

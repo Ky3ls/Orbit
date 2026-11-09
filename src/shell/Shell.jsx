@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { api, sameJson } from '../api.js';
-import ServerControls, { statusLabel, statusTone } from '../components/ServerControls.jsx';
-import { Toaster } from '../components/toast.jsx';
-import { Mark } from '../components/Ui.jsx';
+import { api } from '../api.js';
+import GameMark from '../components/GameMark.jsx';
+import ServerControls from '../components/ServerControls.jsx';
+import { Toaster, toast } from '../components/toast.jsx';
+import { Brand, Mark } from '../components/Ui.jsx';
 import { roleLabel } from '../format.js';
+import { GAMES, PHASE_LABEL, navMatches, serverNav } from '../games.js';
 import { useAppearance } from '../hooks/useAppearance.js';
+import { useServers } from '../hooks/useServers.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 import { NavIcon } from '../layout/icons.jsx';
-import { MOBILE_TABS, localizedModules, moduleForPath } from '../layout/modules.js';
+import { GLOBAL_NAV, MANAGE_NAV, locate, navGroups, navLabel } from '../layout/modules.js';
 import CommandPalette from './CommandPalette.jsx';
 import ShortcutsDialog from './ShortcutsDialog.jsx';
 import './shell.css';
@@ -32,20 +35,14 @@ export default function Shell({ user, onLogout }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const loc = useLocation();
-  const modules = useMemo(() => localizedModules(t), [t]);
   const [prefs, setAppearance] = useAppearance();
-  const [status, setStatus] = useState('offline');
-  const [live, setLive] = useState({ clients: 0, maxClients: 48, hostname: 'Server', serverLabel: 'Game Server' });
-  const [controlEnabled, setControlEnabled] = useState(true);
-  const [fxMeta, setFxMeta] = useState({ fxControlMode: 'systemd', fxCommandReady: false });
+  const { servers, fx, mcList, refresh, refreshFx } = useServers();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   const [powerOpen, setPowerOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [drawer, setDrawer] = useState(false);
-  const [mcList, setMcList] = useState([]);
-  const [switchOpen, setSwitchOpen] = useState(false);
-  const switchRef = useRef(null);
+  const [lastServer, setLastServer] = useState(() => { try { return localStorage.getItem('orbit.lastServer') || ''; } catch { return ''; } });
   const powerRef = useRef(null);
   const userRef = useRef(null);
   const gPending = useRef(0);
@@ -54,79 +51,41 @@ export default function Shell({ user, onLogout }) {
   const canControl = user.role === 'owner' || user.role === 'admin';
   const collapsed = !!prefs.sidebarCollapsed;
   const isLight = prefs.theme === 'light';
-  const current = moduleForPath(loc.pathname);
-  const tone = statusTone(status);
-
-  const refreshStatus = useCallback(() => {
-    if (document.hidden) return;
-    api('/api/server/status')
-      .then((d) => {
-        const nextStatus = d.status || (d.online ? 'online' : 'offline');
-        const nextLive = {
-          clients: d.clients ?? 0,
-          maxClients: d.maxClients ?? 48,
-          hostname: d.hostname || 'Server',
-          serverLabel: d.serverLabel || d.hostname || 'Game Server',
-        };
-        const nextFx = { fxControlMode: d.fxControlMode || 'systemd', fxCommandReady: !!d.fxCommandReady };
-        const nextControl = d.controlEnabled !== false;
-        setStatus((prev) => (prev === nextStatus ? prev : nextStatus));
-        setControlEnabled((prev) => (prev === nextControl ? prev : nextControl));
-        setLive((prev) => (sameJson(prev, nextLive) ? prev : nextLive));
-        setFxMeta((prev) => (sameJson(prev, nextFx) ? prev : nextFx));
-      })
-      .catch(() => {});
-  }, []);
+  const here = locate(loc.pathname, loc.search, servers);
+  const server = here.server;
+  const groups = useMemo(() => navGroups(t, server), [t, server]);
+  const online = servers.filter((s) => s.phase === 'running');
+  const totalPlayers = online.reduce((n, s) => n + (s.players || 0), 0);
 
   useEffect(() => {
-    refreshStatus();
-    const busy = status === 'starting' || status === 'stopping' || status === 'restarting';
-    const id = setInterval(refreshStatus, busy ? 2000 : 10_000);
-    return () => clearInterval(id);
-  }, [refreshStatus, status]);
+    if (!here.key) return;
+    setLastServer(here.key);
+    try { localStorage.setItem('orbit.lastServer', here.key); } catch { /* */ }
+  }, [here.key]);
 
   useEffect(() => {
     setPowerOpen(false);
     setUserOpen(false);
     setDrawer(false);
-    setSwitchOpen(false);
   }, [loc.pathname]);
-
-  /* Minecraft-Instanzen für Navigation + Umschalter */
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      if (document.hidden) return;
-      api('/api/mc/instances')
-        .then((d) => {
-          if (!alive) return;
-          const next = (d.instances || []).map((i) => ({ id: i.id, name: i.name, type: i.type, mcVersion: i.mcVersion, phase: i.status?.phase, players: i.status?.players, max: i.status?.maxPlayers }));
-          setMcList((prev) => (sameJson(prev, next) ? prev : next));
-        })
-        .catch(() => {});
-    };
-    load();
-    const id = setInterval(load, 8000);
-    return () => { alive = false; clearInterval(id); };
-  }, []);
 
   /* Dokumenttitel */
   useEffect(() => {
-    const page = current ? t(current.item.labelKey) : '';
-    document.title = page ? `${page} · Orbit` : 'Orbit · Server Control';
-  }, [current, t]);
+    const page = here.item ? navLabel(t, here.item) : '';
+    const parts = [page, server?.name, 'Orbit'].filter(Boolean);
+    document.title = parts.length > 1 ? parts.join(' · ') : 'Orbit · Game Server Panel';
+  }, [here.item, server?.name, t]);
 
   /* Popover schließen bei Klick außerhalb */
   useEffect(() => {
-    if (!powerOpen && !userOpen && !switchOpen) return undefined;
+    if (!powerOpen && !userOpen) return undefined;
     const onDown = (e) => {
       if (powerRef.current && !powerRef.current.contains(e.target)) setPowerOpen(false);
       if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false);
-      if (switchRef.current && !switchRef.current.contains(e.target)) setSwitchOpen(false);
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [powerOpen, userOpen, switchOpen]);
+  }, [powerOpen, userOpen]);
 
   /* Globale Tastenkürzel */
   useEffect(() => {
@@ -147,7 +106,7 @@ export default function Shell({ user, onLogout }) {
       if (k === 'g') { gPending.current = Date.now(); return; }
       if (gPending.current && Date.now() - gPending.current < 1200) {
         gPending.current = 0;
-        for (const g of modules) {
+        for (const g of groups) {
           const hit = g.items.find((i) => i.key === k.toLowerCase() && (!i.owner || isOwner));
           if (hit) { e.preventDefault(); navigate(hit.to); return; }
         }
@@ -155,19 +114,18 @@ export default function Shell({ user, onLogout }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, keysOpen, collapsed, isLight, modules, isOwner, navigate, setAppearance]);
+  }, [paletteOpen, keysOpen, collapsed, isLight, groups, isOwner, navigate, setAppearance]);
 
-  const playerPct = live.maxClients ? Math.min(100, (live.clients / live.maxClients) * 100) : 0;
+  const serverOrder = useMemo(() => {
+    const order = { running: 0, starting: 1, restarting: 1, stopping: 1, installing: 2, crashed: 2, failed: 2 };
+    return [...servers].sort((a, b) => (order[a.phase] ?? 3) - (order[b.phase] ?? 3) || a.name.localeCompare(b.name));
+  }, [servers]);
 
   const sidebar = (
     <aside className="sb" aria-label={t('nav.main')}>
       <div className="sb-head">
-        <Link to="/panel" className="sb-brand" title="Orbit">
-          <Mark />
-          <span className="sb-brand-text">
-            <b>Orbit</b>
-            <small>Server Control</small>
-          </span>
+        <Link to="/home" className="sb-brand" title="Orbit">
+          <Brand size={34} />
         </Link>
         <button
           type="button"
@@ -180,71 +138,71 @@ export default function Shell({ user, onLogout }) {
         </button>
       </div>
 
-      <div className="sb-switch" ref={switchRef}>
-        <button type="button" className={`sb-server tone-${tone}${switchOpen ? ' open' : ''}`} title={live.hostname} onClick={() => setSwitchOpen((v) => !v)} aria-expanded={switchOpen}>
-          <span className="sb-server-orb" aria-hidden="true"><i /></span>
-          <span className="sb-server-main">
-            <span className="sb-server-name">{live.serverLabel}</span>
-            <span className="sb-server-meta">
-              <span className="sb-server-status">{statusLabel(status)}</span>
-              <span className="sb-server-sep">·</span>
-              <span className="mono">{live.clients}/{live.maxClients}</span>
-              {mcList.length ? <span className="sb-server-more">+{mcList.length}</span> : null}
-            </span>
-            <span className="sb-server-bar" aria-hidden="true"><i style={{ width: `${playerPct}%` }} /></span>
-          </span>
-          <span className="sb-switch-ico"><NavIcon name="switch" /></span>
-        </button>
-        {switchOpen && (
-          <div className="pop sb-switch-menu" role="menu">
-            <div className="sb-switch-label">FiveM</div>
-            <Link to="/panel" className="sb-switch-item" role="menuitem">
-              <span className={`sb-dot tone-${tone}`} />
-              <span className="sb-switch-text"><b>{live.serverLabel}</b><small>{statusLabel(status)} · {live.clients}/{live.maxClients}</small></span>
-            </Link>
-            {mcList.length > 0 && <div className="sb-switch-label">Minecraft</div>}
-            {mcList.map((m) => (
-              <Link key={m.id} to={`/mc/${m.id}`} className="sb-switch-item" role="menuitem">
-                <span className={`sb-dot tone-${({ running: 'ok', starting: 'warn', stopping: 'warn', crashed: 'bad', failed: 'bad', installing: 'warn' })[m.phase] || 'idle'}`} />
-                <span className="sb-switch-text"><b>{m.name}</b><small>{m.type} {m.mcVersion}{m.phase === 'running' ? ` · ${m.players ?? 0}/${m.max ?? '–'}` : ''}</small></span>
-              </Link>
-            ))}
-            <div className="pop-sep" />
-            <Link to="/instances" className="pop-item" role="menuitem"><NavIcon name="layers" />Alle Instanzen</Link>
-            {(user.role === 'owner' || user.role === 'admin') && <Link to="/instances/new" className="pop-item" role="menuitem"><NavIcon name="plus" />Neue Instanz</Link>}
-          </div>
-        )}
-      </div>
-
       <nav className="sb-nav">
-        {modules.map((group) => (
-          <div key={group.id} className="sb-group">
-            <span className="sb-group-label">{group.label}</span>
-            {group.items.map((item) => {
-              if (item.owner && !isOwner) return null;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={!!item.end}
-                  title={item.label}
-                  className={({ isActive }) => `sb-item${isActive ? ' active' : ''}`}
-                >
-                  <span className="sb-ico"><NavIcon name={item.icon} /></span>
-                  <span className="sb-label">{item.label}</span>
-                  {item.to === '/players' && live.clients > 0 ? <span className="sb-count">{live.clients}</span> : null}
-                </NavLink>
-              );
-            })}
-            {group.id === 'games' && mcList.map((m) => (
-              <NavLink key={m.id} to={`/mc/${m.id}`} title={m.name} className={({ isActive }) => `sb-item sb-sub${isActive || loc.pathname.startsWith(`/mc/${m.id}/`) ? ' active' : ''}`}>
-                <span className="sb-ico"><NavIcon name="cube" /></span>
-                <span className="sb-label">{m.name}</span>
-                <span className={`sb-dot tone-${({ running: 'ok', starting: 'warn', stopping: 'warn', crashed: 'bad', failed: 'bad', installing: 'warn' })[m.phase] || 'idle'}`} />
-              </NavLink>
-            ))}
+        <div className="sb-group">
+          {GLOBAL_NAV.map((item) => (
+            <NavLink key={item.to} to={item.to} end={!!item.end} title={navLabel(t, item)} className={({ isActive }) => `sb-item${isActive ? ' active' : ''}`}>
+              <span className="sb-ico"><NavIcon name={item.icon} /></span>
+              <span className="sb-label">{navLabel(t, item)}</span>
+              {online.length ? <span className="sb-count" title={`${online.length} Server online`}>{online.length}/{servers.length}</span> : null}
+            </NavLink>
+          ))}
+        </div>
+
+        <div className="sb-group">
+          <div className="sb-group-head">
+            <span className="sb-group-label">Server</span>
+            {canControl && <Link to="/instances/new" className="sb-group-add" title="Neuer Server" aria-label="Neuer Server"><NavIcon name="plus" /></Link>}
           </div>
-        ))}
+          {serverOrder.map((s) => {
+            const open = here.key === s.key;
+            const items = open ? serverNav(s) : [];
+            return (
+              <div key={s.key} className={`sb-srv${open ? ' open' : ''}`}>
+                <Link to={s.to} className={`sb-srv-row tone-${s.tone}`} title={`${s.name} — ${PHASE_LABEL[s.phase] || s.phase}`}>
+                  <span className="sb-srv-mark">
+                    <GameMark game={s.game} size={26} />
+                    <i className="sb-srv-dot" />
+                  </span>
+                  <span className="sb-srv-text">
+                    <b>{s.name}</b>
+                    <small>{GAMES[s.game]?.label}{s.players != null ? <> · <span className="mono">{s.players}/{s.max ?? '–'}</span></> : <> · {PHASE_LABEL[s.phase] || s.phase}</>}</small>
+                  </span>
+                </Link>
+                {open && items.length > 0 && (
+                  <div className="sb-srv-nav">
+                    {items.map((item) => {
+                      const active = navMatches(item, loc.pathname, loc.search);
+                      return (
+                        <Link key={item.id} to={item.to} title={item.label} className={`sb-item sb-sub${active ? ' active' : ''}`}>
+                          <span className="sb-ico"><NavIcon name={item.icon} /></span>
+                          <span className="sb-label">{item.label}</span>
+                          {item.count && s.players ? <span className="sb-count">{s.players}</span> : null}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {servers.length === 0 && (
+            <Link to="/instances/new" className="sb-item sb-empty"><span className="sb-ico"><NavIcon name="plus" /></span><span className="sb-label">Ersten Server anlegen</span></Link>
+          )}
+        </div>
+
+        <div className="sb-group">
+          <span className="sb-group-label">{t('nav.manage')}</span>
+          {MANAGE_NAV.map((item) => {
+            if (item.owner && !isOwner) return null;
+            return (
+              <NavLink key={item.to} to={item.to} title={navLabel(t, item)} className={({ isActive }) => `sb-item${isActive ? ' active' : ''}`}>
+                <span className="sb-ico"><NavIcon name={item.icon} /></span>
+                <span className="sb-label">{navLabel(t, item)}</span>
+              </NavLink>
+            );
+          })}
+        </div>
       </nav>
 
       <div className="sb-foot" ref={userRef}>
@@ -277,6 +235,17 @@ export default function Shell({ user, onLogout }) {
     </aside>
   );
 
+  const ctxItems = server ? serverNav(server) : [];
+  const playersItem = ctxItems.find((i) => i.id === 'players');
+  const fallback = servers.find((s) => s.key === lastServer) || serverOrder[0];
+  const mobileTabs = [
+    { to: '/home', end: true, label: t('nav.overview'), icon: 'dashboard' },
+    server
+      ? { to: server.to, label: 'Server', icon: 'layers', match: true }
+      : fallback ? { to: fallback.to, label: 'Server', icon: 'layers' } : { to: '/instances/new', label: 'Neu', icon: 'plus' },
+    playersItem ? { to: playersItem.to, label: playersItem.label, icon: 'users' } : { to: '/settings', label: t('nav.settings'), icon: 'gear' },
+  ];
+
   return (
     <div className="app" data-collapsed={collapsed ? '1' : '0'} data-drawer={drawer ? '1' : '0'}>
       {sidebar}
@@ -287,10 +256,20 @@ export default function Shell({ user, onLogout }) {
           <button type="button" className="tb-burger" aria-label={t('nav.menu')} onClick={() => setDrawer(true)}>
             <NavIcon name="menu" />
           </button>
+          <Link to="/home" className="tb-mark" aria-label="Orbit"><Mark size={30} /></Link>
           <nav className="tb-crumbs" aria-label="Breadcrumb">
-            <span className="tb-crumb-group">{current ? t(current.group.labelKey) : 'Orbit'}</span>
-            <NavIcon name="chevron" />
-            <span className="tb-crumb-page">{current ? t(current.item.labelKey) : ''}</span>
+            {server ? (
+              <>
+                <Link to={server.to} className="tb-crumb-server"><GameMark game={server.game} size={20} /><span>{server.name}</span></Link>
+                {here.item && here.item.to !== server.to && (<><NavIcon name="chevron" /><span className="tb-crumb-page">{here.item.label}</span></>)}
+              </>
+            ) : (
+              <>
+                <span className="tb-crumb-group">Orbit</span>
+                <NavIcon name="chevron" />
+                <span className="tb-crumb-page">{here.item ? navLabel(t, here.item) : ''}</span>
+              </>
+            )}
           </nav>
 
           <button type="button" className="tb-search" onClick={() => setPaletteOpen(true)}>
@@ -300,17 +279,25 @@ export default function Shell({ user, onLogout }) {
           </button>
 
           <div className="tb-end">
-            <Link to="/players?filter=online" className={`tb-live tone-${tone}`} title={statusLabel(status)}>
-              <i className="tb-live-dot" />
-              <span className="tb-live-label">{statusLabel(status)}</span>
-              <span className="tb-live-count"><NavIcon name="users" />{live.clients}</span>
-            </Link>
+            {server ? (
+              <Link to={playersItem?.to || server.to} className={`tb-live tone-${server.tone}`} title={`${server.name}: ${PHASE_LABEL[server.phase] || server.phase}`}>
+                <i className="tb-live-dot" />
+                <span className="tb-live-label">{PHASE_LABEL[server.phase] || server.phase}</span>
+                <span className="tb-live-count"><NavIcon name="users" />{server.players ?? 0}</span>
+              </Link>
+            ) : (
+              <Link to="/home" className={`tb-live tone-${online.length ? 'ok' : 'idle'}`} title="Server online">
+                <i className="tb-live-dot" />
+                <span className="tb-live-label">{online.length}/{servers.length} online</span>
+                <span className="tb-live-count"><NavIcon name="users" />{totalPlayers}</span>
+              </Link>
+            )}
 
-            {canControl && (
+            {canControl && server && (server.game === 'minecraft' || server.active) && (
               <div className="tb-pop-wrap" ref={powerRef}>
                 <button
                   type="button"
-                  className={`tb-icon tb-power tone-${tone}${powerOpen ? ' on' : ''}`}
+                  className={`tb-icon tb-power tone-${server.tone}${powerOpen ? ' on' : ''}`}
                   aria-expanded={powerOpen}
                   title={t('shell.serverControls')}
                   onClick={() => setPowerOpen((v) => !v)}
@@ -320,18 +307,22 @@ export default function Shell({ user, onLogout }) {
                 {powerOpen && (
                   <div className="pop tb-power-pop" role="menu">
                     <div className="pop-title">
-                      <b>{live.serverLabel}</b>
-                      <small className="mono">{live.hostname}</small>
+                      <b>{server.name}</b>
+                      <small className="mono">{server.game === 'fivem' ? fx.hostname : server.sub}</small>
                     </div>
-                    <ServerControls
-                      compact
-                      status={status}
-                      controlEnabled={controlEnabled}
-                      canControl={canControl}
-                      fxControlMode={fxMeta.fxControlMode}
-                      fxCommandReady={fxMeta.fxCommandReady}
-                      onDone={() => { refreshStatus(); setPowerOpen(false); }}
-                    />
+                    {server.game === 'fivem' ? (
+                      <ServerControls
+                        compact
+                        status={fx.status}
+                        controlEnabled={fx.controlEnabled}
+                        canControl={canControl}
+                        fxControlMode={fx.fxControlMode}
+                        fxCommandReady={fx.fxCommandReady}
+                        onDone={() => { refreshFx(); setPowerOpen(false); }}
+                      />
+                    ) : (
+                      <McPower server={server} onDone={() => { refresh(); setPowerOpen(false); }} />
+                    )}
                   </div>
                 )}
               </div>
@@ -348,6 +339,16 @@ export default function Shell({ user, onLogout }) {
           </div>
         </header>
 
+        {server && ctxItems.length > 1 && (
+          <nav className="ctx-tabs" aria-label={server.name}>
+            {ctxItems.map((item) => (
+              <Link key={item.id} to={item.to} className={navMatches(item, loc.pathname, loc.search) ? 'active' : ''}>
+                <NavIcon name={item.icon} />{item.label}
+              </Link>
+            ))}
+          </nav>
+        )}
+
         {user.mustChange && (
           <div className="app-banner banner">
             {t('shell.mustChangePrefix')}
@@ -360,20 +361,22 @@ export default function Shell({ user, onLogout }) {
           <Outlet context={{
             onLogout,
             user,
-            refreshStatus,
-            fxMeta,
-            serverStatus: status,
-            controlEnabled,
-            live,
+            refreshStatus: refreshFx,
+            refreshServers: refresh,
+            servers,
+            fxMeta: { fxControlMode: fx.fxControlMode, fxCommandReady: fx.fxCommandReady },
+            serverStatus: fx.status,
+            controlEnabled: fx.controlEnabled,
+            live: { clients: fx.clients, maxClients: fx.maxClients, hostname: fx.hostname, serverLabel: fx.serverLabel },
           }} />
         </main>
       </div>
 
       <nav className="mtab" aria-label={t('nav.main')}>
-        {MOBILE_TABS.map((item) => (
-          <NavLink key={item.to} to={item.to} end={!!item.end} className={({ isActive }) => `mtab-item${isActive ? ' active' : ''}`}>
+        {mobileTabs.map((item) => (
+          <NavLink key={item.label} to={item.to} end={!!item.end} className={({ isActive }) => `mtab-item${isActive || (item.match && here.scope === 'server' && item.to === server?.to && !playersItem?.to.endsWith(loc.pathname)) ? ' active' : ''}`}>
             <NavIcon name={item.icon} />
-            <span>{t(item.labelKey)}</span>
+            <span>{item.label}</span>
           </NavLink>
         ))}
         <button type="button" className="mtab-item" onClick={() => setDrawer(true)}>
@@ -389,14 +392,39 @@ export default function Shell({ user, onLogout }) {
         prefs={prefs}
         setAppearance={setAppearance}
         canControl={canControl}
-        status={status}
+        status={fx.status}
         onLogout={onLogout}
         onShortcuts={() => setKeysOpen(true)}
-        refreshStatus={refreshStatus}
+        refreshStatus={refreshFx}
+        groups={groups}
+        servers={servers}
         mcList={mcList}
       />
-      <ShortcutsDialog open={keysOpen} onClose={() => setKeysOpen(false)} modules={modules} isOwner={isOwner} mac={IS_MAC} />
+      <ShortcutsDialog open={keysOpen} onClose={() => setKeysOpen(false)} modules={groups} isOwner={isOwner} mac={IS_MAC} />
       <Toaster />
+    </div>
+  );
+}
+
+/** Start/Stopp/Neustart für Minecraft-Instanzen im Topbar-Popover */
+function McPower({ server, onDone }) {
+  const [busy, setBusy] = useState('');
+  const running = server.phase === 'running' || server.phase === 'starting';
+  const run = useCallback(async (action) => {
+    setBusy(action);
+    try {
+      await api(`/api/mc/instances/${server.id}/control`, { method: 'POST', body: { action } });
+      toast.ok(`${server.name}: ${action === 'start' ? 'startet' : action === 'stop' ? 'gestoppt' : action === 'kill' ? 'beendet' : 'Neustart'}`);
+      onDone?.();
+    } catch (e) { toast.err(e.message); }
+    setBusy('');
+  }, [server.id, server.name, onDone]);
+  return (
+    <div className="mc-power">
+      <button type="button" className="btn btn-sm mc-power-start" disabled={!!busy || running} onClick={() => run('start')}><NavIcon name="play" />Start</button>
+      <button type="button" className="btn btn-sm" disabled={!!busy || !running} onClick={() => run('restart')}><NavIcon name="restart" />Neustart</button>
+      <button type="button" className="btn btn-sm btn-danger" disabled={!!busy || !running} onClick={() => run('stop')}><NavIcon name="stop" />Stopp</button>
+      {running && <button type="button" className="mc-power-kill" disabled={!!busy} onClick={() => { if (window.confirm(`${server.name} hart beenden (ohne Speichern)?`)) run('kill'); }}>Hart beenden</button>}
     </div>
   );
 }

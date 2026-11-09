@@ -3,33 +3,51 @@ import { getLang, toBcp47 } from '../i18n/core.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 import { ModuleShell } from '../workspace/Module.jsx';
 
-/** Orbit-Mark: Kern + gekreuzte Orbits + Satellit — skaliert scharf, Farbe via currentColor / --accent */
-export function Mark() {
+/**
+ * Orbit-Logo: Kachel im Akzent-Verlauf, Planet mit geneigtem Orbit, der vorne über den Planeten läuft,
+ * und ein Satellit. Skaliert über --mark-size, Farbe folgt dem Akzent.
+ */
+export function Mark({ size, className = '' }) {
+  const id = useId().replace(/:/g, '');
   return (
-    <div className="mark" aria-hidden="true">
-      <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-        <ellipse
-          className="mk-ring"
-          cx="16"
-          cy="16"
-          rx="13"
-          ry="5.6"
-          transform="rotate(-32 16 16)"
-          strokeWidth="2.35"
-        />
-        <ellipse
-          className="mk-ring mk-ring-dim"
-          cx="16"
-          cy="16"
-          rx="5.6"
-          ry="13"
-          transform="rotate(-32 16 16)"
-          strokeWidth="1.7"
-        />
-        <circle className="mk-core" cx="16" cy="16" r="4.85" />
-        <circle className="mk-sat" cx="27" cy="9.1" r="2.75" />
+    <span className={`mark ${className}`} aria-hidden="true" style={size ? { '--mark-size': `${size}px` } : undefined}>
+      <svg viewBox="0 0 40 40" fill="none">
+        <defs>
+          <linearGradient id={`mk-g-${id}`} x1="4" y1="2" x2="36" y2="40" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="var(--accent-2)" />
+            <stop offset="0.55" stopColor="var(--accent)" />
+            <stop offset="1" stopColor="color-mix(in srgb, var(--accent) 62%, #000)" />
+          </linearGradient>
+          <radialGradient id={`mk-h-${id}`} cx="12" cy="8" r="22" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#fff" stopOpacity="0.38" />
+            <stop offset="1" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <rect className="mk-tile" width="40" height="40" rx="11.5" fill={`url(#mk-g-${id})`} />
+        <rect width="40" height="40" rx="11.5" fill={`url(#mk-h-${id})`} />
+        <g transform="rotate(-24 20 20)">
+          <ellipse cx="20" cy="20" rx="15.6" ry="3.9" className="mk-orbit" strokeWidth="2.4" opacity="0.55" />
+          <circle cx="20" cy="20" r="8.4" className="mk-planet" />
+          <path d="M4.4 20a15.6 3.9 0 0 0 31.2 0" stroke={`url(#mk-g-${id})`} strokeWidth="4.8" />
+          <path d="M4.4 20a15.6 3.9 0 0 0 31.2 0" className="mk-orbit" strokeWidth="2.4" strokeLinecap="round" />
+          <circle cx="35.6" cy="20" r="3.4" fill={`url(#mk-g-${id})`} />
+          <circle cx="35.6" cy="20" r="2.1" className="mk-sat" />
+        </g>
       </svg>
-    </div>
+    </span>
+  );
+}
+
+/** Logo + Schriftzug */
+export function Brand({ size = 34, sub = 'Game Server Panel', className = '' }) {
+  return (
+    <span className={`brand ${className}`}>
+      <Mark size={size} />
+      <span className="brand-text">
+        <b>Orbit</b>
+        {sub ? <small>{sub}</small> : null}
+      </span>
+    </span>
   );
 }
 

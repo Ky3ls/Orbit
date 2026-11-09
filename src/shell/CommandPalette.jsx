@@ -4,7 +4,7 @@ import { api } from '../api.js';
 import { ACCENT_PRESETS } from '../appearance.js';
 import { toast } from '../components/toast.jsx';
 import { NavIcon } from '../layout/icons.jsx';
-import { allModuleItems } from '../layout/modules.js';
+import { GAMES, PHASE_LABEL } from '../games.js';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 
 function score(hay, q) {
@@ -27,7 +27,7 @@ function score(hay, q) {
 /**
  * Befehlspalette (Strg/⌘ + K): Seiten, Server-Aktionen, Spielersuche, Darstellung.
  */
-export default function CommandPalette({ open, onClose, user, prefs, setAppearance, canControl, status, onLogout, onShortcuts, refreshStatus, mcList = [] }) {
+export default function CommandPalette({ open, onClose, user, prefs, setAppearance, canControl, status, onLogout, onShortcuts, refreshStatus, groups = [], servers = [] }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
@@ -76,46 +76,50 @@ export default function CommandPalette({ open, onClose, user, prefs, setAppearan
 
   const items = useMemo(() => {
     const out = [];
-    for (const m of allModuleItems()) {
-      if (m.owner && user.role !== 'owner') continue;
-      out.push({
-        id: `nav:${m.to}`,
-        section: t('palette.pages'),
-        icon: m.icon,
-        label: t(m.labelKey),
-        hint: t(m.groupKey),
-        kbd: m.key ? ['G', m.key.toUpperCase()] : null,
-        hay: `${t(m.labelKey)} ${m.kw || ''} ${m.to}`,
-        run: () => { navigate(m.to); return true; },
-      });
+    for (const g of groups) {
+      for (const m of g.items) {
+        if (m.owner && user.role !== 'owner') continue;
+        out.push({
+          id: `nav:${m.to}`,
+          section: g.id === 'server' ? g.label : t('palette.pages'),
+          icon: m.icon,
+          label: m.label,
+          hint: g.id === 'server' ? 'Aktueller Server' : g.label,
+          kbd: m.key ? ['G', m.key.toUpperCase()] : null,
+          hay: `${m.label} ${m.kw || ''} ${m.to} ${g.label}`,
+          run: () => { navigate(m.to); return true; },
+        });
+      }
     }
-    for (const m of mcList) {
+    for (const s of servers) {
       out.push({
-        id: `mc:${m.id}`,
-        section: 'Instanzen',
-        icon: 'cube',
-        label: m.name,
-        hint: `Minecraft · ${m.type} ${m.mcVersion}${m.phase === 'running' ? ' · online' : ''}`,
-        hay: `${m.name} minecraft ${m.type} ${m.mcVersion} instanz server`,
-        run: () => { navigate(`/mc/${m.id}`); return true; },
+        id: `srv:${s.key}`,
+        section: 'Server',
+        icon: 'layers',
+        label: s.name,
+        hint: `${GAMES[s.game]?.label || s.game} · ${PHASE_LABEL[s.phase] || s.phase}${s.players != null ? ` · ${s.players}/${s.max ?? '–'}` : ''}`,
+        hay: `${s.name} ${s.game} ${GAMES[s.game]?.label || ''} ${s.sub || ''} server instanz`,
+        run: () => { navigate(s.to); return true; },
       });
     }
     if (user.role === 'owner' || user.role === 'admin') {
-      out.push({ id: 'mc:new', section: 'Instanzen', icon: 'plus', label: 'Neue Instanz erstellen', hint: 'Minecraft', hay: 'neue instanz erstellen minecraft server paper fabric forge neoforge vanilla purpur', run: () => { navigate('/instances/new'); return true; } });
+      out.push({ id: 'srv:new', section: 'Server', icon: 'plus', label: 'Neuen Server erstellen', hint: 'Minecraft, FiveM, …', hay: 'neu neuer server erstellen instanz minecraft fivem terraria rust paper fabric forge', run: () => { navigate('/instances/new'); return true; } });
+      out.push({ id: 'srv:import', section: 'Server', icon: 'switch', label: 'Server importieren', hint: 'Bestehenden Server übernehmen', hay: 'import importieren übernehmen bestehend server', run: () => { navigate('/instances/import'); return true; } });
     }
-    if (canControl) {
+    const fxSrv = servers.find((x) => x.game === 'fivem' && x.active);
+    if (canControl && fxSrv) {
       const busy = status === 'starting' || status === 'stopping' || status === 'restarting';
       if (!busy && status !== 'online') {
-        out.push({ id: 'pw:start', section: t('palette.server'), icon: 'play', tone: 'ok', label: t('palette.start'), hay: 'server start starten hochfahren power', run: () => power('start') });
+        out.push({ id: 'pw:start', section: fxSrv.name, icon: 'play', tone: 'ok', label: t('palette.start'), hay: 'server start starten hochfahren power', run: () => power('start') });
       }
       if (!busy && status === 'online') {
         out.push({
-          id: 'pw:restart', section: t('palette.server'), icon: 'restart', tone: 'warn',
+          id: 'pw:restart', section: fxSrv.name, icon: 'restart', tone: 'warn',
           label: armed === 'restart' ? t('palette.confirm') : t('palette.restart'),
           hay: 'server restart neustart neu starten reboot power', run: () => power('restart'),
         });
         out.push({
-          id: 'pw:stop', section: t('palette.server'), icon: 'stop', tone: 'bad',
+          id: 'pw:stop', section: fxSrv.name, icon: 'stop', tone: 'bad',
           label: armed === 'stop' ? t('palette.confirm') : t('palette.stop'),
           hay: 'server stop stoppen herunterfahren aus power', run: () => power('stop'),
         });
@@ -146,7 +150,7 @@ export default function CommandPalette({ open, onClose, user, prefs, setAppearan
     out.push({ id: 'ui:keys', section: t('palette.help'), icon: 'keyboard', label: t('palette.shortcuts'), hay: 'shortcuts tastenkürzel hilfe keyboard', kbd: ['?'], run: () => { onShortcuts(); return true; } });
     out.push({ id: 'ui:logout', section: t('palette.help'), icon: 'logout', label: t('common.logout'), hay: 'logout abmelden ausloggen', run: () => { onLogout(); return true; } });
     return out;
-  }, [t, user.role, canControl, status, prefs, armed, q, navigate, setAppearance, onLogout, onShortcuts, mcList]);
+  }, [t, user.role, canControl, status, prefs, armed, q, navigate, setAppearance, onLogout, onShortcuts, groups, servers]);
 
   const results = useMemo(() => {
     const scored = items

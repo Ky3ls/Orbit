@@ -234,7 +234,7 @@ function InstanceSettings({ inst, onChange }) {
     try {
       await api(`/api/mc/instances/${inst.id}`, { method: 'DELETE', body: { deleteFiles: true, deleteBackups: backups } });
       toast.ok(`${inst.name} gelöscht`);
-      navigate('/instances');
+      navigate('/home');
     } catch (e) { toast.err(e.message); }
   }
 
@@ -345,17 +345,17 @@ export default function McInstance() {
     setBusy('');
   }
 
-  if (err && !inst) return <Page><div className="err">{err}</div><Link to="/instances" className="btn">Zur Übersicht</Link></Page>;
+  if (err && !inst) return <Page><div className="err">{err}</div><Link to="/home" className="btn">Zur Übersicht</Link></Page>;
   if (!inst) return <Page><div className="mcx-loading">Lädt…</div></Page>;
 
   const tm = TYPE_META[inst.type] || {};
   const ph = phaseOf(inst);
   const st = inst.status;
-  const tabs = TABS.filter((t) => t.id !== 'mods' || inst.modKind).map((t) => (t.id === 'mods' ? { ...t, label: inst.modKind } : t));
   const addr = inst.address || `${window.location.hostname}:${inst.port}`;
 
   return (
     <Page className="mcx-page mci-page">
+      {tab === 'console' && (<>
       <section className={`mci-hero card tone-${ph.tone}`}>
         <GameMark game="minecraft" color={tm.color} size={60} />
         <div className="mci-hero-main">
@@ -397,14 +397,8 @@ export default function McInstance() {
         </div>
         <div><span><NavIcon name="clock" />Uptime</span><b>{st.startedAt ? fmtDur(Date.now() - st.startedAt) : '–'}</b></div>
       </div>
-
-      <div className="pp-tabs mci-tabs" role="tablist">
-        {tabs.map((t) => (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'active' : ''} onClick={() => navigate(`/mc/${inst.id}${t.id === 'console' ? '' : `/${t.id}`}`)}>
-            <NavIcon name={t.icon} />{t.label}
-          </button>
-        ))}
-      </div>
+      </>)}
+      {tab !== 'console' && inst.state === 'failed' && <div className="err">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}
 
       {tab === 'console' && (
         <div className="mci-overview">
@@ -419,7 +413,7 @@ export default function McInstance() {
               <ul>
                 {st.sample.map((n) => (
                   <li key={n}>
-                    <img src={`https://mc-heads.net/avatar/${encodeURIComponent(n)}/28`} alt="" loading="lazy" />
+                    <span className="mci-av" aria-hidden="true">{n.slice(0, 1).toUpperCase()}</span>
                     <span>{n}</span>
                   </li>
                 ))}

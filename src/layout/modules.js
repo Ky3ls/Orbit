@@ -1,78 +1,42 @@
-/** Zentrale Modul-Navigation — Labels via i18n labelKey, `kw` für die Befehlspalette */
+/**
+ * Globale Navigation (spielunabhängig). Die Seiten eines einzelnen Servers kommen aus
+ * games.js → serverNav(), damit jedes Spiel denselben Aufbau bekommt.
+ */
+import { navMatches, serverKeyForPath, serverNav } from '../games.js';
 
-export const MODULES = [
-  {
-    id: 'live',
-    labelKey: 'nav.live',
-    items: [
-      { to: '/panel', end: true, labelKey: 'nav.overview', icon: 'dashboard', key: 'd', kw: 'dashboard home cockpit übersicht start' },
-      { to: '/players', labelKey: 'nav.players', icon: 'users', key: 'p', kw: 'spieler players bans kick allowlist whitelist' },
-      { to: '/resources', labelKey: 'nav.resources', icon: 'box', key: 'r', kw: 'scripts ressourcen resources ensure' },
-      { to: '/monitoring', labelKey: 'nav.monitoring', icon: 'activity', key: 'm', kw: 'cpu ram auslastung performance' },
-    ],
-  },
-  {
-    id: 'games',
-    labelKey: 'nav.games',
-    items: [
-      { to: '/instances', labelKey: 'nav.instances', icon: 'layers', key: 'i', kw: 'instanzen minecraft fivem multi game server neu erstellen' },
-    ],
-  },
-  {
-    id: 'server',
-    labelKey: 'nav.server',
-    items: [
-      { to: '/cfg', labelKey: 'nav.cfg', icon: 'cfg', key: 'c', kw: 'server.cfg config konfiguration editor' },
-      { to: '/schedule', labelKey: 'nav.schedule', icon: 'calendar', key: 'a', kw: 'restart backup zeitplan cron automation' },
-      { to: '/server-log', labelKey: 'nav.serverLog', icon: 'log', key: 'l', kw: 'log fx konsole fehler errors' },
-      { to: '/database', labelKey: 'nav.database', icon: 'db', key: 'b', kw: 'mysql sql tabellen database' },
-      { to: '/ingame', labelKey: 'nav.ingame', icon: 'gamepad', kw: 'ingame menü noclip orbitmenu' },
-    ],
-  },
-  {
-    id: 'manage',
-    labelKey: 'nav.manage',
-    items: [
-      { to: '/admins', labelKey: 'nav.admins', icon: 'team', owner: true, key: 't', kw: 'team admins rollen rechte' },
-      { to: '/audit', labelKey: 'nav.audit', icon: 'audit', key: 'u', kw: 'audit aktionen protokoll' },
-      { to: '/settings', labelKey: 'nav.settings', icon: 'gear', key: 's', kw: 'einstellungen settings discord aussehen' },
-    ],
-  },
+export const GLOBAL_NAV = [
+  { to: '/home', end: true, labelKey: 'nav.overview', icon: 'dashboard', key: 'h', kw: 'home dashboard übersicht alle server host' },
 ];
 
-/** Mobile Tab-Bar (unten) */
-export const MOBILE_TABS = [
-  { to: '/panel', end: true, labelKey: 'nav.home', icon: 'dashboard' },
-  { to: '/players', labelKey: 'nav.players', icon: 'users' },
-  { to: '/resources', labelKey: 'nav.scripts', icon: 'box' },
-  { to: '/monitoring', labelKey: 'nav.monitoring', icon: 'activity' },
+export const MANAGE_NAV = [
+  { to: '/admins', labelKey: 'nav.admins', icon: 'team', owner: true, key: 't', kw: 'team admins rollen rechte' },
+  { to: '/audit', labelKey: 'nav.audit', icon: 'audit', key: 'u', kw: 'audit aktionen protokoll' },
+  { to: '/settings', labelKey: 'nav.settings', icon: 'gear', key: 's', kw: 'einstellungen settings discord aussehen' },
 ];
 
-export function allModuleItems() {
-  return MODULES.flatMap((g) => g.items.map((i) => ({ ...i, group: g.id, groupKey: g.labelKey })));
+export const navLabel = (t, item) => (item.labelKey ? t(item.labelKey) : item.label);
+
+/** Navigation als Gruppen (für Tastenkürzel-Hilfe und Befehlspalette) */
+export function navGroups(t, server) {
+  const groups = [{ id: 'global', label: 'Orbit', items: GLOBAL_NAV.map((i) => ({ ...i, label: navLabel(t, i) })) }];
+  const sn = serverNav(server);
+  if (sn.length) groups.push({ id: 'server', label: server.name, items: sn });
+  groups.push({ id: 'manage', label: t('nav.manage'), items: MANAGE_NAV.map((i) => ({ ...i, label: navLabel(t, i) })) });
+  return groups;
 }
 
-/** MODULES mit übersetzten Labels */
-export function localizedModules(t) {
-  return MODULES.map((group) => ({
-    ...group,
-    label: t(group.labelKey),
-    items: group.items.map((item) => ({ ...item, label: t(item.labelKey) })),
-  }));
-}
-
-/** Aktuelles Modul inkl. Gruppe zu einem Pfad */
-export function moduleForPath(pathname) {
-  if (pathname === '/mc' || pathname.startsWith('/mc/')) {
-    const g = MODULES.find((x) => x.id === 'games');
-    return { group: g, item: g.items[0] };
+/** Wo bin ich? → { scope, key, server, item } */
+export function locate(pathname, search, servers) {
+  const key = serverKeyForPath(pathname);
+  if (key) {
+    const server = servers.find((s) => s.key === key) || null;
+    const item = server ? serverNav(server).find((i) => navMatches(i, pathname, search)) : null;
+    return { scope: 'server', key, server, item };
   }
-  for (const g of MODULES) {
-    for (const item of g.items) {
-      if (item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(`${item.to}/`)) {
-        return { group: g, item };
-      }
-    }
+  const all = [...GLOBAL_NAV, ...MANAGE_NAV];
+  let item = all.find((i) => navMatches(i, pathname, search)) || null;
+  if (!item && pathname.startsWith('/instances')) {
+    item = { to: pathname, label: pathname.includes('import') ? 'Server importieren' : 'Neuer Server', icon: 'plus' };
   }
-  return null;
+  return { scope: 'global', key: null, server: null, item };
 }

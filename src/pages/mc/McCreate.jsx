@@ -509,7 +509,7 @@ export default function McCreate() {
       </section>
 
       <div className="mcx-nav">
-        {step > 0 ? <button type="button" className="btn" onClick={() => setStep((s) => s - 1)}><NavIcon name="collapse" />Zurück</button> : <Link className="btn btn-ghost" to="/instances">Abbrechen</Link>}
+        {step > 0 ? <button type="button" className="btn" onClick={() => setStep((s) => s - 1)}><NavIcon name="collapse" />Zurück</button> : <Link className="btn btn-ghost" to="/instances/new">Abbrechen</Link>}
         <span className="grow" />
         {step < STEPS.length - 1 ? (
           <button type="button" className="btn btn-primary" disabled={!canNext || (step === 0 && form.game !== 'minecraft')} onClick={() => setStep((s) => s + 1)}>Weiter<NavIcon name="arrowRight" /></button>

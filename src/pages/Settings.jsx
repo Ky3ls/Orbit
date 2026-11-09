@@ -27,20 +27,19 @@ const PERSONAL_SECTIONS = new Set(['appearance', 'account']);
 /** Navigation in vier klaren Gruppen — jedes Feld existiert genau einmal. */
 const SECTION_GROUPS = [
   { id: 'me', label: 'Persönlich' },
-  { id: 'server', label: 'Server' },
-  { id: 'community', label: 'Community' },
-  { id: 'system', label: 'System' },
+  { id: 'fivem', label: 'FiveM' },
+  { id: 'system', label: 'Panel' },
 ];
 
 const SECTION_DEFS = [
   { id: 'account', group: 'me', icon: 'audit', label: 'Konto & Sicherheit', hint: 'Passwort, 2FA, Cfx.re und aktive Sitzungen' },
   { id: 'appearance', group: 'me', icon: 'palette', label: 'Darstellung', hint: 'Farbschema, Akzentfarbe, Sidebar und Konsole' },
-  { id: 'general', group: 'server', icon: 'globe', label: 'Server-Profil', hint: 'Name, Sprache und Eintrag in der Serverliste' },
-  { id: 'fxserver', group: 'server', icon: 'cpu', label: 'FXServer & Start', hint: 'Prozess, Netzwerk, Pfade und RCON', owner: true },
-  { id: 'host', group: 'server', icon: 'box', label: 'Instanzen & Builds', hint: 'Weitere Server und FXServer-Artifacts', owner: true },
-  { id: 'moderation', group: 'community', icon: 'ban', label: 'Zugang & Bans', hint: 'Allowlist, Ban-Prüfung und Ban-Vorlagen', admin: true },
-  { id: 'game', group: 'community', icon: 'gamepad', label: 'Ingame-Menü', hint: '/orbit-Menü und Benachrichtigungen im Spiel', admin: true },
-  { id: 'discord', group: 'community', icon: 'megaphone', label: 'Discord', hint: 'Webhook-Meldungen und Status-Bot', owner: true },
+  { id: 'general', group: 'fivem', icon: 'globe', label: 'Server-Profil', hint: 'Name, Sprache und Eintrag in der Serverliste' },
+  { id: 'fxserver', group: 'fivem', icon: 'cpu', label: 'Start & Netzwerk', hint: 'Prozess, Netzwerk, Pfade und RCON', owner: true },
+  { id: 'host', group: 'fivem', icon: 'box', label: 'FXServer & Builds', hint: 'Weitere FiveM-Server und Artifacts', owner: true },
+  { id: 'moderation', group: 'fivem', icon: 'ban', label: 'Zugang & Bans', hint: 'Allowlist, Ban-Prüfung und Ban-Vorlagen', admin: true },
+  { id: 'game', group: 'fivem', icon: 'gamepad', label: 'Ingame-Menü', hint: '/orbit-Menü und Benachrichtigungen im Spiel', admin: true },
+  { id: 'discord', group: 'fivem', icon: 'megaphone', label: 'Discord', hint: 'Webhook-Meldungen und Status-Bot', owner: true },
   { id: 'system', group: 'system', icon: 'db', label: 'Backup & Wartung', hint: 'Panel-Datenbank sichern und bereinigen', owner: true },
   { id: 'danger', group: 'system', icon: 'bolt', label: 'Gefahrenzone', hint: 'Zurücksetzen und Deinstallieren', owner: true },
 ];
@@ -189,7 +188,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
   const sectionParam = params.get('section');
   const legacyMap = { server: 'general', bans: 'moderation', allowlist: 'moderation', fx: 'fxserver' };
   const mapped = legacyMap[sectionParam] || sectionParam;
-  const fallbackSection = canViewSettings ? 'general' : 'appearance';
+  const fallbackSection = 'account';
   const section = nav.some((s) => s.id === mapped)
     ? mapped
     : (canViewSettings && HOST_TABS.has(params.get('tab')) ? 'host' : fallbackSection);
@@ -411,7 +410,7 @@ export default function Settings({ user, onUser, onSetupReset }) {
       <PageHeader
         eyebrow={t('settings.eyebrow')}
         title={t('settings.title')}
-        description="Alles an einem Ort — persönliche Einstellungen, Server, Community und System."
+        description="Dein Konto, die Darstellung, FiveM-spezifische Optionen und das Panel selbst."
       />
 
       <div className="sx-shell">

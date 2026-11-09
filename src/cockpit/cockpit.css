@@ -403,3 +403,7 @@ a:hover .dash-link svg { transform: translateX(3px); }
   .dash-restart { padding: 18px; }
   .dash-restart-ring { flex-basis: 84px; width: 84px; height: 84px; }
 }
+
+.dash-hero-game { position: absolute; right: -18px; top: -18px; opacity: 0.09; pointer-events: none; transform: rotate(-12deg); }
+.dash-hero-game .gm { border: 0; background: transparent; }
+@media (max-width: 720px) { .dash-hero-game { display: none; } }

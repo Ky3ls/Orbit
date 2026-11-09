@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
 import { hydrateAppearanceFromServer } from './appearance.js';
 import Shell from './components/Shell.jsx';
-import { Mark } from './components/Ui.jsx';
+import { Mark, Page } from './components/Ui.jsx';
+import GameMark from './components/GameMark.jsx';
 import Admins from './pages/Admins.jsx';
 import Audit from './pages/Audit.jsx';
 import CfgEditor from './pages/CfgEditor.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import Home from './pages/Home.jsx';
+import NewServer from './pages/NewServer.jsx';
 import Ingame from './pages/Ingame.jsx';
 import Install from './pages/Install.jsx';
 import Login from './pages/Login.jsx';
@@ -19,14 +22,13 @@ import Resources from './pages/Resources.jsx';
 import Schedule from './pages/Schedule.jsx';
 import ServerLog from './pages/ServerLog.jsx';
 import Settings from './pages/Settings.jsx';
-import Instances from './pages/mc/Instances.jsx';
 import McCreate from './pages/mc/McCreate.jsx';
 import McImport from './pages/mc/McImport.jsx';
 import McInstance from './pages/mc/McInstance.jsx';
 import Setup from './pages/Setup.jsx';
 
 const PANEL_PREFIXES = [
-  '/panel', '/monitoring', '/console', '/players', '/history', '/drops',
+  '/home', '/panel', '/monitoring', '/console', '/players', '/history', '/drops',
   '/bans', '/whitelist', '/resources', '/schedule', '/server-log', '/cfg',
   '/audit', '/admins', '/ingame', '/database', '/more', '/setup', '/settings', '/instances', '/mc',
 ];
@@ -130,9 +132,9 @@ export default function App() {
     <Routes>
       <Route
         path="/"
-        element={<Navigate to={authed ? (setupOk ? '/panel' : '/setup') : '/login'} replace />}
+        element={<Navigate to={authed ? '/home' : '/login'} replace />}
       />
-      <Route path="/install" element={<Navigate to={authed ? (setupOk ? '/panel' : '/setup') : '/login'} replace />} />
+      <Route path="/install" element={<Navigate to={authed ? '/home' : '/login'} replace />} />
       <Route
         path="/login"
         element={
@@ -144,29 +146,31 @@ export default function App() {
 
       {authed ? (
         <Route element={<Authed session={session} setSession={setSession} />}>
-          <Route path="panel" element={setupOk ? <Dashboard /> : <Navigate to="/setup" replace />} />
-          <Route path="monitoring" element={setupOk ? <Monitoring /> : <Navigate to="/setup" replace />} />
+          <Route path="panel" element={setupOk ? <Dashboard /> : <FxNotSetup />} />
+          <Route path="monitoring" element={setupOk ? <Monitoring /> : <FxNotSetup />} />
           <Route path="console" element={<Navigate to="/panel" replace />} />
-          <Route path="players" element={setupOk ? <Players user={session.user} /> : <Navigate to="/setup" replace />} />
-          <Route path="history" element={setupOk ? <PlayersRedirect /> : <Navigate to="/setup" replace />} />
-          <Route path="drops" element={setupOk ? <PlayersRedirect /> : <Navigate to="/setup" replace />} />
-          <Route path="bans" element={setupOk ? <PlayersRedirect filter="banned" /> : <Navigate to="/setup" replace />} />
-          <Route path="whitelist" element={setupOk ? <PlayersRedirect filter="allowlist" /> : <Navigate to="/setup" replace />} />
-          <Route path="resources" element={setupOk ? <Resources /> : <Navigate to="/setup" replace />} />
-          <Route path="schedule" element={setupOk ? <Schedule /> : <Navigate to="/setup" replace />} />
-          <Route path="server-log" element={setupOk ? <ServerLog /> : <Navigate to="/setup" replace />} />
-          <Route path="cfg" element={setupOk ? <CfgEditor /> : <Navigate to="/setup" replace />} />
-          <Route path="audit" element={setupOk ? <Audit /> : <Navigate to="/setup" replace />} />
-          <Route path="admins" element={setupOk ? <Admins user={session.user} /> : <Navigate to="/setup" replace />} />
-          <Route path="ingame" element={setupOk ? <Ingame user={session.user} /> : <Navigate to="/setup" replace />} />
+          <Route path="players" element={setupOk ? <Players user={session.user} /> : <FxNotSetup />} />
+          <Route path="history" element={setupOk ? <PlayersRedirect /> : <FxNotSetup />} />
+          <Route path="drops" element={setupOk ? <PlayersRedirect /> : <FxNotSetup />} />
+          <Route path="bans" element={setupOk ? <PlayersRedirect filter="banned" /> : <FxNotSetup />} />
+          <Route path="whitelist" element={setupOk ? <PlayersRedirect filter="allowlist" /> : <FxNotSetup />} />
+          <Route path="resources" element={setupOk ? <Resources /> : <FxNotSetup />} />
+          <Route path="schedule" element={setupOk ? <Schedule /> : <FxNotSetup />} />
+          <Route path="server-log" element={setupOk ? <ServerLog /> : <FxNotSetup />} />
+          <Route path="cfg" element={setupOk ? <CfgEditor /> : <FxNotSetup />} />
+          <Route path="audit" element={<Audit />} />
+          <Route path="admins" element={<Admins user={session.user} />} />
+          <Route path="ingame" element={setupOk ? <Ingame user={session.user} /> : <FxNotSetup />} />
           <Route path="platform" element={<Navigate to="/settings?section=host&tab=servers" replace />} />
-          <Route path="database" element={setupOk ? <Database user={session.user} /> : <Navigate to="/setup" replace />} />
-          <Route path="instances" element={setupOk ? <Instances /> : <Navigate to="/setup" replace />} />
-          <Route path="instances/new" element={setupOk ? <McCreate /> : <Navigate to="/setup" replace />} />
-          <Route path="instances/import" element={setupOk ? <McImport /> : <Navigate to="/setup" replace />} />
-          <Route path="mc/:id" element={setupOk ? <McInstance /> : <Navigate to="/setup" replace />} />
-          <Route path="mc/:id/:tab" element={setupOk ? <McInstance /> : <Navigate to="/setup" replace />} />
-          <Route path="more" element={setupOk ? <More /> : <Navigate to="/setup" replace />} />
+          <Route path="database" element={setupOk ? <Database user={session.user} /> : <FxNotSetup />} />
+          <Route path="home" element={<Home />} />
+          <Route path="instances" element={<Navigate to="/home" replace />} />
+          <Route path="instances/new" element={<NewServer />} />
+          <Route path="instances/new/minecraft" element={<McCreate />} />
+          <Route path="instances/import" element={<McImport />} />
+          <Route path="mc/:id" element={<McInstance />} />
+          <Route path="mc/:id/:tab" element={<McInstance />} />
+          <Route path="more" element={<More />} />
           <Route path="setup" element={setupOk ? <Navigate to="/panel" replace /> : <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={() => { setSession({ ...session, setup: true }); window.location.assign('/panel'); }} />} />
           <Route
             path="settings"
@@ -181,7 +185,7 @@ export default function App() {
               />
             }
           />
-          <Route path="*" element={<Navigate to={setupOk ? '/panel' : '/setup'} replace />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
       ) : (
         <Route path="*" element={<GuestFallback />} />
@@ -201,14 +205,13 @@ function GuestFallback() {
 
 function LoginRedirect({ setupOk }) {
   const location = useLocation();
-  const dest = setupOk
-    ? (isPanelPath(location.state?.from || '') ? location.state.from : '/panel')
-    : '/setup';
+  const dest = isPanelPath(location.state?.from || '') ? location.state.from : '/home';
   return <Navigate to={dest} replace />;
 }
 
 function Authed({ session, setSession }) {
   const navigate = useNavigate();
+  const location = useLocation();
   async function onLogout() {
     await api('/api/auth/logout', { method: 'POST', body: {} }).catch(() => {});
     setSession(null);
@@ -218,8 +221,25 @@ function Authed({ session, setSession }) {
     setSession({ ...session, setup: true });
     navigate('/panel', { replace: true });
   }
-  if (!session.setup) {
+  if (!session.setup && location.pathname === '/setup') {
     return <Setup userName={session.user?.cfxName || session.user?.username || ''} onDone={finishSetup} />;
   }
   return <Shell user={session.user} onLogout={onLogout} />;
+}
+
+/** FiveM-Seiten, solange FiveM noch nicht eingerichtet ist */
+function FxNotSetup() {
+  return (
+    <Page>
+      <div className="card fx-unset">
+        <GameMark game="fivem" size={56} />
+        <h2>FiveM ist noch nicht eingerichtet</h2>
+        <p>Orbit läuft auch ohne FiveM — richte es ein, sobald du einen FXServer hosten willst.</p>
+        <div className="fx-unset-acts">
+          <Link to="/setup" className="btn btn-primary">FiveM einrichten</Link>
+          <Link to="/home" className="btn">Zur Übersicht</Link>
+        </div>
+      </div>
+    </Page>
+  );
 }
