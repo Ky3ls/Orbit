@@ -9,6 +9,7 @@ import {
   installEngine, listEngines, resetPassword, setExternal, setRemote, updateMeta,
 } from './databases.js';
 import { KNOWN, controlService, listServices, serviceLog } from './services.js';
+import * as studio from './dbStudio.js';
 import {
   SITE_TYPES, WEBSERVERS, activeWebserver, checkDns, deleteSite, dnsGuide, ensureWebTables, getSite,
   installWebserver, listCertificates, listForeignSites, listSites, publicIp, saveSite, setSiteEnabled, siteConfig,
@@ -185,6 +186,93 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
         json(res, 200, { connection: connectionInfo(engine, { name }) });
         return true;
       }
+    }
+
+    /* ── Datenbank-Studio (MySQL/MariaDB) ── */
+    if (p.startsWith('/studio/')) {
+      if (!isOwner) return deny();
+      if (method === 'GET' && p === '/studio/server') {
+        json(res, 200, await studio.serverInfo());
+        return true;
+      }
+      if (method === 'POST' && p === '/studio/server/kill') {
+        const body = await readBody(req);
+        await studio.killProcess(body.id);
+        audit(db, me.username, 'host.db.kill', String(body.id), ip);
+        json(res, 200, { ok: true });
+        return true;
+      }
+      const sm2 = p.match(/^\/studio\/([^/]+)(?:\/(relations|search|users|sql|explain|export|import|tables))?$/);
+      const tm = p.match(/^\/studio\/([^/]+)\/t\/([^/]+)\/(rows|structure|alter)$/);
+      const dbName = decodeURIComponent((sm2 || tm || [])[1] || '');
+      if (!dbName) return false;
+      studio.ident(dbName, 'Datenbank');
+      const managed = !!db.prepare("SELECT 1 FROM host_databases WHERE engine = 'mysql' AND name = ?").get(dbName);
+      const unlocked = req.headers['x-orbit-unlock'] === '1' || url.searchParams.get('unlock') === '1';
+      const write = (what) => { studio.assertWritable(dbName, { managed, unlocked }); audit(db, me.username, `host.db.${what}`, dbName, ip); };
+      if (sm2) {
+        const action = sm2[2] || '';
+        if (method === 'GET' && !action) { json(res, 200, { ...(await studio.dbOverview(dbName)), managed }); return true; }
+        if (method === 'GET' && action === 'relations') { json(res, 200, await studio.relations(dbName)); return true; }
+        if (method === 'GET' && action === 'search') { json(res, 200, await studio.searchAll(dbName, url.searchParams.get('q'))); return true; }
+        if (method === 'GET' && action === 'users') { json(res, 200, { users: await studio.dbUsers(dbName) }); return true; }
+        if (method === 'GET' && action === 'export') {
+          audit(db, me.username, 'host.db.export', `${dbName}${url.searchParams.get('table') ? `.${url.searchParams.get('table')}` : ''}`, ip);
+          await studio.exportData(dbName, res, { table: url.searchParams.get('table'), format: url.searchParams.get('format') || 'sql', query: url.searchParams.get('query') });
+          return true;
+        }
+        if (method === 'POST' && action === 'sql') {
+          const body = await readBody(req);
+          if (studio.isWriteSql(body.sql)) write('sql');
+          const out = await studio.runSql(dbName, body.sql);
+          json(res, 200, out);
+          return true;
+        }
+        if (method === 'POST' && action === 'explain') {
+          const body = await readBody(req);
+          json(res, 200, { rows: await studio.explain(dbName, body.sql) });
+          return true;
+        }
+        if (method === 'POST' && action === 'import') {
+          write('import');
+          const out = await studio.importSql(dbName, req, { gz: url.searchParams.get('gz') === '1' });
+          json(res, 200, { ok: true, ...out });
+          return true;
+        }
+        if (method === 'POST' && action === 'tables') {
+          const body = await readBody(req);
+          write('create-table');
+          json(res, 200, await studio.createTable(dbName, body));
+          return true;
+        }
+      }
+      if (tm) {
+        const table = decodeURIComponent(tm[2]);
+        studio.ident(table, 'Tabelle');
+        if (tm[3] === 'structure' && method === 'GET') { json(res, 200, await studio.tableStructure(dbName, table)); return true; }
+        if (tm[3] === 'rows' && method === 'GET') {
+          let filters = [];
+          try { filters = JSON.parse(url.searchParams.get('filters') || '[]'); } catch { /* */ }
+          json(res, 200, await studio.browse(dbName, table, {
+            offset: url.searchParams.get('offset'), limit: url.searchParams.get('limit'), sort: url.searchParams.get('sort'),
+            dir: url.searchParams.get('dir'), filters, q: url.searchParams.get('q') || '',
+          }));
+          return true;
+        }
+        if (tm[3] === 'rows') {
+          const body = await readBody(req);
+          if (method === 'POST') { write('insert'); json(res, 200, await studio.insertRow(dbName, table, body.values)); return true; }
+          if (method === 'PATCH') { write('update'); json(res, 200, await studio.updateRow(dbName, table, body.key, body.changes)); return true; }
+          if (method === 'DELETE') { write('delete'); json(res, 200, await studio.deleteRows(dbName, table, body.keys)); return true; }
+        }
+        if (tm[3] === 'alter' && method === 'POST') {
+          const body = await readBody(req);
+          write(`alter.${String(body.op).slice(0, 20)}`);
+          json(res, 200, await studio.alterTable(dbName, table, body));
+          return true;
+        }
+      }
+      return false;
     }
 
     /* ── Webserver & Domains ── */

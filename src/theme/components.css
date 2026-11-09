@@ -941,3 +941,9 @@ input[type='file'] { padding: 7px; }
 .fx-unset h2 { margin: 8px 0 0; font-size: 20px; letter-spacing: -0.02em; }
 .fx-unset p { margin: 0; color: var(--muted); font-size: 14px; max-width: 42ch; }
 .fx-unset-acts { display: flex; gap: 8px; margin-top: 10px; }
+
+/* Suchfeld mit Lupe (einheitlich für alle Seiten) */
+.lg-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--surface); min-width: 0; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.lg-search:focus-within { border-color: rgba(var(--accent-rgb), 0.55); box-shadow: var(--focus-ring); }
+.lg-search > svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--faint); }
+.lg-search > input { flex: 1; min-width: 0; height: 100%; min-height: 0; padding: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 13px; }

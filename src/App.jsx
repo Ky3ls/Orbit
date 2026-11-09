@@ -13,6 +13,7 @@ import Home from './pages/Home.jsx';
 import NewServer from './pages/NewServer.jsx';
 import Welcome from './pages/Welcome.jsx';
 import HostDatabases from './pages/host/Databases.jsx';
+import Studio from './pages/host/studio/Studio.jsx';
 import HostServices from './pages/host/Services.jsx';
 import HostWeb from './pages/host/Web.jsx';
 import Ingame from './pages/Ingame.jsx';
@@ -172,6 +173,8 @@ export default function App() {
           <Route path="home" element={<Home />} />
           <Route path="host" element={<Navigate to="/host/services" replace />} />
           <Route path="host/databases" element={<HostDatabases />} />
+          <Route path="host/databases/mysql/:db" element={<Studio />} />
+          <Route path="host/databases/mysql/:db/:table" element={<Studio />} />
           <Route path="host/web" element={<HostWeb />} />
           <Route path="host/services" element={<HostServices />} />
           <Route path="instances" element={<Navigate to="/home" replace />} />

@@ -538,3 +538,65 @@
   .tm-c-role, .tm-c-sec, .tm-c-last { grid-column: 1; padding-left: 48px; }
   .tm-c-acts { grid-row: 1; grid-column: 2; }
 }
+
+/* ═══ Team (neu) ═══ */
+.tmx-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tmx-kpi { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius-lg); min-width: 0; }
+.tmx-kpi.alert { border-color: rgba(var(--warn-rgb), 0.4); }
+.tmx-kpi b { display: block; font-size: 22px; font-weight: 750; letter-spacing: -0.02em; line-height: 1.15; }
+.tmx-kpi b small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.tmx-kpi em { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); }
+.tmx-kpi-ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: var(--accent-dim); color: var(--accent-ink); flex: 0 0 auto; }
+.tmx-kpi-ico svg { width: 17px; height: 17px; }
+.tmx-kpi-ico.warn { background: rgba(var(--warn-rgb), 0.13); color: var(--warn); }
+.tmx-kpi-ico.ok { background: rgba(var(--ok-rgb), 0.13); color: var(--ok); }
+.tmx-ring { --p: 0; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto; background: conic-gradient(var(--ok) calc(var(--p) * 1%), var(--surface-3) 0); position: relative; }
+.tmx-kpi.alert .tmx-ring { background: conic-gradient(var(--warn) calc(var(--p) * 1%), var(--surface-3) 0); }
+.tmx-ring::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--surface); }
+.tmx-ring b { position: relative; font-size: 10.5px !important; letter-spacing: 0 !important; }
+.tmx-note { margin-top: -2px; }
+
+.tmx-members { min-width: 0; }
+.tmx-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 4px 0 2px; }
+.tmx-card { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--radius-lg); border: 1px solid var(--line); background: var(--surface); overflow: hidden; transition: border-color 0.16s ease, transform 0.16s var(--ease); }
+.tmx-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 70px; background: radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--uc) 16%, transparent), transparent 70%); pointer-events: none; }
+.tmx-card:hover { border-color: color-mix(in srgb, var(--uc) 40%, var(--line)); }
+.tmx-card.off { opacity: 0.6; }
+.tmx-card.owner { border-color: rgba(var(--accent-rgb), 0.35); }
+.tmx-card > header { position: relative; display: flex; align-items: center; gap: 12px; }
+.tmx-avatar { position: relative; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 15px; font-weight: 800; color: var(--uc); background: color-mix(in srgb, var(--uc) 18%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--uc) 35%, transparent); flex: 0 0 auto; }
+.tmx-avatar i { position: absolute; right: -3px; bottom: -3px; width: 12px; height: 12px; border-radius: 50%; background: var(--ok); border: 2.5px solid var(--surface); }
+.tmx-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tmx-name b { font-size: 15px; display: flex; align-items: center; gap: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tmx-you { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--accent-dim); color: var(--accent-ink); }
+.tmx-role { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; padding: 2px 9px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); }
+.tmx-role svg { width: 11px; height: 11px; }
+.tmx-role.r-owner { background: rgba(var(--accent-rgb), 0.15); color: var(--accent-ink); }
+.tmx-role.r-admin { background: rgba(var(--warn-rgb), 0.14); color: var(--warn); }
+.tmx-role.r-moderator { background: rgba(var(--info-rgb), 0.14); color: var(--info); }
+.tmx-role.off { background: rgba(var(--bad-rgb), 0.14); color: var(--bad); }
+.tmx-acts { display: flex; gap: 2px; align-self: flex-start; }
+.tmx-acts .o-icon-btn.on { color: var(--bad); }
+.tmx-acts .o-icon-btn.danger:hover { color: var(--bad); }
+.tmx-facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.tmx-fact { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12px; color: var(--text-2); }
+.tmx-fact svg { width: 12px; height: 12px; color: var(--muted); }
+.tmx-fact.ok { color: var(--ok); border-color: rgba(var(--ok-rgb), 0.3); }
+.tmx-fact.ok svg { color: var(--ok); }
+.tmx-fact.warn { color: var(--warn); border-color: rgba(var(--warn-rgb), 0.35); }
+.tmx-fact.warn svg { color: var(--warn); }
+.tmx-perms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.tmx-perm { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--text-2); min-width: 0; }
+.tmx-perm span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tmx-perm i { height: 4px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.tmx-perm i em { display: block; height: 100%; border-radius: inherit; background: var(--uc); }
+.tmx-perm.more { justify-content: center; color: var(--muted); }
+.tmx-perm-all { margin: 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--text-2); }
+.tmx-add { align-items: center; justify-content: center; gap: 6px; min-height: 180px; border-style: dashed; background: transparent; text-align: center; color: var(--muted); }
+.tmx-add::before { display: none; }
+.tmx-add > span { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-dim); color: var(--accent-ink); }
+.tmx-add > span svg { width: 20px; height: 20px; }
+.tmx-add b { color: var(--text); font-size: 14px; }
+.tmx-add small { font-size: 12px; max-width: 28ch; }
+.tmx-add:hover { border-color: rgba(var(--accent-rgb), 0.5); }
+@media (max-width: 1100px) { .tmx-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

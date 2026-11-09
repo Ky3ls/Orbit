@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { NavIcon } from '../layout/icons.jsx';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { fmtFull, roleLabel } from '../format.js';
@@ -14,6 +15,21 @@ const EMPTY_FORM = {
   cfxName: '',
   discordId: '',
 };
+
+const MEMBER_COLORS = ['#f97316', '#38bdf8', '#a78bfa', '#34d399', '#f472b6', '#facc15', '#60a5fa', '#fb7185'];
+function memberColor(u) {
+  let h = 0;
+  for (const ch of String(u)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return MEMBER_COLORS[h % MEMBER_COLORS.length];
+}
+function fmtAgoShort(t) {
+  const d = Date.now() - t;
+  if (d < 15 * 60_000) return 'gerade aktiv';
+  if (d < 3600_000) return `vor ${Math.round(d / 60_000)} min`;
+  if (d < 86_400_000) return `vor ${Math.round(d / 3600_000)} h`;
+  if (d < 30 * 86_400_000) return `vor ${Math.round(d / 86_400_000)} Tagen`;
+  return new Date(t).toLocaleDateString('de-DE');
+}
 
 function permLabel(t, id, fallback) {
   const key = `perm.${id}`;
@@ -482,16 +498,29 @@ export default function Admins({ user: me }) {
           </button>
         )}
       />
-      <div className="tm-kpis">
-        <div><span>Mitglieder</span><b>{members.length}</b></div>
-        <div><span>Admins</span><b>{members.filter((m) => m.role === 'owner' || m.role === 'admin').length}</b></div>
-        <div className={members.some((m) => !m.totp_enabled) ? 'warn' : 'ok'}><span>Mit 2FA</span><b>{members.filter((m) => m.totp_enabled).length}<small> / {members.length}</small></b></div>
-        <div><span>Heute aktiv</span><b>{members.filter((m) => m.last_login && Date.now() - m.last_login < 86_400_000).length}</b></div>
-      </div>
+      {(() => {
+        const with2fa = members.filter((m) => m.totp_enabled).length;
+        const pct = members.length ? Math.round((with2fa / members.length) * 100) : 0;
+        const activeToday = members.filter((m) => m.last_login && Date.now() - m.last_login < 86_400_000).length;
+        return (
+          <div className="tmx-kpis">
+            <div className="card tmx-kpi"><span className="tmx-kpi-ico"><NavIcon name="team" /></span><span><b>{members.length}</b><em>Mitglieder</em></span></div>
+            <div className="card tmx-kpi"><span className="tmx-kpi-ico warn"><NavIcon name="crown" /></span><span><b>{members.filter((m) => m.role === 'owner' || m.role === 'admin').length}</b><em>Admins &amp; Inhaber</em></span></div>
+            <div className={`card tmx-kpi${pct < 100 ? ' alert' : ''}`}>
+              <span className="tmx-ring" style={{ '--p': pct }}><b>{pct}%</b></span>
+              <span><b>{with2fa}<small> / {members.length}</small></b><em>mit Zwei-Faktor</em></span>
+            </div>
+            <div className="card tmx-kpi"><span className="tmx-kpi-ico ok"><NavIcon name="activity" /></span><span><b>{activeToday}</b><em>Heute aktiv</em></span></div>
+          </div>
+        );
+      })()}
+      {members.some((m) => !m.totp_enabled && m.role !== 'moderator') && (
+        <div className="mcp-note warn tmx-note"><NavIcon name="lock" /><span><b>{members.filter((m) => !m.totp_enabled).map((m) => m.username).join(', ')}</b> {members.filter((m) => !m.totp_enabled).length === 1 ? 'hat' : 'haben'} noch keine Zwei-Faktor-Anmeldung. Orbit hat Root-Zugriff auf den Server — 2FA unter Einstellungen → Konto aktivieren.</span></div>
+      )}
       {err && !formOpen && !tplOpen && !createdCreds && <div className="err">{err}</div>}
 
       <div className="tm-grid">
-        <section className="tm-section">
+        <section className="tm-section tmx-members">
           <div className="tm-module-head">
             <div>
               <h3>{t('team.membersCount', { n: members.length })}</h3>
@@ -501,68 +530,63 @@ export default function Admins({ user: me }) {
           {members.length === 0 ? (
             <Empty title={t('team.empty')} text={t('team.emptyText')} />
           ) : (
-            <div className="tm-table">
-              <div className="tm-thead">
-                <span>Mitglied</span>
-                <span>Rolle</span>
-                <span>Sicherheit</span>
-                <span>Zuletzt aktiv</span>
-                <span />
-              </div>
+            <div className="tmx-cards">
               {members.map((user) => {
                 const isSelf = me && Number(me.id) === Number(user.id);
                 const preview = permPreview(user);
                 const canManage = !isSelf && user.role !== 'owner';
+                const color = memberColor(user.username);
+                const last = user.last_login;
+                const online = last && Date.now() - last < 15 * 60_000;
                 return (
-                  <div key={user.id} className={`tm-tr${user.disabled ? ' off' : ''}${user.role === 'owner' ? ' is-owner' : ''}`}>
-                    <span className="tm-c-user">
-                      <span className="tm-avatar" aria-hidden="true">{String(user.username || '?').slice(0, 2).toUpperCase()}</span>
-                      <span className="tm-c-name">
-                        <b>{user.username}{isSelf ? <em> · Du</em> : null}</b>
-                        <small className="mono">
-                          {[user.cfx_name || (user.cfx_id ? `fivem:${user.cfx_id}` : ''), user.discord_id ? `discord:${user.discord_id}` : ''].filter(Boolean).join(' · ') || 'Nicht verknüpft'}
-                        </small>
+                  <article key={user.id} className={`tmx-card${user.disabled ? ' off' : ''}${user.role === 'owner' ? ' owner' : ''}`} style={{ '--uc': color }}>
+                    <header>
+                      <span className="tmx-avatar">{String(user.username || '?').slice(0, 2).toUpperCase()}{online && <i title="gerade aktiv" />}</span>
+                      <span className="tmx-name">
+                        <b>{user.username}{isSelf && <span className="tmx-you">Du</span>}</b>
+                        <span className={`tmx-role r-${user.role}${user.disabled ? ' off' : ''}`}>{user.role === 'owner' && <NavIcon name="crown" />}{user.disabled ? 'Gesperrt' : roleBadge(user)}</span>
                       </span>
-                    </span>
-                    <span className="tm-c-role">
-                      <span className={`badge${user.role === 'owner' ? ' accent' : user.disabled ? ' bad' : ''}`}>{roleBadge(user)}</span>
-                      {preview.length > 0 && <small>{preview.map((g) => g.label).slice(0, 3).join(', ')}{preview.length > 3 ? ` +${preview.length - 3}` : ''}</small>}
-                    </span>
-                    <span className={`tm-c-sec${user.totp_enabled ? ' on' : ''}`}><i />{user.totp_enabled ? '2FA aktiv' : 'Ohne 2FA'}</span>
-                    <span className="tm-c-last">{user.last_login ? fmtFull(user.last_login) : 'Nie'}</span>
-                    <span className="tm-c-acts">
-                      {canManage ? (
-                        <>
-                          <button type="button" className="tm-icon-btn" title={t('common.edit')} aria-label={t('common.edit')} onClick={() => openEdit(user)}><PencilIcon /></button>
-                          <button
-                            type="button"
-                            className={`tm-icon-btn${user.disabled ? ' is-on' : ''}`}
-                            title={user.disabled ? t('team.enable') : t('team.lock')}
-                            aria-label={user.disabled ? t('team.enable') : t('team.lock')}
-                            onClick={() => api(`/api/admins/${user.id}`, { method: 'PATCH', body: { disabled: !user.disabled } }).then(load).catch((e) => setErr(e.message))}
-                          >
-                            <XIcon />
-                          </button>
-                          <button
-                            type="button"
-                            className="tm-icon-btn danger"
-                            title={t('common.remove')}
-                            aria-label={t('common.remove')}
-                            onClick={() => {
-                              if (!window.confirm(t('team.deleteConfirm', { name: user.username }))) return;
-                              api(`/api/admins/${user.id}`, { method: 'DELETE' }).then(load).catch((e) => setErr(e.message));
-                            }}
-                          >
-                            <TrashIcon />
-                          </button>
-                        </>
-                      ) : (
-                        <button type="button" className="tm-icon-btn" title={t('team.yourAccount')} aria-label={t('team.yourAccount')} onClick={() => navigate('/settings?section=account')}><PencilIcon /></button>
-                      )}
-                    </span>
-                  </div>
+                      <span className="tmx-acts">
+                        {canManage ? (
+                          <>
+                            <button type="button" className="o-icon-btn" title={t('common.edit')} onClick={() => openEdit(user)}><NavIcon name="cfg" /></button>
+                            <button type="button" className={`o-icon-btn${user.disabled ? ' on' : ''}`} title={user.disabled ? t('team.enable') : t('team.lock')} onClick={() => api(`/api/admins/${user.id}`, { method: 'PATCH', body: { disabled: !user.disabled } }).then(load).catch((e) => setErr(e.message))}><NavIcon name="lock" /></button>
+                            <button type="button" className="o-icon-btn danger" title={t('common.remove')} onClick={() => { if (!window.confirm(t('team.deleteConfirm', { name: user.username }))) return; api(`/api/admins/${user.id}`, { method: 'DELETE' }).then(load).catch((e) => setErr(e.message)); }}><NavIcon name="trash" /></button>
+                          </>
+                        ) : (
+                          <button type="button" className="o-icon-btn" title={t('team.yourAccount')} onClick={() => navigate('/settings?section=account')}><NavIcon name="cfg" /></button>
+                        )}
+                      </span>
+                    </header>
+                    <div className="tmx-facts">
+                      <span className={`tmx-fact${user.totp_enabled ? ' ok' : ' warn'}`}><NavIcon name="lock" />{user.totp_enabled ? '2FA aktiv' : 'Ohne 2FA'}</span>
+                      <span className="tmx-fact"><NavIcon name="clock" />{last ? fmtAgoShort(last) : 'Nie angemeldet'}</span>
+                      {user.cfx_name || user.cfx_id ? <span className="tmx-fact link"><NavIcon name="gamepad" />{user.cfx_name || `fivem:${user.cfx_id}`}</span> : null}
+                      {user.discord_id ? <span className="tmx-fact link"><NavIcon name="chat" />Discord</span> : null}
+                    </div>
+                    {user.role === 'owner' ? (
+                      <p className="tmx-perm-all">Voller Zugriff auf alles — Server, Host, Team und Einstellungen.</p>
+                    ) : preview.length ? (
+                      <div className="tmx-perms">
+                        {preview.slice(0, 6).map((g) => (
+                          <span key={g.id} className="tmx-perm" title={`${g.label}: ${g.n} von ${g.total} Rechten`}>
+                            <span>{g.label}</span>
+                            <i><em style={{ width: `${g.total ? (g.n / g.total) * 100 : 0}%` }} /></i>
+                          </span>
+                        ))}
+                        {preview.length > 6 && <span className="tmx-perm more">+{preview.length - 6}</span>}
+                      </div>
+                    ) : user.role === 'admin' || user.role === 'moderator' ? (
+                      <p className="tmx-perm-all">Standardrechte der Rolle <b>{roleLabel(user.role)}</b> — zum Anpassen bearbeiten.</p>
+                    ) : <p className="tmx-perm-all muted">Noch keine Rechte vergeben.</p>}
+                  </article>
                 );
               })}
+              <button type="button" className="tmx-card tmx-add" onClick={openCreate}>
+                <span><NavIcon name="plus" /></span>
+                <b>Mitglied hinzufügen</b>
+                <small>Rolle oder Vorlage wählen, Orbit erzeugt ein Startpasswort</small>
+              </button>
             </div>
           )}
         </section>

@@ -98,6 +98,7 @@ import { runRecipeYaml } from './recipeRunner.js';
 import { fetchRecommendedBuild, installArtifact } from './artifacts.js';
 import { ensureBackupTable, ensureMcTables, handleMinecraftApi, initMcBackups, initMinecraft } from './minecraft/mcApi.js';
 import { ensureHostTables, handleHostApi } from './host/hostApi.js';
+import { auditQuery } from './auditQuery.js';
 import { handlePlatformApi, initPlatform } from './platformApi.js';
 import { handleIngamePublicApi } from './ingameApi.js';
 import { primaryId, normalizeIdentifiers, mergeIdLists, cleanupPlayerDuplicates } from './playerIdentity.js';
@@ -2536,7 +2537,7 @@ async function handleApi(req, res, url) {
 
   if (method === 'GET' && pathname === '/api/audit') {
     if (!hasPerm(me, 'audit')) return json(res, 403, { error: 'Keine Berechtigung.' });
-    return json(res, 200, { entries: db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT 400').all() });
+    return json(res, 200, auditQuery(db, url.searchParams));
   }
 
   if (method === 'GET' && pathname === '/api/server-log') {

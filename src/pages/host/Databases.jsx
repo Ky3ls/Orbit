@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import Drawer from '../../components/Drawer.jsx';
 import GameMark from '../../components/GameMark.jsx';
@@ -15,6 +15,7 @@ const ENGINE_COLOR = { mysql: '#00a3e0', postgresql: '#6b8cce', redis: '#e5483f'
 export default function Databases() {
   const { user, servers = [] } = useOutletContext();
   const isOwner = user.role === 'owner';
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [engines, setEngines] = useState(null);
   const [sel, setSel] = useState(params.get('engine') || 'mysql');
@@ -164,7 +165,7 @@ export default function Databases() {
             {data.databases.map((d) => {
               const linked = servers.find((s) => s.key === d.meta?.server_key);
               return (
-                <div key={d.name} className={`hx-row${d.managed ? '' : ' foreign'}`}>
+                <div key={d.name} className={`hx-row${d.managed ? '' : ' foreign'}${sel === 'mysql' && isOwner ? ' clickable' : ''}`} onClick={(e) => { if (sel === 'mysql' && isOwner && !e.target.closest('button, a')) navigate(`/host/databases/mysql/${encodeURIComponent(d.name)}`); }}>
                   <span className="hx-name">
                     <span className="hx-name-ico" style={{ '--eng': ENGINE_COLOR[sel] }}><NavIcon name={ENGINE_ICON[sel]} /></span>
                     <span><b className="mono">{d.name}</b><small>{d.managed ? (d.meta?.note || 'Von Orbit angelegt') : 'Bestehend — nur lesend'}{d.meta?.remote ? ' · extern erreichbar' : ''}</small></span>
@@ -173,6 +174,7 @@ export default function Databases() {
                   <span className="hx-users">{d.users?.length ? d.users.slice(0, 2).map((u) => <span key={u} className="mono">{u}</span>) : <span className="muted">—</span>}{d.users?.length > 2 ? <span className="muted">+{d.users.length - 2}</span> : null}</span>
                   <span>{linked ? <span className="hx-linked"><GameMark game={linked.game} size={18} />{linked.name}</span> : <span className="muted">—</span>}</span>
                   <span className="hx-acts">
+                    {sel === 'mysql' && isOwner && <Link className="btn btn-sm btn-primary" to={`/host/databases/mysql/${encodeURIComponent(d.name)}`}><NavIcon name="term" />Öffnen</Link>}
                     {sel !== 'redis' && isOwner && <a className="o-icon-btn" title="Als SQL exportieren" href={`/api/host/db/${sel}/${encodeURIComponent(d.name)}/dump`}><NavIcon name="download" /></a>}
                     {d.managed && isOwner && (
                       <>
