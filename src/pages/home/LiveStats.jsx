@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api.js';
+import { Modal } from '../../components/Ui.jsx';
 import GameMark from '../../components/GameMark.jsx';
 import { NavIcon } from '../../layout/icons.jsx';
 import TimeChart from './TimeChart.jsx';
@@ -37,13 +38,16 @@ function useTheme() {
   return light ? 'light' : 'dark';
 }
 
-export default function LiveStats({ servers = [] }) {
+export default function LiveStats({ servers = [], canKill = false }) {
   const theme = useTheme();
   const [snap, setSnap] = useState(null);
   const [hist, setHist] = useState([]);
   const [range, setRange] = useState('15');
   const [denied, setDenied] = useState(false);
   const [showProcs, setShowProcs] = useState(false);
+  const [kill, setKill] = useState(null);
+  const [flash, setFlash] = useState(null);
+  const reload = useRef(() => {});
   const lastT = useRef(0);
 
   useEffect(() => {
@@ -59,6 +63,7 @@ export default function LiveStats({ servers = [] }) {
         }
       }).catch((e) => { if (e.status === 403) setDenied(true); });
     };
+    reload.current = load;
     load();
     const t = setInterval(load, 5000);
     return () => { alive = false; clearInterval(t); };
@@ -171,6 +176,7 @@ export default function LiveStats({ servers = [] }) {
                   <span className="ls-bar"><i style={{ width: `${Math.max(1, (x.rss / (consumers[0]?.rss || 1)) * 100)}%`, background: c(x.cat) }} /></span>
                   <span className="ls-val"><b>{fmtB(x.rss)}</b><small>{pct.toFixed(1)}% vom RAM</small></span>
                   <span className="ls-cpu" title={`${x.cpu}% eines Kerns`}><b>{(x.cpu / cores).toFixed(1)}%</b><small>CPU</small></span>
+                  {canKill && <KillButton x={x} srv={srv} onKill={setKill} />}
                 </>
               );
               return srv ? <Link key={x.key} to={srv.to} className="ls-row link">{row}</Link> : <div key={x.key} className="ls-row">{row}</div>;
@@ -178,7 +184,7 @@ export default function LiveStats({ servers = [] }) {
           </div>
         ) : (
           <div className="ls-procs">
-            <div className="ls-proc th"><span>PID</span><span>Prozess</span><span>Gehört zu</span><span>Benutzer</span><span>RAM</span><span>CPU</span></div>
+            <div className="ls-proc th"><span>PID</span><span>Prozess</span><span>Gehört zu</span><span>Benutzer</span><span>RAM</span><span>CPU</span>{canKill && <span />}</div>
             {(snap.processes || []).map((p) => (
               <div key={p.pid} className="ls-proc">
                 <span className="mono muted">{p.pid}</span>
@@ -187,12 +193,98 @@ export default function LiveStats({ servers = [] }) {
                 <span className="mono muted">{p.user}</span>
                 <span className="mono"><b>{fmtB(p.rss)}</b></span>
                 <span className="mono">{(p.cpu / cores).toFixed(1)}%</span>
+                {canKill && (
+                  <span className="ls-act">
+                    <button type="button" className="ls-kill" disabled={!!p.protect} title={p.protect || `${p.comm} (PID ${p.pid}) beenden`} aria-label={`${p.comm} beenden`}
+                      onClick={() => setKill({ pid: p.pid, comm: p.comm, name: p.comm, kind: 'proc', rss: p.rss, args: p.args })}><NavIcon name="power" /></button>
+                  </span>
+                )}
               </div>
             ))}
           </div>
         )}
+        {flash && <div className={`ls-flash ${flash.tone}`} role="status">{flash.text}</div>}
         <p className="ls-foot">CPU-Werte relativ zum ganzen Server ({cores} Kerne = 100%). RAM ist der residente Speicher (RSS) aller zugehörigen Prozesse.</p>
       </article>
+      {kill && <KillDialog target={kill} onClose={() => setKill(null)} onDone={(text) => { setKill(null); setFlash({ text, tone: 'ok' }); setTimeout(() => setFlash(null), 6000); setTimeout(() => reload.current(), 600); }} />}
     </section>
+  );
+}
+
+function KillButton({ x, srv, onKill }) {
+  if (x.key === 'other:rest') return <span className="ls-act" />;
+  const isGame = !!x.protect && !x.service && !!srv;
+  const blocked = !!x.protect && !x.service && !srv;
+  const title = x.service ? `${x.name} stoppen oder neu starten` : isGame ? 'Gameserver — öffnen und dort stoppen' : blocked ? x.protect : `${x.name} beenden${x.pids > 1 ? ` (${x.pids} Prozesse)` : ''}`;
+  return (
+    <span className="ls-act">
+      <button type="button" className="ls-kill" disabled={blocked} title={title} aria-label={title}
+        onClick={(e) => {
+          if (isGame) return; // Klick fällt auf den Zeilen-Link → Server öffnen
+          e.preventDefault(); e.stopPropagation();
+          onKill({ key: x.key, name: x.name, kind: x.service ? 'service' : 'group', service: x.service, pids: x.pids, rss: x.rss });
+        }}>
+        <NavIcon name="power" />
+      </button>
+    </span>
+  );
+}
+
+function KillDialog({ target, onClose, onDone }) {
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const [stuck, setStuck] = useState(false);
+
+  async function go(force) {
+    setBusy(force ? 'kill' : 'term'); setErr('');
+    try {
+      const body = target.key ? { key: target.key, name: target.name, force } : { pid: target.pid, comm: target.comm, name: target.name, force };
+      const r = await api('/api/host/processes/kill', { method: 'POST', body });
+      if (r.remaining?.length) { setStuck(true); setErr(`${r.remaining.length} von ${r.pids.length} Prozess${r.pids.length > 1 ? 'en' : ''} läuft noch — reagiert nicht auf Beenden. Hart beenden?`); return; }
+      onDone(`${target.name} ${force ? 'hart beendet' : 'beendet'} · ca. ${fmtB(target.rss)} RAM frei`);
+    } catch (e) { setErr(e.message || String(e)); } finally { setBusy(''); }
+  }
+  async function svc(action) {
+    setBusy(action); setErr('');
+    try {
+      await api(`/api/host/services/${target.service}/${action}`, { method: 'POST', body: {} });
+      onDone(`${target.name} ${action === 'stop' ? 'gestoppt' : 'neu gestartet'}`);
+    } catch (e) { setErr(e.message || String(e)); } finally { setBusy(''); }
+  }
+  const n = target.pids || 1;
+
+  return (
+    <Modal title={target.kind === 'service' ? `${target.name} steuern` : `${target.name} beenden?`} onClose={() => { if (!busy) onClose(); }}>
+      <div className="ls-killdlg">
+        <div className="ls-killdlg-what">
+          <span className="ls-killdlg-ico"><NavIcon name="power" /></span>
+          <div>
+            <b>{target.name}</b>
+            <small>{target.pid ? `PID ${target.pid}` : `${n} Prozess${n > 1 ? 'e' : ''}`} · {fmtB(target.rss)} RAM</small>
+            {target.args && <code>{target.args}</code>}
+          </div>
+        </div>
+        {target.kind === 'service' ? (
+          <p className="muted">Systemdienst — er wird sauber über systemd gesteuert (einfaches Killen würde ihn sofort neu starten). Seiten und Apps, die ihn brauchen, sind beim Stoppen nicht erreichbar.</p>
+        ) : (
+          <p className="muted">„Beenden“ schickt SIGTERM, damit {n > 1 ? 'die Prozesse' : 'der Prozess'} sauber schließen {n > 1 ? 'können' : 'kann'}. „Hart beenden“ (SIGKILL) wirkt sofort — ungespeicherte Daten gehen dabei verloren.</p>
+        )}
+        {err && <div className="ls-killdlg-err">{err}</div>}
+        <div className="ls-killdlg-btns">
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={!!busy}>Abbrechen</button>
+          {target.kind === 'service' ? (
+            <>
+              <button type="button" className="btn" onClick={() => svc('restart')} disabled={!!busy}>{busy === 'restart' ? 'Startet neu …' : 'Neu starten'}</button>
+              <button type="button" className="btn btn-danger" onClick={() => svc('stop')} disabled={!!busy}>{busy === 'stop' ? 'Stoppt …' : 'Dienst stoppen'}</button>
+            </>
+          ) : (
+            <>
+              <button type="button" className={stuck ? 'btn btn-danger' : 'btn ls-btn-hard'} onClick={() => go(true)} disabled={!!busy}>{busy === 'kill' ? 'Erzwinge …' : 'Hart beenden'}</button>
+              {!stuck && <button type="button" className="btn btn-danger" onClick={() => go(false)} disabled={!!busy}>{busy === 'term' ? 'Beendet …' : 'Beenden'}</button>}
+            </>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }

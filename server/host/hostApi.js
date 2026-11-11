@@ -4,7 +4,7 @@ import { PORT } from '../config.js';
 import { audit, setSetting, settingMap } from '../db.js';
 import nodePath from 'node:path';
 import { getMcInstance, listMcInstances } from '../minecraft/mcDb.js';
-import { startStats, statsSnapshot } from './stats.js';
+import { killTarget, startStats, statsSnapshot } from './stats.js';
 import { getJob, listJobs } from './exec.js';
 import {
   ENGINES, connectionInfo, createDatabase, dropDatabase, dumpDatabase, engineOverview, ensureDbTables,
@@ -90,6 +90,14 @@ export async function handleHostApi({ req, res, url, method, pathname, me, db, i
     }
     if (method === 'GET' && p === '/stats') {
       json(res, 200, statsSnapshot(Number(url.searchParams.get('since')) || 0));
+      return true;
+    }
+    if (method === 'POST' && p === '/processes/kill') {
+      if (!can('host.services')) return deny();
+      const body = await readBody(req);
+      const r = await killTarget({ key: body.key ? String(body.key) : null, pid: body.pid ? Number(body.pid) : null, comm: body.comm ? String(body.comm) : null, force: !!body.force });
+      audit(db, me.username, r.signal === 'SIGKILL' ? 'host.process.kill' : 'host.process.term', `${body.name || body.key || body.comm || ''} (PID ${r.pids.join(', ')})`.slice(0, 200), ip);
+      json(res, 200, r);
       return true;
     }
     if (method === 'GET' && p === '/setup') {

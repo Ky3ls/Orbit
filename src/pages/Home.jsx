@@ -111,7 +111,7 @@ export default function Home() {
         </div>
       </div>
 
-      {(can(user, 'overview') || can(user, 'host.view')) && <LiveStats servers={servers} />}
+      {(can(user, 'overview') || can(user, 'host.view')) && <LiveStats servers={servers} canKill={can(user, 'host.services')} />}
 
       {games.length > 1 && (
         <div className="seg home-filter">

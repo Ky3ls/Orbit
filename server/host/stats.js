@@ -14,6 +14,8 @@ const history = [];
 let last = null;
 let consumers = [];
 let processes = [];
+let groupPids = new Map(); // Verursacher-Schlüssel → PIDs (letzte Messung)
+let procByPid = new Map();
 let resolveEntities = () => ({ mc: [], fx: null });
 let timer = null;
 let tick = 0;
@@ -98,6 +100,27 @@ function classify(p, ent) {
   return { key: `proc:${name}`, name, cat: 'other' };
 }
 
+/* ── Schutz: was darf aus dem Panel heraus beendet werden? ── */
+const SYSTEM_COMM = /^(systemd.*|init|sshd|sshd-session|dbus-daemon|dbus-broker|agetty|login|polkitd|containerd|dockerd|udisksd|networkd-dispatcher|multipathd|snapd|cron|rsyslogd)$/;
+const SERVICE_OF = { 'db:mysql': 'mysql', 'db:postgresql': 'postgresql', 'db:redis': 'redis', 'web:nginx': 'nginx', 'web:apache': 'apache', 'web:caddy': 'caddy', 'web:php': 'php' };
+
+/** Grund, warum ein Prozess geschützt ist — oder null, wenn er beendet werden darf. */
+function protectReason(p, byPid) {
+  if (p.pid <= 1) return 'Systemprozess (init).';
+  if (p.pid === process.pid) return 'Das ist Orbit selbst — nutze „Orbit neu starten“.';
+  if (SYSTEM_COMM.test(p.comm)) return 'Systemdienst — wird nicht aus dem Panel beendet.';
+  let cur = p;
+  for (let i = 0; cur && i < 64; i += 1) {
+    if (cur.pid === process.pid && cur !== p) return 'Läuft unter Orbit — über den Server selbst stoppen.';
+    if (/\/opt\/mcsmanager\//.test(cur.args || '') || /^\/opt\/mcsmanager(\/|$)/.test(cur.cwd || '')) return 'Gehört zu MCSManager — bitte dort steuern.';
+    if (cur.ppid <= 1) break;
+    cur = byPid.get(cur.ppid);
+  }
+  // Vorfahren von Orbit (z. B. die Shell, die es gestartet hat)
+  for (let a = byPid.get(process.pid); a && a.pid > 1; a = byPid.get(a.ppid)) if (a.pid === p.pid) return 'Orbit läuft darunter.';
+  return null;
+}
+
 async function sampleProcesses() {
   const r = await run('ps', ['-eo', 'pid=,ppid=,user:20=,rss=,pcpu=,etimes=,comm=,args='], { timeout: 8000, allowFail: true, maxBuffer: 16 << 20 });
   const ent = resolveEntities();
@@ -130,12 +153,16 @@ async function sampleProcesses() {
   }
   for (const pid of cpuTicks.keys()) if (!list.some((p) => p.pid === pid)) cpuTicks.delete(pid);
 
+  const byPid = new Map(list.map((p) => [p.pid, p]));
+  for (const p of list) p.protect = protectReason(p, byPid);
   const groups = new Map();
   for (const p of list) {
     const c = classify(p, ent);
     p.owner = c;
     let g = groups.get(c.key);
-    if (!g) { g = { ...c, rss: 0, cpu: 0, pids: 0, main: p }; groups.set(c.key, g); }
+    if (!g) { g = { ...c, rss: 0, cpu: 0, pids: 0, main: p, list: [], protect: null }; groups.set(c.key, g); }
+    g.list.push(p.pid);
+    if (p.protect) { g.blocked = (g.blocked || 0) + 1; if (!g.protect) g.protect = p.protect; }
     g.rss += p.rss;
     g.cpu += p.cpuNow ?? 0;
     g.pids += 1;
@@ -146,12 +173,22 @@ async function sampleProcesses() {
   const rest = { key: 'other:rest', name: 'Andere Prozesse', cat: 'other', rss: 0, cpu: 0, pids: 0 };
   for (const g of groups.values()) {
     if (g.cat === 'other' && g.rss < 80 * 1024 * 1024) { rest.rss += g.rss; rest.cpu += g.cpu; rest.pids += g.pids; continue; }
-    big.push({ key: g.key, name: g.name, cat: g.cat, game: g.game, rss: g.rss, cpu: Math.round(g.cpu * 10) / 10, pids: g.pids, pid: g.main.pid, since: g.main.age ? now - g.main.age * 1000 : null });
+    big.push({
+      key: g.key, name: g.name, cat: g.cat, game: g.game, rss: g.rss, cpu: Math.round(g.cpu * 10) / 10, pids: g.pids, pid: g.main.pid, since: g.main.age ? now - g.main.age * 1000 : null,
+      service: SERVICE_OF[g.key] || null,
+      protect: g.game && !g.key.startsWith('java:') ? 'Gameserver — über den Server stoppen.' : g.protect,
+    });
   }
+  for (const c of big) {
+    const g = groups.get(c.key);
+    if (g && g.blocked && g.blocked < g.pids && !c.game) c.protect = `${g.blocked} von ${g.pids} Prozessen sind geschützt (${g.protect.replace(/\.$/, '')}). Beende die anderen einzeln unter „Prozesse“.`;
+  }
+  groupPids = new Map([...groups.values()].map((g) => [g.key, g.list]));
+  procByPid = byPid;
   if (rest.pids) big.push({ ...rest, cpu: Math.round(rest.cpu * 10) / 10 });
   consumers = big.sort((a, b) => b.rss - a.rss);
   processes = list.sort((a, b) => b.rss - a.rss).slice(0, 15).map((p) => ({
-    pid: p.pid, user: p.user, comm: p.comm, args: p.args, rss: p.rss, cpu: Math.round((p.cpuNow ?? p.cpu) * 10) / 10, owner: p.owner?.name, cat: p.owner?.cat, since: now - p.age * 1000,
+    pid: p.pid, user: p.user, comm: p.comm, args: p.args, rss: p.rss, cpu: Math.round((p.cpuNow ?? p.cpu) * 10) / 10, owner: p.owner?.name, cat: p.owner?.cat, since: now - p.age * 1000, protect: p.protect,
   }));
 }
 const cpuTicks = new Map();
@@ -195,6 +232,46 @@ export function startStats(resolver) {
     if (tick % 2 === 0) sampleProcesses().catch(() => {});
   }, STEP);
   timer.unref?.();
+}
+
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+
+/**
+ * Prozess oder ganzen Verursacher beenden. Misst vorher frisch und prüft den Schutz erneut.
+ * target: { key } für eine Gruppe aus „Was zieht am meisten RAM?“ oder { pid, comm } für einen Prozess.
+ */
+export async function killTarget({ key, pid, comm, force = false }) {
+  await sampleProcesses();
+  let pids;
+  if (key) {
+    if (key === 'other:rest') throw new Error('„Andere Prozesse“ ist eine Sammelgruppe — beende einzelne Prozesse im Reiter „Prozesse“.');
+    const c = consumers.find((x) => x.key === key);
+    if (!c) throw new Error('Läuft nicht mehr.');
+    if (c.service) throw new Error('Das ist ein Systemdienst — nutze „Dienst stoppen“ oder „Neu starten“.');
+    if (c.protect) throw new Error(c.protect);
+    pids = groupPids.get(key) || [];
+  } else {
+    const p = procByPid.get(Number(pid));
+    if (!p || (comm && p.comm !== comm)) throw new Error('Prozess läuft nicht mehr.');
+    if (p.owner?.game && !p.owner.key.startsWith('java:')) throw new Error('Gehört zu einem Gameserver — über den Server stoppen.');
+    pids = [p.pid];
+  }
+  for (const id of pids) {
+    const p = procByPid.get(id);
+    const why = p && protectReason(p, procByPid);
+    if (why) throw new Error(`PID ${id}: ${why}`);
+  }
+  if (!pids.length) throw new Error('Läuft nicht mehr.');
+  const sig = force ? 'SIGKILL' : 'SIGTERM';
+  for (const id of pids) { try { process.kill(id, sig); } catch { /* schon weg */ } }
+  const until = Date.now() + (force ? 2000 : 5000);
+  let left = pids.filter(alive);
+  while (left.length && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 250));
+    left = left.filter(alive);
+  }
+  sampleProcesses().catch(() => {});
+  return { signal: sig, pids, remaining: left };
 }
 
 export function statsSnapshot(since = 0) {
