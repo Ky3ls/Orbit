@@ -105,7 +105,9 @@ export async function onlinePlayers(inst) {
   let v = null;
   if (rconConfig(inst)) {
     try {
-      const out = await rcon(inst, 'minecraft:list uuids');
+      let out = await rcon(inst, 'minecraft:list uuids');
+      // Ältere/gemoddete Server kennen „list uuids“ nicht → einfache Liste (nur Namen)
+      if (!/players online/.test(out)) out = await rcon(inst, 'list');
       const m = out.match(/There are (\d+) (?:of a max of|out of maximum) (\d+) players online[.:]?\s*(.*)$/s);
       if (m) {
         const players = m[3].split(',').map((s) => s.trim()).filter(Boolean).map((s) => {

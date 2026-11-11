@@ -40,6 +40,8 @@ class McRcon {
     this.ready = new Promise((resolve, reject) => {
       const sock = net.createConnection({ host: '127.0.0.1', port: this.port });
       this.sock = sock;
+      // Schließt der Server die Verbindung vor der Anmeldung (z. B. beim Hochfahren), muss das Warten enden
+      this.abortConnect = (e) => reject(e);
       const fail = (e) => { this.close(); reject(e); };
       sock.setTimeout(6000, () => fail(new Error('RCON: Zeitüberschreitung')));
       sock.on('error', fail);
@@ -50,7 +52,7 @@ class McRcon {
           parts: [],
           done: (_txt, id) => {
             if (id === -1) fail(new Error('RCON: Passwort falsch'));
-            else { sock.setTimeout(0); resolve(); }
+            else { sock.setTimeout(0); this.abortConnect = null; resolve(); }
           },
           auth: true,
         });
@@ -86,7 +88,11 @@ class McRcon {
   }
 
   async run(cmd) {
-    await this.connect();
+    let t0;
+    await Promise.race([
+      this.connect(),
+      new Promise((_, rej) => { t0 = setTimeout(() => rej(new Error('RCON: Anmeldung dauert zu lange')), 8000); }),
+    ]).finally(() => clearTimeout(t0));
     clearTimeout(this.idle);
     this.idle = setTimeout(() => this.close(), IDLE_MS);
     return new Promise((resolve, reject) => {
@@ -109,6 +115,9 @@ class McRcon {
     try { this.sock?.destroy(); } catch { /* */ }
     this.sock = null;
     this.ready = null;
+    const abort = this.abortConnect;
+    this.abortConnect = null;
+    abort?.(new Error('RCON: Verbindung vom Server geschlossen'));
     for (const w of this.waiters.values()) { if (!w.auth) w.done(''); }
     this.waiters.clear();
   }
