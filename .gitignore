@@ -10,4 +10,8 @@ servers
 *.log
 .npm
 .npm-cache
-
+.cursor
+.claude
+CLAUDE.md
+AGENTS.md
+.ktest
