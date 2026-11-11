@@ -44,12 +44,15 @@ function pidBelongs(pid, inst) {
   }
 }
 
+// Von Hand gestoppte Instanzen: Autostart greift für sie erst wieder nach einem Start
+const held = new Set();
+
 function persist() {
   try {
     const map = {};
     for (const [id, s] of rt) if (s.pid && pidAlive(s.pid)) map[id] = { pid: s.pid };
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(STATE_FILE(), JSON.stringify({ v: 1, at: Date.now(), instances: map }));
+    fs.writeFileSync(STATE_FILE(), JSON.stringify({ v: 1, at: Date.now(), instances: map, held: [...held] }));
   } catch { /* */ }
 }
 
@@ -193,6 +196,7 @@ export async function startMc(db, id, log = () => {}) {
   }
   child.unref();
   Object.assign(s, { pid: child.pid, child, phase: 'starting', startedAt: Date.now(), onlineAt: 0, manualStop: false, ping: null });
+  held.delete(Number(inst.id));
   child.on('exit', (code, signal) => onExit(db, inst.id, code, signal, log));
   persist();
   log('info', `[MC:${inst.slug}] gestartet (pid ${child.pid})`);
@@ -244,6 +248,8 @@ export async function stopMc(db, id, { kill = false, log = () => {} } = {}) {
   if (!s.pid || !pidAlive(s.pid)) { s.phase = 'offline'; return { ok: true }; }
   s.manualStop = true;
   s.phase = 'stopping';
+  held.add(Number(inst.id));
+  persist();
   const pid = s.pid;
   if (!kill) {
     try { sendMc(inst, 'stop'); } catch { /* */ }
@@ -460,13 +466,19 @@ let loopTimer = null;
 export function initMinecraft(db, log = () => {}) {
   // Nach Panel-Restart: laufende Server wieder einhängen
   let saved = {};
-  try { saved = JSON.parse(fs.readFileSync(STATE_FILE(), 'utf8')).instances || {}; } catch { /* */ }
+  try {
+    const st = JSON.parse(fs.readFileSync(STATE_FILE(), 'utf8'));
+    saved = st.instances || {};
+    for (const id of st.held || []) held.add(Number(id));
+  } catch { /* */ }
   for (const inst of listMcInstances(db)) {
     if (inst.state === 'installing') updateMcInstance(db, inst.id, { state: 'failed' });
     const pid = Number(saved[inst.id]?.pid);
     if (pid && pidAlive(pid) && pidBelongs(pid, inst)) {
       Object.assign(r(inst.id), { pid, phase: 'starting', startedAt: Date.now() });
       log('ok', `[MC:${inst.slug}] laufenden Server übernommen (pid ${pid})`);
+    } else if (inst.autostart && inst.state === 'ready' && held.has(Number(inst.id))) {
+      log('info', `[MC:${inst.slug}] Autostart übersprungen — wurde von Hand gestoppt`);
     } else if (inst.autostart && inst.state === 'ready') {
       startMc(db, inst.id, log).catch((e) => log('warn', `[MC:${inst.slug}] Autostart: ${e.message}`));
     }
