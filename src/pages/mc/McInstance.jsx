@@ -25,32 +25,37 @@ const TABS = [
 const QUICK = ['list', 'save-all', 'time set day', 'weather clear', 'tps'];
 
 /* ── Konsole ── */
-function Console({ inst }) {
+function Console({ inst, onPlayers }) {
   const [lines, setLines] = useState([]);
   const [cmd, setCmd] = useState('');
   const [hist, setHist] = useState([]);
   const [hi, setHi] = useState(-1);
   const [follow, setFollow] = useState(true);
-  const offset = useRef(null);
+  const [live, setLive] = useState(false);
   const box = useRef(null);
+  const playersCb = useRef(onPlayers);
+  playersCb.current = onPlayers;
   const running = !!inst.status.pid;
 
+  // Live-Stream: Orbit schickt sofort die letzten Zeilen, danach jede neue Zeile in dem Moment, in dem der Server sie schreibt
   useEffect(() => {
-    let alive = true;
-    offset.current = null;
-    setLines([]);
-    const tick = () => {
-      const q = offset.current == null ? '' : `?offset=${offset.current}`;
-      api(`/api/mc/instances/${inst.id}/console${q}`).then((d) => {
-        if (!alive) return;
-        offset.current = d.offset;
-        if (d.reset) setLines(d.lines);
-        else if (d.lines.length) setLines((prev) => [...prev, ...d.lines].slice(-1500));
-      }).catch(() => {});
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => { alive = false; clearInterval(id); };
+    const es = new EventSource(`/api/mc/instances/${inst.id}/console/stream`);
+    const parse = (e) => { try { return JSON.parse(e.data); } catch { return null; } };
+    es.addEventListener('init', (e) => {
+      const d = parse(e);
+      if (!d) return;
+      setLive(true);
+      setLines(d.lines || []);
+      playersCb.current?.(d.players || []);
+    });
+    es.addEventListener('lines', (e) => {
+      const d = parse(e);
+      if (d?.lines?.length) setLines((prev) => (prev.length + d.lines.length > 1500 ? [...prev, ...d.lines].slice(-1500) : [...prev, ...d.lines]));
+    });
+    es.addEventListener('reset', () => setLines([]));
+    es.addEventListener('players', (e) => { const d = parse(e); if (d) playersCb.current?.(d.players || []); });
+    es.onerror = () => setLive(false);
+    return () => { es.close(); playersCb.current?.(null); };
   }, [inst.id]);
 
   useEffect(() => {
@@ -88,10 +93,10 @@ function Console({ inst }) {
           if (atBottom !== follow) setFollow(atBottom);
         }}
       >
-        {lines.length === 0 ? <div className="lc-empty">{running ? 'Warte auf Ausgabe…' : 'Server ist offline. Starte ihn, um die Konsole zu sehen.'}</div> : null}
+        {lines.length === 0 ? <div className="lc-empty">{!live ? 'Verbinde…' : running ? 'Warte auf Ausgabe…' : 'Server ist offline. Starte ihn, um die Konsole zu sehen.'}</div> : null}
         {lines.map((l, i) => (
           // eslint-disable-next-line react/no-array-index-key
-          <div key={i} className={`mci-line lvl-${l.level}`}>{l.t}</div>
+          <div key={l.id ?? i} className={`mci-line lvl-${l.level}`}>{l.t}</div>
         ))}
       </div>
       <form className="lc-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
@@ -324,12 +329,14 @@ export default function McInstance() {
   const [inst, setInst] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState('');
+  const [livePlayers, setLivePlayers] = useState(null);
 
   const load = useCallback(() => {
     api(`/api/mc/instances/${id}`).then((d) => { setInst(d.instance); setErr(''); }).catch((e) => setErr(e.message));
   }, [id]);
   useEffect(() => {
     setInst(null);
+    setLivePlayers(null);
     load();
     const t = setInterval(load, 2500);
     return () => clearInterval(t);
@@ -389,7 +396,7 @@ export default function McInstance() {
       {inst.state === 'failed' && <div className="err">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}
 
       <div className="mci-kpis">
-        <div><span><NavIcon name="users" />Spieler</span><b>{st.online ? st.players : '–'}<small> / {st.maxPlayers ?? '–'}</small></b></div>
+        <div><span><NavIcon name="users" />Spieler</span><b>{st.pid ? (livePlayers ? livePlayers.length : st.players ?? 0) : '–'}<small> / {st.maxPlayers ?? '–'}</small></b></div>
         <div><span><NavIcon name="cpu" />CPU</span><b>{st.pid ? `${st.cpu}%` : '–'}</b></div>
         <div>
           <span><NavIcon name="memory" />RAM</span>
@@ -403,23 +410,28 @@ export default function McInstance() {
 
       {tab === 'console' && (
         <div className="mci-overview">
-          <Console inst={inst} />
+          <Console inst={inst} onPlayers={setLivePlayers} />
           <aside className="mci-players card">
-            <header><h3>Spieler online</h3><span className="dash-count">{st.online ? st.players : 0}</span></header>
-            {!st.online ? (
-              <div className="dash-empty"><NavIcon name="power" /><span>{st.pid ? 'Server startet…' : 'Server ist offline.'}</span></div>
-            ) : st.sample.length === 0 ? (
-              <div className="dash-empty"><NavIcon name="users" /><span>{st.players ? `${st.players} Spieler online` : 'Niemand online.'}</span></div>
-            ) : (
-              <ul>
-                {st.sample.map((n) => (
-                  <li key={n}>
-                    <span className="mci-av" aria-hidden="true">{n.slice(0, 1).toUpperCase()}</span>
-                    <span>{n}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {(() => {
+              const names = st.pid ? (livePlayers ? livePlayers.map((p) => p.name) : st.sample) : [];
+              return (<>
+                <header><h3>Spieler online</h3><span className="dash-count">{names.length}</span></header>
+                {!st.pid ? (
+                  <div className="dash-empty"><NavIcon name="power" /><span>Server ist offline.</span></div>
+                ) : names.length === 0 ? (
+                  <div className="dash-empty"><NavIcon name="users" /><span>{st.online ? 'Niemand online.' : 'Server startet…'}</span></div>
+                ) : (
+                  <ul>
+                    {names.map((n) => (
+                      <li key={n}>
+                        <span className="mci-av" aria-hidden="true">{n.slice(0, 1).toUpperCase()}</span>
+                        <span>{n}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>);
+            })()}
             {st.version ? <footer><span>Version</span><b>{st.version}</b></footer> : null}
           </aside>
         </div>

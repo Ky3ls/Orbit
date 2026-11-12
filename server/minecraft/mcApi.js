@@ -14,6 +14,7 @@ import { archiveEntries, backupDir, backupOverview, createBackup, deleteBackup, 
 import { analyzeServer, getImportJob, importServer, scanServers } from './mcImport.js';
 import { editInventory, listPlayers, playerAction, playerDetail } from './mcPlayers.js';
 import { checkHost, externalCheck, publicHost, setPublicHost } from './mcNet.js';
+import { closeConsole, consoleSnapshot, subscribeConsole } from './mcConsole.js';
 import { chownForRun, initMinecraft, isRunning, mcStatus, readConsole, restartMc, runningRamMb, sendMc, startMc, stopMc } from './mcProcess.js';
 import { PROPERTY_SCHEMA, readProperties, writeProperties } from './mcProperties.js';
 import { hostMemory, suggestRam } from './mcRam.js';
@@ -278,6 +279,7 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       if (body.deleteBackups) {
         try { fs.rmSync(backupDir(inst), { recursive: true, force: true }); } catch { /* */ }
       }
+      closeConsole(inst.id);
       deleteMcInstanceRow(db, inst.id);
       audit(db, me.username, 'mc.delete', `${inst.name}${body.deleteFiles ? ' (inkl. Dateien)' : ''}${body.deleteBackups ? ' (inkl. Backups)' : ''}`, ip);
       json(res, 200, { ok: true });
@@ -294,6 +296,29 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       else throw new Error('Aktion muss start, stop, restart oder kill sein.');
       audit(db, me.username, `mc.${action}`, inst.name, ip);
       json(res, 200, { ok: true, status: mcStatus(getMcInstance(db, inst.id)) });
+      return true;
+    }
+    if (method === 'GET' && sub === '/console/stream') {
+      // Live-Konsole per SSE: sofort die letzten Zeilen aus dem Speicher, danach jede neue Zeile
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      res.socket?.setNoDelay?.(true);
+      const send = (event, data) => {
+        if (res.writableEnded || res.destroyed) return;
+        try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* */ }
+      };
+      res.write('retry: 2000\n\n');
+      send('init', consoleSnapshot(inst, 600));
+      const off = subscribeConsole(inst, send);
+      const ka = setInterval(() => { if (!res.writableEnded) res.write(': ka\n\n'); }, 15_000);
+      const end = () => { off(); clearInterval(ka); };
+      req.on('close', end);
+      res.on('close', end);
       return true;
     }
     if (method === 'GET' && sub === '/console') {

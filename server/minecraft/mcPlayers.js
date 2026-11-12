@@ -2,9 +2,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { plain, readNbtFile, T, writeNbtFile } from './mcNbt.js';
-import { chownForRun, consoleLog, consoleQuery, isRunning, mcStatus, sendMc } from './mcProcess.js';
+import { chownForRun, consoleQuery, isRunning, mcStatus, sendMc } from './mcProcess.js';
 import { readProperties, writeProperties } from './mcProperties.js';
-import { rcon, rconConfig } from './mcRcon.js';
+import { lastIp, logPlayers } from './mcConsole.js';
 import { parseSnbt } from './mcSnbt.js';
 import { UA } from './mcSources.js';
 
@@ -86,44 +86,23 @@ async function resolveProfile(inst, name) {
   throw new Error('Mojang ist gerade nicht erreichbar — später erneut versuchen.');
 }
 
-/* ── Befehle ── */
+/* ── Befehle ── direkt in die Server-Konsole (Antwort erscheint live in der Konsole) */
 async function command(inst, cmd) {
   if (!isRunning(inst.id)) throw new Error('Server läuft nicht.');
-  if (rconConfig(inst)) {
-    try { return { out: await rcon(inst, cmd), rcon: true }; } catch { /* RCON noch nicht bereit → Konsole */ }
-  }
   sendMc(inst, cmd);
   return { out: null, rcon: false };
 }
 
-const onlineCache = new Map();
-/** Online-Spieler: RCON `list uuids`, sonst Status-Ping (max. 12 Namen) */
+/** Online-Spieler live aus der Konsole (Login/Logout) — ohne RCON */
 export async function onlinePlayers(inst) {
   if (!isRunning(inst.id)) return { players: [], max: 0, source: 'offline' };
-  const hit = onlineCache.get(inst.id);
-  if (hit && Date.now() - hit.at < 2500) return hit.v;
-  let v = null;
-  if (rconConfig(inst)) {
-    try {
-      let out = await rcon(inst, 'minecraft:list uuids');
-      // Ältere/gemoddete Server kennen „list uuids“ nicht → einfache Liste (nur Namen)
-      if (!/players online/.test(out)) out = await rcon(inst, 'list');
-      const m = out.match(/There are (\d+) (?:of a max of|out of maximum) (\d+) players online[.:]?\s*(.*)$/s);
-      if (m) {
-        const players = m[3].split(',').map((s) => s.trim()).filter(Boolean).map((s) => {
-          const pm = s.match(/^(\S+)\s+\(([0-9a-f-]{36})\)$/i);
-          return pm ? { name: pm[1], uuid: pm[2].toLowerCase() } : { name: s, uuid: null };
-        });
-        v = { players, max: Number(m[2]), count: Number(m[1]), source: 'rcon' };
-      }
-    } catch { /* fällt auf Ping zurück */ }
-  }
-  if (!v) {
-    const st = mcStatus(inst);
-    v = { players: (st.sample || []).map((n) => ({ name: typeof n === 'string' ? n : n.name, uuid: null })), max: st.maxPlayers || 0, count: st.players ?? 0, source: 'ping' };
-  }
-  onlineCache.set(inst.id, { at: Date.now(), v });
-  return v;
+  const cache = lists(inst).cache;
+  const players = logPlayers(inst).map((p) => ({
+    name: p.name,
+    uuid: p.uuid || cache.find((c) => c.name.toLowerCase() === p.name.toLowerCase())?.uuid || null,
+  }));
+  const st = mcStatus(inst);
+  return { players, max: st.maxPlayers || 0, count: players.length, source: 'log' };
 }
 
 /* ── Statistiken ── */
@@ -228,8 +207,8 @@ export async function listPlayers(inst) {
   const props = readProperties(inst.path);
   return {
     running: isRunning(inst.id),
-    live: online.source === 'rcon',
-    rcon: !!rconConfig(inst),
+    live: online.source === 'log',
+    rcon: false,
     online: online.count ?? online.players.length,
     max: online.max || Number(props['max-players']) || 20,
     whitelist: props['white-list'] === 'true',
@@ -345,25 +324,6 @@ function normalizePlayer(p) {
   };
 }
 
-let ipCache = { size: -1, map: new Map() };
-function lastIps(inst) {
-  const file = consoleLog(inst);
-  let size = 0;
-  try { size = fs.statSync(file).size; } catch { return new Map(); }
-  if (size === ipCache.size && ipCache.file === file) return ipCache.map;
-  const map = new Map();
-  try {
-    const len = Math.min(size, 4 * 1048576);
-    const buf = Buffer.alloc(len);
-    const fd = fs.openSync(file, 'r');
-    fs.readSync(fd, buf, 0, len, size - len);
-    fs.closeSync(fd);
-    for (const m of buf.toString('utf8').matchAll(/(\w{1,16})\[\/([0-9a-fA-F:.]+):\d+\] logged in/g)) map.set(m[1].toLowerCase(), m[2]);
-  } catch { /* */ }
-  ipCache = { size, file, map };
-  return map;
-}
-
 export async function playerDetail(inst, uuidIn, opts = {}) {
   const uuid = dashUuid(uuidIn);
   if (!uuid) throw new Error('Ungültige UUID.');
@@ -395,7 +355,7 @@ export async function playerDetail(inst, uuidIn, opts = {}) {
   const adv = advancementSummary(readJson(path.join(dirs.adv, `${uuid}.json`), null));
   return {
     ...base,
-    ip: lastIps(inst).get(base.name.toLowerCase()) || null,
+    ip: lastIp(inst, base.name),
     ipBanned: false,
     source,
     canEdit: base.online ? true : !!raw,
@@ -417,24 +377,22 @@ export async function playerDetail(inst, uuidIn, opts = {}) {
 }
 
 /* ── Live-Daten eines Online-Spielers ──
- * Kurze Werte per RCON (keine Konsolen-Ausgabe), Inventar & Co. über die Konsole (dort ungekürzt). */
+ * Ein einziges `data get entity` über die Konsole (dort ungekürzt) — die Antwortzeile fängt
+ * der Live-Tail ab, sie taucht nicht in der Konsolen-Ansicht auf. */
 const VITALS = ['Health', 'foodLevel', 'foodSaturationLevel', 'XpLevel', 'XpP', 'XpTotal', 'Pos', 'Dimension', 'playerGameType', 'SelectedItemSlot', 'AbsorptionAmount', 'Air', 'Fire'];
 const INV_PARTS = ['Inventory', 'equipment', 'EnderItems'];
 
 async function livePlayer(inst, name, parts) {
   const raw = {};
-  const useRcon = !!rconConfig(inst);
-  const consoleKeys = [...parts];
-  if (useRcon) {
-    const outs = await Promise.all(VITALS.map((k) => rcon(inst, `data get entity ${name} ${k}`).catch(() => '')));
-    VITALS.forEach((k, i) => {
-      const out = outs[i];
-      const at = out.indexOf('entity data: ');
-      if (at < 0 || out.endsWith('...')) return;
-      try { raw[k] = parseSnbt(out.slice(at + 13)); } catch { /* */ }
-    });
-  } else consoleKeys.push(...VITALS);
-  for (const key of consoleKeys) {
+  const keys = [...VITALS, ...parts];
+  const full = await consoleQuery(inst, `data get entity ${name}`, name, 4000);
+  if (full == null) return raw;
+  try {
+    const all = parseSnbt(full);
+    for (const k of keys) if (all && all[k] !== undefined) raw[k] = all[k];
+    return raw;
+  } catch { /* Parser kommt mit etwas nicht klar → einzeln nachfragen */ }
+  for (const key of keys) {
     const txt = await consoleQuery(inst, `data get entity ${name} ${key}`, name);
     if (txt == null) continue;
     try { raw[key] = parseSnbt(txt); } catch { /* */ }

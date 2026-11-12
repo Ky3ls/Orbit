@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { DATA_DIR } from '../config.js';
+import { awaitLine, consoleLog, logPlayers, pokeConsole, readConsole } from './mcConsole.js';
 import { ensureRconProperties } from './mcRcon.js';
 import { getMcInstance, listMcInstances, updateMcInstance } from './mcDb.js';
 import { readProperties } from './mcProperties.js';
@@ -25,7 +26,7 @@ function r(id) {
 }
 
 export const orbitDir = (inst) => path.join(inst.path, '.orbit');
-export const consoleLog = (inst) => path.join(orbitDir(inst), 'console.log');
+export { consoleLog };
 const stdinFifo = (inst) => path.join(orbitDir(inst), 'stdin.fifo');
 
 function pidAlive(pid) {
@@ -71,6 +72,7 @@ function appendLog(inst, text) {
   try {
     fs.mkdirSync(orbitDir(inst), { recursive: true });
     fs.appendFileSync(consoleLog(inst), `${text}\n`);
+    pokeConsole(inst);
   } catch { /* */ }
 }
 
@@ -142,6 +144,7 @@ export function mcStatus(inst) {
   const alive = s.pid && pidAlive(s.pid);
   if (!alive && (s.phase === 'running' || s.phase === 'starting')) s.phase = 'offline';
   const phase = inst.state === 'installing' ? 'installing' : inst.state === 'failed' ? 'failed' : s.phase;
+  const logged = alive ? logPlayers(inst) : [];
   return {
     phase,
     online: phase === 'running',
@@ -150,9 +153,10 @@ export function mcStatus(inst) {
     onlineAt: phase === 'running' ? s.onlineAt : null,
     cpu: alive ? Math.round(s.cpu.pct) : 0,
     rssMb: alive ? s.rssMb : 0,
-    players: s.ping?.players ?? null,
-    maxPlayers: s.ping?.max ?? null,
-    sample: s.ping?.sample || [],
+    // Online-Liste live aus der Konsole (Login/Logout) — nicht vom Status-Ping (max. 12 Namen, hängt bei Last)
+    players: alive ? logged.length : null,
+    maxPlayers: s.ping?.max ?? (alive ? Number(readProperties(inst.path)['max-players']) || null : null),
+    sample: logged.map((p) => p.name),
     version: s.ping?.version || null,
     motd: s.ping?.motd || null,
   };
@@ -273,115 +277,27 @@ export async function restartMc(db, id, log) {
 
 /* ── Interne Konsolen-Abfragen (z. B. Live-Inventar) ──
  * Die Konsole gibt `data get` ungekürzt aus (RCON kürzt auf ~150 Zeichen).
- * Orbit merkt sich die Byte-Bereiche seiner Antwortzeilen und blendet sie in der Konsolen-Ansicht aus. */
-const hidden = new Map(); // id → { ino, ranges: [[start, end]] }
+ * Der Live-Tail fängt die Antwortzeile ab, sie erscheint nicht in der Konsolen-Ansicht. */
 const queryChain = new Map();
-
-function hideRange(inst, start, end) {
-  let ino = 0;
-  try { ino = fs.statSync(consoleLog(inst)).ino; } catch { /* */ }
-  let h = hidden.get(inst.id);
-  if (!h || h.ino !== ino) { h = { ino, ranges: [] }; hidden.set(inst.id, h); }
-  h.ranges.push([start, end]);
-  if (h.ranges.length > 2000) h.ranges.splice(0, h.ranges.length - 2000);
-}
-function isHidden(inst, ino, start) {
-  const h = hidden.get(inst.id);
-  if (!h || h.ino !== ino) return false;
-  return h.ranges.some(([a, b]) => start >= a && start < b);
-}
-
 const escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Befehl über die Konsole schicken und die Antwortzeile zurückgeben.
  * @returns {Promise<string|null>} Text nach „…entity data: “ oder null (nicht gefunden / Zeitüberschreitung)
  */
-export function consoleQuery(inst, command, name, timeoutMs = 1500) {
+export function consoleQuery(inst, command, name, timeoutMs = 3000) {
   const prev = queryChain.get(inst.id) || Promise.resolve();
+  const re = new RegExp(`(?:System chat: )?(?:${escRe(name)} has the following entity data: (.*)|Found no elements matching .*|No entity was found|No player was found)$`);
   const job = prev.then(async () => {
-    const file = consoleLog(inst);
-    let pos = 0;
-    try { pos = fs.statSync(file).size; } catch { return null; }
-    sendMc(inst, command);
-    const re = new RegExp(`(?:System chat: )?(?:${escRe(name)} has the following entity data: (.*)|Found no elements matching .*|No entity was found|No player was found)$`);
-    const deadline = Date.now() + timeoutMs;
-    let carry = '';
-    let carryStart = pos;
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 30));
-      let size = 0;
-      try { size = fs.statSync(file).size; } catch { return null; }
-      if (size <= pos) continue;
-      const buf = Buffer.alloc(size - pos);
-      const fd = fs.openSync(file, 'r');
-      fs.readSync(fd, buf, 0, buf.length, pos);
-      fs.closeSync(fd);
-      pos = size;
-      const text = carry + buf.toString('utf8');
-      let lineStart = carryStart;
-      const parts = text.split('\n');
-      carry = parts.pop();
-      for (const line of parts) {
-        const len = Buffer.byteLength(line) + 1;
-        const m = line.match(re);
-        if (m) {
-          hideRange(inst, lineStart, lineStart + len);
-          return m[1] ?? null;
-        }
-        lineStart += len;
-      }
-      carryStart = lineStart;
-    }
-    return null;
+    if (!isRunning(inst.id)) return null;
+    const hit = await awaitLine(inst, re, () => sendMc(inst, command), timeoutMs);
+    return hit ? (hit[1] ?? null) : null;
   });
   queryChain.set(inst.id, job.catch(() => {}));
   return job;
 }
 
-/** Konsole lesen: ohne Offset die letzten ~400 Zeilen, sonst ab Byte-Offset */
-export function readConsole(inst, offset) {
-  const file = consoleLog(inst);
-  let size = 0;
-  let ino = 0;
-  try { const st = fs.statSync(file); size = st.size; ino = st.ino; } catch { return { offset: 0, lines: [], reset: true }; }
-  let start = Number(offset);
-  let reset = false;
-  if (!Number.isFinite(start) || start < 0 || start > size) {
-    start = Math.max(0, size - 96 * 1024);
-    reset = true;
-  }
-  const len = Math.min(size - start, 512 * 1024);
-  if (len <= 0) return { offset: size, lines: [], reset };
-  const buf = Buffer.alloc(len);
-  const fd = fs.openSync(file, 'r');
-  fs.readSync(fd, buf, 0, len, start);
-  fs.closeSync(fd);
-  const lastNl = buf.lastIndexOf(0x0a);
-  if (lastNl < 0) return { offset: start, lines: [], reset };
-  let text = buf.subarray(0, lastNl + 1).toString('utf8');
-  let at = start;
-  if (reset && start > 0) {
-    const cut = text.indexOf('\n') + 1;
-    at += Buffer.byteLength(text.slice(0, cut));
-    text = text.slice(cut);
-  }
-  const lines = [];
-  for (const t of text.split('\n')) {
-    const lineAt = at;
-    at += Buffer.byteLength(t) + 1;
-    if (!t || isHidden(inst, ino, lineAt)) continue;
-    lines.push({ t, level: lineLevel(t) });
-  }
-  return { offset: start + lastNl + 1, lines: lines.slice(-600), reset };
-}
-
-function lineLevel(t) {
-  if (/\b(ERROR|FATAL|SEVERE)\b|Exception|Caused by/i.test(t)) return 'bad';
-  if (/\bWARN(ING)?\b/.test(t)) return 'warn';
-  if (/Done \(|\[Orbit\].*Start/.test(t)) return 'ok';
-  return 'info';
-}
+export { readConsole };
 
 /* ── Server List Ping (Status-Protokoll) ── */
 function varint(n) {
