@@ -7,7 +7,7 @@ import { DATA_DIR } from '../config.js';
 import { getMcInstance, listMcInstances } from './mcDb.js';
 import { chownForRun, isRunning, mcStatus, sendMc, startMc, stopMc } from './mcProcess.js';
 import { readProperties } from './mcProperties.js';
-import { rcon, rconConfig } from './mcRcon.js';
+import { awaitLine } from './mcConsole.js';
 
 /*
  * Backups pro Minecraft-Instanz.
@@ -225,37 +225,27 @@ function finish(job, err) {
 
 async function tell(inst, text) {
   const msg = JSON.stringify(['', { text: '[Backup] ', color: 'aqua' }, { text, color: 'gray' }]);
-  try {
-    if (rconConfig(inst)) await rcon(inst, `tellraw @a ${msg}`);
-    else sendMc(inst, `tellraw @a ${msg}`);
-  } catch { /* */ }
+  try { sendMc(inst, `tellraw @a ${msg}`); } catch { /* */ }
 }
 
-/** Welt auf die Platte schreiben und Autosave pausieren */
+/**
+ * Welt auf die Platte schreiben und Autosave pausieren — über die Server-Konsole.
+ * Orbit wartet auf „Saved the game“ (bei großen Modpacks kann das dauern, daher kein kurzes RCON-Timeout).
+ */
 async function freezeWorld(inst, job) {
   if (!isRunning(inst.id)) return false;
   jlog(job, 'step', 'Welt speichern (save-all flush)');
-  try {
-    if (rconConfig(inst)) {
-      await rcon(inst, 'save-off');
-      await rcon(inst, 'save-all flush');
-    } else {
-      sendMc(inst, 'save-off');
-      sendMc(inst, 'save-all flush');
-      await new Promise((r) => setTimeout(r, 5000));
-    }
-  } catch (e) {
-    jlog(job, 'warn', `Speichern über RCON fehlgeschlagen: ${e.message}`);
-    try { sendMc(inst, 'save-off'); sendMc(inst, 'save-all flush'); } catch { /* */ }
-    await new Promise((r) => setTimeout(r, 5000));
-  }
+  const t0 = Date.now();
+  const hit = await awaitLine(inst, /\]: Saved the game$/, () => {
+    sendMc(inst, 'save-off');
+    sendMc(inst, 'save-all flush');
+  }, 180_000);
+  if (hit) jlog(job, 'info', `Welt gespeichert (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  else jlog(job, 'warn', 'Server hat das Speichern nach 3 Minuten nicht bestätigt — sichere trotzdem.');
   return true;
 }
 async function thawWorld(inst) {
-  try {
-    if (rconConfig(inst)) await rcon(inst, 'save-on');
-    else sendMc(inst, 'save-on');
-  } catch { try { sendMc(inst, 'save-on'); } catch { /* */ } }
+  try { sendMc(inst, 'save-on'); } catch { /* */ }
 }
 
 /** tar → (Zähler) → zstd → Datei, mit Fortschritt */
@@ -587,7 +577,7 @@ export function backupOverview(db, inst) {
     everyOptions: EVERY_OPTIONS,
     worlds: worldNames(inst),
     running: isRunning(inst.id),
-    rcon: !!rconConfig(inst),
+    rcon: false,
     job: job ? publicJob(job) : null,
     busy: active && active.instanceId !== Number(inst.id) ? { name: active.name, kind: active.kind } : null,
   };
