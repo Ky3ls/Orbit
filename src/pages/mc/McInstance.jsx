@@ -9,7 +9,7 @@ import { TYPE_META, fmtDur, fmtMb, phaseOf } from './mcShared.js';
 import McBackups from './McBackups.jsx';
 import McFiles from './McFiles.jsx';
 import McMods from './McMods.jsx';
-import McPlayers from './McPlayers.jsx';
+import McPlayers, { McPlayerPanel } from './McPlayers.jsx';
 import McSettings from './McSettings.jsx';
 import './mc.css';
 
@@ -330,6 +330,19 @@ export default function McInstance() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState('');
   const [livePlayers, setLivePlayers] = useState(null);
+  const [panel, setPanel] = useState(null);
+
+  // Klick auf einen Online-Spieler: Profil direkt hier an der Seite öffnen
+  async function openPlayer(name) {
+    const known = (livePlayers || []).find((p) => p.name === name && p.uuid);
+    if (known) { setPanel(known.uuid); return; }
+    try {
+      const d = await api(`/api/mc/instances/${id}/players`);
+      const hit = d.players.find((p) => p.name.toLowerCase() === name.toLowerCase());
+      if (hit) setPanel(hit.uuid);
+      else toast.err(`${name} ist Orbit noch nicht bekannt.`);
+    } catch (e) { toast.err(e.message); }
+  }
 
   const load = useCallback(() => {
     api(`/api/mc/instances/${id}`).then((d) => { setInst(d.instance); setErr(''); }).catch((e) => setErr(e.message));
@@ -424,10 +437,10 @@ export default function McInstance() {
                   <ul>
                     {names.map((n) => (
                       <li key={n}>
-                        <Link to={`/mc/${inst.id}/players?p=${encodeURIComponent(n)}`} title={`${n} öffnen`}>
+                        <button type="button" onClick={() => openPlayer(n)} title={`${n} öffnen`}>
                           <span className="mci-av" aria-hidden="true">{n.slice(0, 1).toUpperCase()}</span>
                           <span>{n}</span>
-                        </Link>
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -438,6 +451,7 @@ export default function McInstance() {
           </aside>
         </div>
       )}
+      {tab === 'console' && panel && <McPlayerPanel inst={inst} uuid={panel} online={(livePlayers || []).filter((p) => p.uuid)} onClose={() => setPanel(null)} />}
       {tab === 'players' && <McPlayers inst={inst} />}
       {tab === 'mods' && inst.modKind && <McMods inst={inst} noun={inst.modKind} onRestart={() => control('restart')} />}
       {(tab === 'settings' || tab === 'properties') && <McSettings inst={inst} />}

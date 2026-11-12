@@ -253,6 +253,12 @@ const DTABS = [
   { id: 'actions', label: 'Aktionen', icon: 'bolt' },
 ];
 
+/** Spieler-Seitenfenster für andere Seiten (z. B. Übersicht) */
+export function McPlayerPanel({ inst, uuid, online, onClose }) {
+  const cat = useCatalog(inst.mcVersion);
+  return <PlayerDrawer inst={inst} cat={cat} uuid={uuid} online={online || []} onClose={onClose} onChange={() => {}} />;
+}
+
 function PlayerDrawer({ inst, cat, uuid, online, onClose, onChange }) {
   const [p, setP] = useState(null);
   const [tab, setTab] = useState('overview');
