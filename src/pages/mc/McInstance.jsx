@@ -424,8 +424,10 @@ export default function McInstance() {
                   <ul>
                     {names.map((n) => (
                       <li key={n}>
-                        <span className="mci-av" aria-hidden="true">{n.slice(0, 1).toUpperCase()}</span>
-                        <span>{n}</span>
+                        <Link to={`/mc/${inst.id}/players?p=${encodeURIComponent(n)}`} title={`${n} öffnen`}>
+                          <span className="mci-av" aria-hidden="true">{n.slice(0, 1).toUpperCase()}</span>
+                          <span>{n}</span>
+                        </Link>
                       </li>
                     ))}
                   </ul>

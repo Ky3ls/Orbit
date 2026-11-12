@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../../api.js';
 import Drawer from '../../components/Drawer.jsx';
 import { toast } from '../../components/toast.jsx';
@@ -42,6 +43,16 @@ export default function McPlayers({ inst }) {
     const t = setInterval(() => { if (!document.hidden) load(); }, 2500);
     return () => clearInterval(t);
   }, [load]);
+
+  // Aus der Übersicht kommend (?p=Name): Spieler direkt öffnen
+  const [params, setParams] = useSearchParams();
+  const want = params.get('p');
+  useEffect(() => {
+    if (!want || !data) return;
+    const hit = data.players.find((x) => x.name.toLowerCase() === want.toLowerCase());
+    if (hit) setSel(hit.uuid);
+    setParams((prev) => { const n = new URLSearchParams(prev); n.delete('p'); return n; }, { replace: true });
+  }, [want, data, setParams]);
 
   const players = data?.players || [];
   const counts = useMemo(() => ({
