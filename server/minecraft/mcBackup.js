@@ -423,8 +423,7 @@ export function restoreBackup(db, inst, opts = {}) {
       if (isRunning(inst.id)) {
         job.step = 'Server stoppen';
         jlog(job, 'step', 'Server wird gestoppt');
-        await tell(inst, 'Server wird für eine Wiederherstellung gestoppt.');
-        await stopMc(db, inst.id, { log: opts.log });
+        await stopMc(db, inst.id, { log: opts.log, reason: 'restore' });
       }
       if (opts.safety !== false) {
         job.step = 'Sicherheits-Backup';

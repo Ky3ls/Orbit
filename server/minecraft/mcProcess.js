@@ -244,7 +244,42 @@ export function sendMc(inst, command) {
   try { fs.writeSync(fd, `${line}\n`); } finally { fs.closeSync(fd); }
 }
 
-export async function stopMc(db, id, { kill = false, log = () => {} } = {}) {
+/* ── Ankündigung im Spiel vor Neustart/Stopp ── */
+const NOTICE = {
+  restart: { title: 'Neustart', chat: 'Server startet neu', kick: 'Server startet neu – in 1–2 Minuten wieder da!' },
+  stop: { title: 'Server stoppt', chat: 'Server wird gestoppt', kick: 'Server wurde gestoppt – bis gleich!' },
+  restore: { title: 'Backup', chat: 'Ein Backup wird eingespielt – Server stoppt', kick: 'Backup wird eingespielt – Server ist gleich wieder da!' },
+};
+const raw = (o) => JSON.stringify(o);
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+/** Countdown im Chat (+ Titel, Actionbar, Ton) und danach alle mit eigener Nachricht trennen */
+async function announce(inst, kind, seconds = 10) {
+  const n = NOTICE[kind] || NOTICE.stop;
+  const s = r(inst.id);
+  const alive = () => s.pid && pidAlive(s.pid);
+  const send = (c) => { try { sendMc(inst, c); } catch { /* */ } };
+  if (!logPlayers(inst).length) return;
+  send(`tellraw @a ${raw(['', { text: '» ', color: 'dark_gray' }, { text: n.chat, color: 'gold', bold: true }, { text: ` in ${seconds} Sekunden.`, color: 'yellow' }, { text: ' Bring dich kurz in Sicherheit!', color: 'gray' }])}`);
+  send(`title @a times 5 40 10`);
+  send(`title @a subtitle ${raw({ text: `in ${seconds} Sekunden`, color: 'gray' })}`);
+  send(`title @a title ${raw({ text: n.title, color: 'gold', bold: true })}`);
+  send('execute as @a at @s run playsound minecraft:block.note_block.bell master @s ~ ~ ~ 1 1');
+  for (let i = seconds - 1; i >= 1; i -= 1) {
+    await sleep(1000);
+    if (!alive()) return;
+    const color = i <= 3 ? 'red' : i <= 5 ? 'gold' : 'yellow';
+    send(`tellraw @a ${raw(['', { text: '» ', color: 'dark_gray' }, { text: n.title, color: 'gray' }, { text: ` in ${i}…`, color, bold: i <= 3 }])}`);
+    send(`title @a actionbar ${raw({ text: `${n.title} in ${i}`, color, bold: true })}`);
+    send(`execute as @a at @s run playsound minecraft:block.note_block.hat master @s ~ ~ ~ 1 ${i <= 3 ? 1.6 : 1.2}`);
+  }
+  await sleep(1000);
+  if (!alive()) return;
+  send(`kick @a ${n.kick}`);
+  await sleep(400);
+}
+
+export async function stopMc(db, id, { kill = false, log = () => {}, reason = 'stop' } = {}) {
   const inst = getMcInstance(db, id);
   if (!inst) throw new Error('Instanz nicht gefunden.');
   const s = r(inst.id);
@@ -256,6 +291,7 @@ export async function stopMc(db, id, { kill = false, log = () => {} } = {}) {
   persist();
   const pid = s.pid;
   if (!kill) {
+    if (reason) await announce(inst, reason);
     try { sendMc(inst, 'stop'); } catch { /* */ }
     for (let i = 0; i < 120 && pidAlive(pid); i += 1) await new Promise((res) => setTimeout(res, 500));
   }
@@ -270,7 +306,7 @@ export async function stopMc(db, id, { kill = false, log = () => {} } = {}) {
 }
 
 export async function restartMc(db, id, log) {
-  await stopMc(db, id, { log });
+  await stopMc(db, id, { log, reason: 'restart' });
   await new Promise((res) => setTimeout(res, 1500));
   return startMc(db, id, log);
 }
