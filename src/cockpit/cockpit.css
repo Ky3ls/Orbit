@@ -188,32 +188,32 @@ a:hover .dash-link svg { transform: translateX(3px); }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 16px 18px 0;
-  border-radius: 18px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   transition: border-color 0.2s ease, transform 0.2s var(--ease), box-shadow 0.2s ease;
 }
 .kpi:hover { border-color: color-mix(in srgb, var(--kpi) 45%, transparent); transform: translateY(-2px); box-shadow: var(--shadow); }
 .kpi-top { display: flex; align-items: center; gap: 9px; }
 .kpi-ico {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 8px;
   display: grid;
   place-items: center;
   color: var(--kpi);
   background: color-mix(in srgb, var(--kpi) 14%, transparent);
 }
-.kpi-ico svg { width: 15px; height: 15px; }
+.kpi-ico svg { width: 13px; height: 13px; }
 .kpi-label { font-size: 12.5px; font-weight: 580; color: var(--muted); }
 .kpi-go { margin-left: auto; color: var(--faint); opacity: 0; transform: translateX(-4px); transition: all 0.2s var(--ease); }
 .kpi-go svg { width: 15px; height: 15px; }
 .kpi:hover .kpi-go { opacity: 1; transform: none; color: var(--kpi); }
-.kpi-value { display: flex; align-items: baseline; gap: 6px; margin-top: 8px; }
-.kpi-value strong { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+.kpi-value { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
+.kpi-value strong { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .kpi-value span { font-size: 14px; color: var(--muted); font-weight: 560; }
 .kpi-sub { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
-.kpi-meter { height: 4px; margin-top: 10px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.kpi-meter { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--line); overflow: hidden; }
 .kpi-meter i { display: block; height: 100%; border-radius: inherit; background: var(--kpi); transition: width 0.6s var(--ease); }
 .kpi-spark { margin: 8px -18px 0; }
 .spark { display: block; width: 100%; }
@@ -409,3 +409,17 @@ a:hover .dash-link svg { transform: translateX(3px); }
 .dash-hero-game { position: absolute; right: -18px; top: -18px; opacity: 0.09; pointer-events: none; transform: rotate(-12deg); }
 .dash-hero-game .gm { border: 0; background: transparent; }
 @media (max-width: 720px) { .dash-hero-game { display: none; } }
+
+/* ── Verbinden (Adresse + cfx.re) ── */
+.dash-addr, .dash-cfx, .dash-cfx-add { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--text-2); font-size: 12.5px; }
+.dash-addr svg, .dash-cfx svg, .dash-cfx-add svg { width: 13px; height: 13px; color: var(--muted); }
+.dash-addr:hover, .dash-cfx:hover { border-color: rgba(var(--accent-rgb), 0.5); }
+.dash-cfx { padding: 0 4px 0 10px; gap: 2px; }
+.dash-cfx a { display: inline-flex; align-items: center; gap: 7px; color: inherit; text-decoration: none; padding-right: 4px; }
+.dash-cfx a:hover { color: var(--accent-ink); }
+.dash-cfx button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; }
+.dash-cfx button:hover { background: var(--surface-3, var(--line)); }
+.dash-cfx-add { border-style: dashed; background: transparent; color: var(--muted); font-size: 12px; }
+.dash-cfx-add:hover { color: var(--accent-ink); border-color: rgba(var(--accent-rgb), 0.5); }
+.dash-cfx-edit { display: inline-flex; gap: 6px; align-items: center; }
+.dash-cfx-edit input { height: 28px; width: 190px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; }

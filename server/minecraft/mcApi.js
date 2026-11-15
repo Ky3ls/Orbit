@@ -14,13 +14,14 @@ import { archiveEntries, backupDir, backupOverview, createBackup, deleteBackup, 
 import { analyzeServer, getImportJob, importServer, scanServers } from './mcImport.js';
 import { editInventory, listPlayers, playerAction, playerDetail } from './mcPlayers.js';
 import { checkHost, externalCheck, publicHost, setPublicHost } from './mcNet.js';
+import { initMcSchedule, nextRestart, parseTimes } from './mcSchedule.js';
 import { closeConsole, consoleSnapshot, subscribeConsole } from './mcConsole.js';
 import { chownForRun, initMinecraft, isRunning, mcStatus, readConsole, restartMc, runningRamMb, sendMc, startMc, stopMc } from './mcProcess.js';
 import { PROPERTY_SCHEMA, readProperties, writeProperties } from './mcProperties.js';
 import { hostMemory, suggestRam } from './mcRam.js';
 import { MC_TYPES, listVersions, requiredJava } from './mcSources.js';
 
-export { ensureMcTables, initMinecraft, initMcBackups, ensureBackupTable };
+export { ensureMcTables, initMinecraft, initMcBackups, ensureBackupTable, initMcSchedule };
 
 function publicInstance(inst, host = '', db = null) {
   const domain = db ? gameDomain(db, `minecraft:${inst.id}`) : null;
@@ -45,6 +46,8 @@ function publicInstance(inst, host = '', db = null) {
     launchMode: launch.mode || null,
     autostart: !!inst.autostart,
     autoRestart: !!inst.auto_restart,
+    restartTimes: parseTimes(inst.restart_times),
+    nextRestart: nextRestart(inst),
     state: inst.state,
     created: inst.created,
     modKind: modKind(inst)?.noun || null,
@@ -251,6 +254,11 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       if (body.ramMb !== undefined) patch.ram_mb = Math.max(1024, Math.min(65536, Math.round(Number(body.ramMb) / 256) * 256));
       if (body.autostart !== undefined) patch.autostart = body.autostart ? 1 : 0;
       if (body.autoRestart !== undefined) patch.auto_restart = body.autoRestart ? 1 : 0;
+      if (body.restartTimes !== undefined) {
+        // Zeitplan gehört zur Server-Steuerung
+        if (!can('mc.control')) return deny() || true;
+        patch.restart_times = parseTimes(body.restartTimes).join(',');
+      }
       if (body.port !== undefined && Number(body.port) !== inst.port) {
         if (isRunning(inst.id)) throw new Error('Port nur bei gestopptem Server änderbar.');
         const chk = await isPortAvailable(db, Number(body.port), inst.id);

@@ -37,6 +37,7 @@ import {
 } from './bootstrapPin.js';
 import { ORIGIN, PORT, HOST, DATA_DIR, ORBIT_SERVERS_ROOT, CFG_PATH, FX_SERVER_ROOT } from './config.js';
 import { audit, auditLogger, auditSystem, getDb, setSetting, settingMap } from './db.js';
+import { publicHost as mcPublicHost } from './minecraft/mcNet.js';
 import { getUserPrefs, setUserPrefs } from './userPrefs.js';
 import { controlFx, fxProcessActive, FX_UNIT } from './control.js';
 import { fxConsoleReady } from './fxCommand.js';
@@ -96,7 +97,7 @@ import {
 import { runRecipeInstall } from './recipeInstall.js';
 import { runRecipeYaml } from './recipeRunner.js';
 import { fetchRecommendedBuild, installArtifact } from './artifacts.js';
-import { ensureBackupTable, ensureMcTables, handleMinecraftApi, initMcBackups, initMinecraft } from './minecraft/mcApi.js';
+import { ensureBackupTable, ensureMcTables, handleMinecraftApi, initMcBackups, initMcSchedule, initMinecraft } from './minecraft/mcApi.js';
 import { ensureHostTables, handleHostApi, initHostStats } from './host/hostApi.js';
 import { auditQuery } from './auditQuery.js';
 import { handlePlatformApi, initPlatform } from './platformApi.js';
@@ -677,6 +678,18 @@ function syncCfgSecrets(parsed) {
   const extra = parseCfgIntegrations(parsed.raw || '');
   if (extra.rconPassword) setSetting(db, 'rconPassword', extra.rconPassword);
   if (extra.mysqlDsn) setSetting(db, 'mysqlDsn', extra.mysqlDsn);
+}
+
+/** Verbindungsdaten für den FiveM-Kopfbereich: öffentliche Adresse + cfx.re-Join-Link */
+function fxConnectInfo(req) {
+  const settings = settingMap(db);
+  const srv = getActiveOrbitServer(db);
+  const port = Number(srv?.port) || 30120;
+  let host = '';
+  try { host = mcPublicHost(db) || ''; } catch { /* */ }
+  if (!host) host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(':')[0];
+  const code = String(settings.fxCfxJoin || runtime.cfxJoin || '').trim() || null;
+  return { address: host ? `${host}:${port}` : null, cfx: code, cfxManual: !!settings.fxCfxJoin };
 }
 
 function nextRestartInfo() {
@@ -1855,6 +1868,17 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (method === 'PUT' && pathname === '/api/server/cfx-join') {
+    if (!hasPerm(me, 'settings')) return json(res, 403, { error: 'Keine Berechtigung.' });
+    const body = await readBody(req);
+    const raw = String(body.code || '').trim();
+    const m = raw.match(/(?:cfx\.re\/join\/)?([a-z0-9]{4,8})$/i);
+    if (raw && !m) return json(res, 400, { error: 'Ungültiger Join-Link — z. B. cfx.re/join/abc123' });
+    setSetting(db, 'fxCfxJoin', raw ? m[1].toLowerCase() : '');
+    audit(db, me.username, 'settings', raw ? `cfx.re/join/${m[1].toLowerCase()}` : 'cfx.re-Join-Link entfernt', clientIp(req));
+    return json(res, 200, { connect: fxConnectInfo(req) });
+  }
+
   if (method === 'GET' && pathname === '/api/overview') {
     if (!hasPerm(me, 'overview')) return json(res, 403, { error: 'Keine Berechtigung.' });
     const settings = settingMap(db);
@@ -1877,6 +1901,7 @@ async function handleApi(req, res, url) {
       players: runtime.players,
       bans, warns, whitelist, resources, resourceCount, schedule, feed, queued,
       nextRestart: nextRestartInfo(),
+      connect: fxConnectInfo(req),
       allowlistEnabled: settings.allowlistEnabled === '1',
       discordBot: settings.discordEnabled === '1',
       stats: playerStats(),
@@ -3879,6 +3904,7 @@ const boot = (async () => {
       initHostStats(db);
       initMinecraft(db, logLine);
       initMcBackups(db, logLine);
+      initMcSchedule(db, logLine);
     } catch (err) {
       auditSystem(db, 'mc.init.fail', err.message);
     }

@@ -91,6 +91,9 @@ function isLiveConsoleNoise(text) {
 export function logLine(level, text, opts = {}) {
   runtime.consoleSeq += 1;
   const clean = stripAnsi(text).slice(0, 500);
+  // Join-Link des Servers merken, falls FXServer ihn ausgibt
+  const jm = clean.match(/cfx\.re\/join\/([a-z0-9]{4,8})\b/i);
+  if (jm) runtime.cfxJoin = jm[1].toLowerCase();
   const toConsole = opts.console !== false && !isLiveConsoleNoise(clean);
   if (toConsole) {
     runtime.console.push({

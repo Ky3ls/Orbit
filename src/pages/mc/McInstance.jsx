@@ -11,6 +11,7 @@ import McFiles from './McFiles.jsx';
 import McMods from './McMods.jsx';
 import McPlayers, { McPlayerPanel } from './McPlayers.jsx';
 import McWidgets from './McWidgets.jsx';
+import McRestartCard from './McRestartCard.jsx';
 import McSettings from './McSettings.jsx';
 import './mc.css';
 
@@ -377,6 +378,7 @@ export default function McInstance() {
   return (
     <Page className="mcx-page mci-page">
       {tab === 'console' && (<>
+      <div className="mci-top">
       <section className={`mci-hero card tone-${ph.tone}`}>
         <GameMark game="minecraft" color={tm.color} size={60} />
         <div className="mci-hero-main">
@@ -406,6 +408,8 @@ export default function McInstance() {
           )}
         </div>
       </section>
+      <McRestartCard key={inst.id} inst={inst} onSaved={setInst} />
+      </div>
 
       {inst.state === 'failed' && <div className="err">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}
 

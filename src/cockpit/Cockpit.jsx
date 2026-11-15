@@ -5,7 +5,8 @@ import { fmtBytes, fmtTime, fmtUptime } from '../format.js';
 import { fxModeShort } from '../fxMeta.js';
 import LiveConsole from '../components/LiveConsole.jsx';
 import ServerControls, { statusLabel, statusTone } from '../components/ServerControls.jsx';
-import Sparkline from '../components/Sparkline.jsx';
+import { toast } from '../components/toast.jsx';
+import { LABELS as AUDIT_LABELS } from '../pages/Audit.jsx';
 import { useNow } from '../components/Ui.jsx';
 import { useI18n } from '../i18n/I18nProvider.jsx';
 import GameMark from '../components/GameMark.jsx';
@@ -73,12 +74,51 @@ function Kpi({ icon, label, value, unit, sub, values, max, color, pct, to }) {
         <strong>{value}</strong>
         {unit ? <span>{unit}</span> : null}
       </div>
-      <div className="kpi-sub">{sub}</div>
+      {sub ? <div className="kpi-sub">{sub}</div> : null}
       {pct != null && (
         <div className="kpi-meter" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></div>
       )}
-      <div className="kpi-spark"><Sparkline values={values} max={max} color={color} height={52} /></div>
     </Link>
+  );
+}
+
+/** Adresse zum Verbinden + cfx.re-Join-Link (wie die Adresse bei Minecraft) */
+function ConnectChips({ connect, canEdit, onSaved }) {
+  const [edit, setEdit] = useState(false);
+  const [val, setVal] = useState('');
+  if (!connect) return null;
+  const copy = (text, label) => navigator.clipboard?.writeText(text).then(() => toast.ok(label, { text }));
+  async function save(e) {
+    e.preventDefault();
+    try {
+      const d = await api('/api/server/cfx-join', { method: 'PUT', body: { code: val } });
+      onSaved?.(d.connect);
+      setEdit(false);
+      toast.ok(val ? 'Join-Link gespeichert' : 'Join-Link entfernt');
+    } catch (err) { toast.err(err.message); }
+  }
+  return (
+    <>
+      {connect.address ? (
+        <button type="button" className="dash-addr" title="Befehl für die F8-Konsole kopieren" onClick={() => copy(`connect ${connect.address}`, 'Connect-Befehl kopiert')}>
+          <NavIcon name="globe" /><span className="mono">{connect.address}</span><NavIcon name="copy" />
+        </button>
+      ) : null}
+      {edit ? (
+        <form className="dash-cfx-edit" onSubmit={save}>
+          <input className="mono" autoFocus value={val} placeholder="cfx.re/join/abc123" onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setEdit(false); }} />
+          <button type="submit" className="btn btn-sm btn-primary">Speichern</button>
+        </form>
+      ) : connect.cfx ? (
+        <span className="dash-cfx">
+          <a href={`https://cfx.re/join/${connect.cfx}`} target="_blank" rel="noreferrer" title="Server in FiveM öffnen"><NavIcon name="external" /><span className="mono">cfx.re/join/{connect.cfx}</span></a>
+          <button type="button" title="Link kopieren" onClick={() => copy(`https://cfx.re/join/${connect.cfx}`, 'Join-Link kopiert')}><NavIcon name="copy" /></button>
+          {canEdit ? <button type="button" title="Ändern" onClick={() => { setVal(connect.cfx); setEdit(true); }}><NavIcon name="wrench" /></button> : null}
+        </span>
+      ) : canEdit ? (
+        <button type="button" className="dash-cfx-add" onClick={() => { setVal(''); setEdit(true); }}><NavIcon name="plus" />cfx.re-Link eintragen</button>
+      ) : null}
+    </>
   );
 }
 
@@ -171,6 +211,7 @@ export default function Cockpit() {
           {hostname && hostname !== serverName ? <p className="dash-host" title={hostname}>{hostname}</p> : null}
           <div className="dash-facts">
             <span className={`dash-status tone-${tone}`}><i />{statusLabel(status)}</span>
+            <ConnectChips connect={data?.connect} canEdit={canControl} onSaved={(c) => setData((d) => (d ? { ...d, connect: c } : d))} />
             {online && state?.onlineSince ? (
               <span className="dash-fact"><NavIcon name="clock" />{t('dash.uptime')} <b>{fmtUptime(state.onlineSince)}</b></span>
             ) : null}
@@ -337,7 +378,7 @@ export default function Cockpit() {
                 <li key={e.id} className={`tone-${m.tone}`}>
                   <span className="dash-feed-ico"><NavIcon name={m.icon} /></span>
                   <div className="dash-feed-body">
-                    <span><b>{e.user}</b> <code>{e.action}</code></span>
+                    <span><b>{e.user}</b> {AUDIT_LABELS[e.action] || e.action}</span>
                     {e.detail ? <small title={e.detail}>{e.detail}</small> : null}
                   </div>
                   <time title={fmtTime(e.created)}>{relTime(e.created, now.getTime(), locale)}</time>
