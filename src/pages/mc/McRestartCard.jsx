@@ -34,30 +34,30 @@ export default function McRestartCard({ inst, onSaved }) {
   }
 
   return (
-    <section className="mci-restart card">
-      <div className="mci-restart-ring" aria-hidden="true">
+    <section className="dash-restart mci-restart card">
+      <div className="dash-restart-ring" aria-hidden="true">
         <svg viewBox="0 0 100 100">
           <circle cx="50" cy="50" r="42" className="ring-track" />
           <circle cx="50" cy="50" r="42" className="ring-fill" style={{ strokeDasharray: `${pct * C} ${C}` }} />
         </svg>
         <NavIcon name="restart" />
       </div>
-      <div className="mci-restart-text">
-        <span className="mci-restart-label">Nächster Neustart</span>
+      <div className="dash-restart-text">
+        <span className="dash-card-label">Nächster Neustart</span>
         {left != null ? (
           <>
             <strong className="mono">{countdown(left)}</strong>
             <span className="muted">{next.hhmm} Uhr{times.length > 1 ? ` · ${times.length} Zeiten` : ''}</span>
           </>
-        ) : <strong className="mci-restart-none">Kein Neustart geplant</strong>}
-        <button type="button" className="mci-restart-edit" onClick={() => { setTimes(inst.restartTimes || []); setEdit((v) => !v); }}>
+        ) : <strong className="dash-restart-none">Kein Neustart geplant</strong>}
+        <button type="button" className="dash-link mci-restart-edit" onClick={() => { setTimes(inst.restartTimes || []); setEdit((v) => !v); }}>
           {edit ? 'Schließen' : left != null ? 'Zeiten ändern' : 'Neustart planen'} <NavIcon name="arrowRight" />
         </button>
       </div>
       {edit && (
         <div className="mci-restart-form">
           <div className="mci-restart-chips">
-            {times.length === 0 ? <span className="muted">Noch keine Zeit — täglich, Uhrzeit in deutscher Zeit.</span> : times.map((t) => (
+            {times.length === 0 ? <span className="muted">Noch keine Zeit — täglich, deutsche Uhrzeit.</span> : times.map((t) => (
               <span key={t} className="mci-restart-chip mono">{t}
                 <button type="button" title="Entfernen" disabled={busy} onClick={() => save(times.filter((x) => x !== t))}><NavIcon name="x" /></button>
               </span>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import '../../cockpit/cockpit.css';
 import { api } from '../../api.js';
 import GameMark from '../../components/GameMark.jsx';
 import { toast } from '../../components/toast.jsx';
@@ -25,6 +26,27 @@ const TABS = [
   { id: 'instance', label: 'Instanz', icon: 'gear' },
 ];
 const QUICK = ['list', 'save-all', 'time set day', 'weather clear', 'tps'];
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend';
+}
+
+/** Kachel wie in der FiveM-Übersicht */
+function Kpi({ icon, label, value, unit, sub, pct, to }) {
+  return (
+    <Link to={to} className="kpi card">
+      <div className="kpi-top">
+        <span className="kpi-ico"><NavIcon name={icon} /></span>
+        <span className="kpi-label">{label}</span>
+        <span className="kpi-go"><NavIcon name="arrowRight" /></span>
+      </div>
+      <div className="kpi-value"><strong>{value}</strong>{unit ? <span>{unit}</span> : null}</div>
+      {sub ? <div className="kpi-sub">{sub}</div> : null}
+      {pct != null && <div className="kpi-meter" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} /></div>}
+    </Link>
+  );
+}
 
 /* ── Konsole ── */
 function Console({ inst, onPlayers }) {
@@ -78,7 +100,7 @@ function Console({ inst, onPlayers }) {
   }
 
   return (
-    <section className="mci-console card">
+    <section className="mci-console dash-console card">
       <header>
         <span className={`lg-live${running ? '' : ' paused'}`}><i />{running ? 'Live' : 'Offline'}</span>
         <div className="mci-quick">
@@ -327,6 +349,7 @@ function InstanceSettings({ inst, onChange }) {
 
 export default function McInstance() {
   const { id, tab = 'console' } = useParams();
+  const { user } = useOutletContext() || {};
   const navigate = useNavigate();
   const [inst, setInst] = useState(null);
   const [err, setErr] = useState('');
@@ -377,74 +400,71 @@ export default function McInstance() {
 
   return (
     <Page className="mcx-page mci-page">
-      {tab === 'console' && (<>
-      <div className="mci-top">
-      <section className={`mci-hero card tone-${ph.tone}`}>
-        <GameMark game="minecraft" color={tm.color} size={60} />
-        <div className="mci-hero-main">
-          <div className="mci-hero-top">
-            <h1>{inst.name}</h1>
-            <span className={`mcx-state tone-${ph.tone}`}><i />{ph.label}</span>
-          </div>
-          <div className="mci-hero-facts">
-            <span className="tag" style={{ color: tm.color, borderColor: `${tm.color}66` }}>{tm.label}</span>
-            <span>Minecraft {inst.mcVersion}</span>
-            {inst.loaderVersion ? <span className="mono">{inst.type === 'paper' || inst.type === 'purpur' ? `Build ${inst.loaderVersion}` : `${TYPE_META[inst.type]?.label} ${inst.loaderVersion}`}</span> : null}
-            <button type="button" className="mci-addr" title="Adresse kopieren" onClick={() => navigator.clipboard?.writeText(addr).then(() => toast.ok('Adresse kopiert', { text: addr }))}>
-              <NavIcon name="globe" /><span className="mono">{addr}</span><NavIcon name="copy" />
-            </button>
-            {!inst.domain && <Link to={`/host/web?add=game&server=minecraft:${inst.id}`} className="mci-domain"><NavIcon name="plus" />Domain verbinden</Link>}
-          </div>
-        </div>
-        <div className="mci-hero-ctl">
-          {inst.state !== 'ready' ? null : st.pid ? (
-            <>
-              <button type="button" className="btn" disabled={!!busy} onClick={() => control('restart')}><NavIcon name="restart" />Neustart</button>
-              <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => control('stop')}><NavIcon name="stop" />{busy === 'stop' ? 'Stoppt…' : 'Stoppen'}</button>
-              {st.phase === 'stopping' || busy === 'stop' ? <button type="button" className="btn btn-ghost" onClick={() => control('kill')}>Erzwingen</button> : null}
-            </>
-          ) : (
-            <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => control('start')}><NavIcon name="play" />{busy === 'start' ? 'Startet…' : 'Starten'}</button>
-          )}
-        </div>
-      </section>
-      <McRestartCard key={inst.id} inst={inst} onSaved={setInst} />
-      </div>
-
-      {inst.state === 'failed' && <div className="err">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}
-
-      <div className="mci-kpis">
-        <div><span><NavIcon name="users" />Spieler</span><b>{st.pid ? (livePlayers ? livePlayers.length : st.players ?? 0) : '–'}<small> / {st.maxPlayers ?? '–'}</small></b></div>
-        <div><span><NavIcon name="cpu" />CPU</span><b>{st.pid ? `${st.cpu}%` : '–'}</b></div>
-        <div>
-          <span><NavIcon name="memory" />RAM</span>
-          <b>{st.pid ? fmtMb(st.rssMb) : '–'}<small> · Heap-Limit {fmtMb(inst.ramMb)}</small></b>
-          <i className="mci-meter"><em style={{ width: `${st.pid ? Math.min(100, (st.rssMb / (inst.ramMb * 1.35)) * 100) : 0}%` }} /></i>
-        </div>
-        <div><span><NavIcon name="clock" />Uptime</span><b>{st.startedAt ? fmtDur(Date.now() - st.startedAt) : '–'}</b></div>
-      </div>
-      </>)}
-      {tab !== 'console' && inst.state === 'failed' && <div className="err">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}
-
       {tab === 'console' && (
-        <div className="mci-overview">
+        <div className="dash mci-dash">
+          {/* ── Kopf: gleich aufgebaut wie bei FiveM ── */}
+          <section className={`dash-hero card tone-${ph.tone}`}>
+            <span className="dash-hero-game" aria-hidden="true"><GameMark game="minecraft" color={tm.color} size={120} /></span>
+            <div className="dash-hero-main">
+              <p className="dash-greet">{greeting()}, <b>{user?.username}</b></p>
+              <h1 className="dash-title">{inst.name}</h1>
+              <p className="dash-host">
+                {tm.label} · Minecraft {inst.mcVersion}
+                {inst.loaderVersion ? ` · ${inst.type === 'paper' || inst.type === 'purpur' ? `Build ${inst.loaderVersion}` : `${tm.label} ${inst.loaderVersion}`}` : ''}
+              </p>
+              <div className="dash-facts">
+                <span className="dash-status"><i />{ph.label}</span>
+                {st.startedAt ? <span className="dash-fact"><NavIcon name="clock" />Uptime <b>{fmtDur(Date.now() - st.startedAt)}</b></span> : null}
+                <button type="button" className="dash-addr" title="Adresse kopieren" onClick={() => navigator.clipboard?.writeText(addr).then(() => toast.ok('Adresse kopiert', { text: addr }))}>
+                  <NavIcon name="globe" /><span className="mono">{addr}</span><NavIcon name="copy" />
+                </button>
+                {!inst.domain && <Link to={`/host/web?add=game&server=minecraft:${inst.id}`} className="dash-cfx-add"><NavIcon name="plus" />Domain verbinden</Link>}
+              </div>
+            </div>
+            <div className="dash-hero-ctl mci-hero-ctl">
+              {inst.state !== 'ready' ? null : st.pid ? (
+                <>
+                  <button type="button" className="btn" disabled={!!busy} onClick={() => control('restart')}><NavIcon name="restart" />Neustart</button>
+                  <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => control('stop')}><NavIcon name="stop" />{busy === 'stop' ? 'Stoppt…' : 'Stoppen'}</button>
+                  {st.phase === 'stopping' || busy === 'stop' ? <button type="button" className="btn btn-ghost" onClick={() => control('kill')}>Erzwingen</button> : null}
+                </>
+              ) : (
+                <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => control('start')}><NavIcon name="play" />{busy === 'start' ? 'Startet…' : 'Starten'}</button>
+              )}
+            </div>
+          </section>
+          <McRestartCard key={inst.id} inst={inst} onSaved={setInst} />
+
+          {inst.state === 'failed' && <div className="err mci-span">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}
+
+          <div className="dash-kpis">
+            <Kpi icon="users" label="Spieler" value={st.pid ? (livePlayers ? livePlayers.length : st.players ?? 0) : '–'} unit={`/ ${st.maxPlayers ?? '–'}`} sub={st.version ? `Version ${st.version}` : null} pct={st.pid && st.maxPlayers ? ((livePlayers ? livePlayers.length : st.players || 0) / st.maxPlayers) * 100 : null} to={`/mc/${inst.id}/players`} />
+            <Kpi icon="cpu" label="CPU" value={st.pid ? st.cpu : '–'} unit={st.pid ? '%' : ''} sub={st.pid ? `PID ${st.pid}` : null} pct={st.pid ? Math.min(100, st.cpu / 4) : null} to="/" />
+            <Kpi icon="memory" label="RAM" value={st.pid ? fmtMb(st.rssMb) : '–'} sub={`Heap-Limit ${fmtMb(inst.ramMb)}`} pct={st.pid ? Math.min(100, (st.rssMb / (inst.ramMb * 1.35)) * 100) : null} to={`/mc/${inst.id}/instance`} />
+            <Kpi icon="clock" label="Uptime" value={st.startedAt ? fmtDur(Date.now() - st.startedAt) : '–'} sub={st.onlineAt ? `online seit ${new Date(st.onlineAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : null} to={`/mc/${inst.id}/backups`} />
+          </div>
+
           <Console inst={inst} onPlayers={setLivePlayers} />
-          <aside className="mci-players card">
+          <section className="dash-players card">
             {(() => {
-              const names = st.pid ? (livePlayers ? livePlayers.map((p) => p.name) : st.sample) : [];
+              const list = st.pid ? (livePlayers || (st.sample || []).map((n) => ({ name: n }))) : [];
               return (<>
-                <header><h3>Spieler online</h3><span className="dash-count">{names.length}</span></header>
+                <header className="dash-card-head">
+                  <div className="dash-card-title"><h2>Gerade online</h2><span className="dash-count">{list.length}</span></div>
+                  <Link to={`/mc/${inst.id}/players`} className="btn btn-sm btn-ghost">Alle<NavIcon name="arrowRight" /></Link>
+                </header>
                 {!st.pid ? (
-                  <div className="dash-empty"><NavIcon name="power" /><span>Server ist offline.</span></div>
-                ) : names.length === 0 ? (
+                  <div className="dash-empty"><NavIcon name="power" /><b>Server ist offline</b><span>Starte ihn, um Spieler zu sehen.</span></div>
+                ) : list.length === 0 ? (
                   <div className="dash-empty"><NavIcon name="users" /><span>{st.online ? 'Niemand online.' : 'Server startet…'}</span></div>
                 ) : (
-                  <ul>
-                    {names.map((n) => (
-                      <li key={n}>
-                        <button type="button" onClick={() => openPlayer(n)} title={`${n} öffnen`}>
-                          <span className="mci-av" aria-hidden="true">{n.slice(0, 1).toUpperCase()}</span>
-                          <span>{n}</span>
+                  <ul className="dash-plist">
+                    {list.map((p) => (
+                      <li key={p.name}>
+                        <button type="button" onClick={() => openPlayer(p.name)} title={`${p.name} öffnen`}>
+                          <span className="dash-pavatar">{p.name.slice(0, 1).toUpperCase()}</span>
+                          <span className="dash-pname">{p.name}</span>
+                          {p.since ? <span className="dash-pid">{fmtDur(Date.now() - p.since)}</span> : null}
                         </button>
                       </li>
                     ))}
@@ -452,11 +472,12 @@ export default function McInstance() {
                 )}
               </>);
             })()}
-            {st.version ? <footer><span>Version</span><b>{st.version}</b></footer> : null}
-          </aside>
+          </section>
+
+          <McWidgets inst={inst} onPlayer={setPanel} />
         </div>
       )}
-      {tab === 'console' && <McWidgets inst={inst} onPlayer={setPanel} />}
+      {tab !== 'console' && inst.state === 'failed' && <div className="err">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}
       {tab === 'console' && panel && <McPlayerPanel inst={inst} uuid={panel} online={(livePlayers || []).filter((p) => p.uuid)} onClose={() => setPanel(null)} />}
       {tab === 'players' && <McPlayers inst={inst} />}
       {tab === 'mods' && inst.modKind && <McMods inst={inst} noun={inst.modKind} onRestart={() => control('restart')} />}

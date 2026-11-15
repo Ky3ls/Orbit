@@ -604,21 +604,6 @@
 @media (max-width: 760px) { .mcw { grid-template-columns: 1fr; } .mcw-act { grid-column: auto; } }
 
 /* ── Kopf: Hero + Nächster Neustart (wie FiveM) ── */
-.mci-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 16px; align-items: stretch; }
-.mci-top > .mci-hero { min-width: 0; }
-.mci-restart { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 18px; padding: 18px 20px; border-radius: 18px; }
-.mci-restart-ring { position: relative; flex: 0 0 76px; width: 76px; height: 76px; display: grid; place-items: center; }
-.mci-restart-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
-.mci-restart-ring > svg:last-child { position: static; transform: none; width: 20px; height: 20px; color: var(--accent-ink); }
-.mci-restart .ring-track { fill: none; stroke: var(--line-2); stroke-width: 7; }
-.mci-restart .ring-fill { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; transition: stroke-dasharray 0.8s var(--ease); }
-.mci-restart-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.mci-restart-label { font-size: 12.5px; color: var(--muted); font-weight: 580; }
-.mci-restart-text strong { font-size: 24px; font-weight: 680; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.mci-restart-text .muted { font-size: 12.5px; }
-.mci-restart-none { font-size: 16px !important; font-family: var(--font); }
-.mci-restart-edit { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 12.5px; color: var(--accent-ink); }
-.mci-restart-edit svg { width: 13px; height: 13px; }
 .mci-restart-form { flex-basis: 100%; display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
 .mci-restart-chips { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12.5px; }
 .mci-restart-chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 4px 0 10px; border-radius: 7px; background: var(--surface-2); border: 1px solid var(--line-2); }
@@ -628,4 +613,15 @@
 .mci-restart-form form { display: flex; gap: 8px; }
 .mci-restart-form input[type=time] { height: 30px; padding: 0 10px; border-radius: 8px; }
 .mci-restart-form small { font-size: 11.5px; }
-@media (max-width: 1100px) { .mci-top { grid-template-columns: 1fr; } }
+
+/* ── Übersicht im FiveM-Raster ── */
+.mci-dash .mci-span { grid-column: span 12; }
+.mci-dash .mci-hero-ctl { display: flex; gap: 8px; align-items: center; }
+.mci-dash .mci-hero-ctl .btn { --btn-h: 40px; min-width: 96px; }
+.mci-dash .mci-hero-ctl .btn svg { width: 15px; height: 15px; }
+.mci-dash .dash-hero-game svg, .mci-dash .dash-hero-game img { width: 120px; height: 120px; }
+.mci-restart { flex-wrap: wrap; }
+.mci-restart-edit { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 12.5px; color: var(--accent-ink); font-weight: 560; }
+.mci-restart-edit svg { width: 14px; height: 14px; }
+.dash .mci-console.dash-console { height: clamp(460px, calc(100vh - 330px), 1100px); min-height: 360px; border-radius: 18px; }
+.mcw-kv-list li { grid-template-columns: minmax(0, 1fr) 0 auto; }

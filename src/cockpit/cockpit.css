@@ -221,8 +221,8 @@ a:hover .dash-link svg { transform: translateX(3px); }
 
 /* ── Konsole ── */
 .dash-console {
-  grid-column: span 8;
-  height: clamp(560px, calc(100vh - 200px), 1100px);
+  grid-column: span 9;
+  height: clamp(460px, calc(100vh - 330px), 1100px);
   min-height: 360px;
   resize: vertical;
   display: flex;
@@ -232,7 +232,7 @@ a:hover .dash-link svg { transform: translateX(3px); }
 .dash-console .live-console { flex: 1; border: 0; border-radius: 0; background: transparent; }
 
 /* ── Spieler ── */
-.dash-players { grid-column: span 4; height: clamp(560px, calc(100vh - 200px), 1100px); display: flex; flex-direction: column; overflow: hidden; }
+.dash-players { grid-column: span 3; height: clamp(460px, calc(100vh - 330px), 1100px); display: flex; flex-direction: column; overflow: hidden; }
 .dash-plist { list-style: none; margin: 0; padding: 0 8px 10px; overflow-y: auto; flex: 1; }
 .dash-plist button {
   width: 100%;
