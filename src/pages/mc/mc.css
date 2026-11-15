@@ -693,11 +693,13 @@
 .mci-search { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 9px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface-2); margin-left: auto; }
 .mci-search svg { width: 13px; height: 13px; color: var(--muted); flex: none; }
 .mci-search input { all: unset; width: 130px; font-size: 12.5px; color: var(--text); }
-.mci-search button { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; color: var(--muted); }
+.mci-search button { appearance: none; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; color: var(--muted); }
 .mci-search:focus-within { border-color: rgba(var(--accent-rgb), 0.55); }
 .mci-seg { display: inline-flex; padding: 2px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface-2); }
-.mci-seg button { height: 22px; padding: 0 9px; border-radius: 6px; font-size: 12px; color: var(--muted); }
-.mci-seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
+.mci-seg button { appearance: none; border: 0; background: transparent; font: inherit; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 12px; font-weight: 560; color: var(--muted); cursor: pointer; transition: color 0.15s, background 0.15s; }
+.mci-seg button:hover { color: var(--text); }
+.mci-seg button.on { background: rgba(var(--accent-rgb), 0.16); color: var(--accent-ink); }
+.mci-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mci-line mark { background: rgba(var(--accent-rgb), 0.35); color: inherit; border-radius: 2px; }
 .mci-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 12px 8px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 .mci-tabs span { padding: 1px 7px; border-radius: 5px; background: var(--surface-2); }
