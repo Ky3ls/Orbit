@@ -10,6 +10,7 @@ import McBackups from './McBackups.jsx';
 import McFiles from './McFiles.jsx';
 import McMods from './McMods.jsx';
 import McPlayers, { McPlayerPanel } from './McPlayers.jsx';
+import McWidgets from './McWidgets.jsx';
 import McSettings from './McSettings.jsx';
 import './mc.css';
 
@@ -451,6 +452,7 @@ export default function McInstance() {
           </aside>
         </div>
       )}
+      {tab === 'console' && <McWidgets inst={inst} onPlayer={setPanel} />}
       {tab === 'console' && panel && <McPlayerPanel inst={inst} uuid={panel} online={(livePlayers || []).filter((p) => p.uuid)} onClose={() => setPanel(null)} />}
       {tab === 'players' && <McPlayers inst={inst} />}
       {tab === 'mods' && inst.modKind && <McMods inst={inst} noun={inst.modKind} onRestart={() => control('restart')} />}

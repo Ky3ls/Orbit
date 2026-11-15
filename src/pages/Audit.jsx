@@ -28,7 +28,7 @@ const CATS = {
 };
 
 /* Verständliche Sätze statt Codes */
-const LABELS = {
+export const LABELS = {
   login: 'hat sich angemeldet', logout: 'hat sich abgemeldet', lockout: 'wurde nach Fehlversuchen gesperrt', 'master.create': 'hat das Inhaberkonto angelegt', 'cfx.claim': 'hat sein Cfx.re-Konto verknüpft',
   'server.start': 'hat den FiveM-Server gestartet', 'server.stop': 'hat den FiveM-Server gestoppt', 'server.restart': 'hat den FiveM-Server neu gestartet',
   'resource.start': 'hat eine Ressource gestartet', 'resource.stop': 'hat eine Ressource gestoppt', 'resource.restart': 'hat eine Ressource neu gestartet',

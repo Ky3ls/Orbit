@@ -1869,7 +1869,8 @@ async function handleApi(req, res, url) {
       .map((row) => ({ ...row, actual: resolveResourceActual(row, ctx) }));
     const resourceCount = db.prepare('SELECT COUNT(*) AS c FROM resources').get().c;
     const schedule = db.prepare('SELECT id, label, hhmm, enabled FROM schedule ORDER BY hhmm').all();
-    const feed = db.prepare('SELECT id, user, action, detail, created FROM audit ORDER BY id DESC LIMIT 8').all();
+    // Nur FiveM/Panel — Minecraft-Aktionen stehen in der Übersicht der jeweiligen MC-Instanz
+    const feed = db.prepare("SELECT id, user, action, detail, created FROM audit WHERE action NOT LIKE 'mc.%' ORDER BY id DESC LIMIT 8").all();
     const queued = db.prepare('SELECT COUNT(*) AS c FROM queue WHERE status = ?').get('queued').c;
     return json(res, 200, {
       state: snapshot(),

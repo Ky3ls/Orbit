@@ -298,6 +298,41 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       json(res, 200, { ok: true, status: mcStatus(getMcInstance(db, inst.id)) });
       return true;
     }
+    if (method === 'GET' && sub === '/overview') {
+      // Widgets der MC-Übersicht: Aktivität dieser Instanz, Backups, Spieler-Zahlen
+      const nm = inst.name;
+      const feed = db.prepare(`SELECT id, user, action, detail, created FROM audit
+        WHERE action LIKE 'mc.%' AND (detail = ? OR detail LIKE ? OR detail LIKE ?)
+        ORDER BY id DESC LIMIT 8`).all(nm, `${nm}:%`, `${nm} (%`);
+      const bo = backupOverview(db, inst);
+      const list = await listPlayers(inst);
+      const day = Date.now() - 86_400_000;
+      const ps = list.players;
+      json(res, 200, {
+        feed,
+        backups: {
+          count: bo.items.length,
+          totalSize: bo.totalSize,
+          last: bo.items.reduce((a, b) => (!a || b.created > a.created ? b : a), null),
+          next: bo.cfg?.enabled ? bo.next : null,
+          enabled: !!bo.cfg?.enabled,
+          free: bo.free,
+          job: bo.job ? { kind: bo.job.kind, progress: bo.job.progress, step: bo.job.step } : null,
+        },
+        players: {
+          known: ps.length,
+          active24: ps.filter((p) => p.lastSeen && p.lastSeen > day).length,
+          new24: ps.filter((p) => p.firstSeen && p.firstSeen > day).length,
+          ops: ps.filter((p) => p.op).length,
+          whitelisted: ps.filter((p) => p.whitelisted).length,
+          banned: ps.filter((p) => p.banned).length,
+          whitelist: list.whitelist,
+          top: [...ps].sort((a, b) => (b.playTicks || 0) - (a.playTicks || 0)).slice(0, 5)
+            .map((p) => ({ uuid: p.uuid, name: p.name, playTicks: p.playTicks || 0, online: p.online })),
+        },
+      });
+      return true;
+    }
     if (method === 'GET' && sub === '/console/stream') {
       // Live-Konsole per SSE: sofort die letzten Zeilen aus dem Speicher, danach jede neue Zeile
       res.writeHead(200, {
