@@ -35,6 +35,19 @@ export function nextRestart(inst) {
   return { at: at.getTime(), hhmm: best.hhmm };
 }
 
+/** Geplante Befehle: [{ at: 'HH:MM', cmd }] — max. 20, ohne führenden Slash */
+export function parseCmds(raw) {
+  let list = raw;
+  if (typeof raw === 'string') { try { list = JSON.parse(raw || '[]'); } catch { list = []; } }
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((x) => ({ at: String(x?.at || '').trim(), cmd: String(x?.cmd || '').replace(/[\r\n]/g, ' ').trim().replace(/^\//, '').slice(0, 300) }))
+    .filter((x) => HM_RE.test(x.at) && x.cmd)
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .slice(0, 20);
+}
+
+const firedCmd = new Set();
 const fired = new Map(); // id → Schlüssel der letzten Aktion
 const warn = (inst, text) => {
   const msg = JSON.stringify(['', { text: '» ', color: 'dark_gray' }, { text: 'Geplanter Neustart', color: 'gold', bold: true }, { text: ` ${text}`, color: 'yellow' }]);
@@ -46,9 +59,19 @@ export function initMcSchedule(db, log = () => {}) {
   clearInterval(timer);
   timer = setInterval(() => {
     for (const inst of listMcInstances(db)) {
-      const times = parseTimes(inst.restart_times);
-      if (!times.length || !isRunning(inst.id)) continue;
+      if (!isRunning(inst.id)) continue;
       const cur = berlinMinutes();
+      const day = new Date().toISOString().slice(0, 10);
+      for (const c of parseCmds(inst.scheduled_cmds)) {
+        const [h, m] = c.at.split(':').map(Number);
+        const key = `${inst.id} ${day} ${c.at} ${c.cmd}`;
+        if (h * 60 + m === cur && !firedCmd.has(key)) {
+          firedCmd.add(key);
+          if (firedCmd.size > 2000) firedCmd.clear();
+          try { sendMc(inst, c.cmd); log('info', `[MC:${inst.slug}] geplanter Befehl (${c.at}): ${c.cmd}`); } catch { /* */ }
+        }
+      }
+      const times = parseTimes(inst.restart_times);
       for (const t of times) {
         const [h, m] = t.split(':').map(Number);
         let left = h * 60 + m - cur;

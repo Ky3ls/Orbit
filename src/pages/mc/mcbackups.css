@@ -132,3 +132,5 @@
   .mcb-acts .btn { margin-right: auto; }
   .mcb-tile b { font-size: 17px; }
 }
+.mcb-guard { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-size: 13px; }
+.mcb-guard small { font-size: 12px; color: var(--muted); }

@@ -14,14 +14,16 @@ import { archiveEntries, backupDir, backupOverview, createBackup, deleteBackup, 
 import { analyzeServer, getImportJob, importServer, scanServers } from './mcImport.js';
 import { editInventory, listPlayers, playerAction, playerDetail } from './mcPlayers.js';
 import { checkHost, externalCheck, publicHost, setPublicHost } from './mcNet.js';
-import { initMcSchedule, nextRestart, parseTimes } from './mcSchedule.js';
+import { initMcSchedule, nextRestart, parseCmds, parseTimes } from './mcSchedule.js';
+import { dismissCrash, initMcMonitor, lastCrash, mcHistory, mcLag, playerHistory } from './mcMonitor.js';
+import { ALERT_KINDS, alertConfig, initMcAlerts, recentAlerts, setAlertConfig, testAlert } from './mcAlerts.js';
 import { closeConsole, consoleSnapshot, subscribeConsole } from './mcConsole.js';
 import { chownForRun, initMinecraft, isRunning, mcStatus, readConsole, restartMc, runningRamMb, sendMc, startMc, stopMc } from './mcProcess.js';
 import { PROPERTY_SCHEMA, readProperties, writeProperties } from './mcProperties.js';
 import { hostMemory, suggestRam } from './mcRam.js';
 import { MC_TYPES, listVersions, requiredJava } from './mcSources.js';
 
-export { ensureMcTables, initMinecraft, initMcBackups, ensureBackupTable, initMcSchedule };
+export { ensureMcTables, initMinecraft, initMcBackups, ensureBackupTable, initMcSchedule, initMcMonitor, initMcAlerts };
 
 function publicInstance(inst, host = '', db = null) {
   const domain = db ? gameDomain(db, `minecraft:${inst.id}`) : null;
@@ -47,12 +49,56 @@ function publicInstance(inst, host = '', db = null) {
     autostart: !!inst.autostart,
     autoRestart: !!inst.auto_restart,
     restartTimes: parseTimes(inst.restart_times),
+    scheduledCmds: parseCmds(inst.scheduled_cmds),
     nextRestart: nextRestart(inst),
     state: inst.state,
     created: inst.created,
     modKind: modKind(inst)?.noun || null,
     status: mcStatus(inst),
   };
+}
+
+/* ── Mod-Updates gesammelt (Modrinth, 6 h zwischengespeichert) ── */
+const modCache = new Map(); // id → { at, updates, error }
+const modJobs = new Map(); // id → { running, step, done, total, results, error, at }
+async function modSummary(inst, refresh = false) {
+  const kind = modKind(inst);
+  if (!kind) return { supported: false, count: 0, updates: {}, job: modJobs.get(inst.id) || null };
+  let c = modCache.get(inst.id);
+  if (refresh || !c || Date.now() - c.at > 6 * 3_600_000) {
+    try { c = { at: Date.now(), updates: await checkUpdates(inst), error: null }; } catch (e) { c = { at: Date.now(), updates: {}, error: e.message }; }
+    modCache.set(inst.id, c);
+  }
+  return { supported: true, noun: kind.noun, count: Object.keys(c.updates).length, updates: c.updates, checkedAt: c.at, error: c.error, job: modJobs.get(inst.id) || null };
+}
+function updateAll(db, inst, user, ip) {
+  const cur = modJobs.get(inst.id);
+  if (cur?.running) return cur;
+  const job = { running: true, step: 'Backup vorher (ohne Welten)', done: 0, total: 0, results: [], error: null, at: Date.now() };
+  modJobs.set(inst.id, job);
+  (async () => {
+    try {
+      const sum = await modSummary(inst, true);
+      const list = Object.entries(sum.updates);
+      job.total = list.length;
+      if (!list.length) { job.step = 'Alles aktuell'; return; }
+      const bj = createBackup(db, inst, { scope: 'config', auto: true, reason: 'pre-update', note: `Vor ${list.length} Mod-Updates`, by: user });
+      await bj.promise;
+      if (bj.error) throw new Error(`Backup fehlgeschlagen: ${bj.error}`);
+      for (const [file, u] of list) {
+        job.step = `Aktualisiere ${file}`;
+        try {
+          const added = await updateMod(inst, file, u.projectId, () => {});
+          job.results.push({ file, ok: true, added, version: u.version });
+        } catch (e) { job.results.push({ file, ok: false, error: e.message }); }
+        job.done += 1;
+      }
+      audit(db, user, 'mc.mod.update', `${inst.name}: ${job.results.filter((r) => r.ok).length} von ${list.length} Mods aktualisiert`, ip);
+      job.step = 'Fertig';
+      modCache.delete(inst.id);
+    } catch (e) { job.error = e.message; job.step = 'Abgebrochen'; } finally { job.running = false; job.restartNeeded = isRunning(inst.id); }
+  })();
+  return job;
 }
 
 /**
@@ -117,6 +163,25 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
     }
     if (method === 'GET' && pathname === '/api/mc/host') {
       json(res, 200, { ...hostMemory(), reservedMb: runningRamMb(db) });
+      return true;
+    }
+
+    /* ── Benachrichtigungen (alle MC-Server) ── */
+    if (pathname === '/api/mc/alerts') {
+      if (method === 'GET') { json(res, 200, { ...alertConfig(), labels: ALERT_KINDS, recent: recentAlerts() }); return true; }
+      if (method === 'PUT') {
+        if (!can('mc.settings') && !canCreate) return deny() || true;
+        const body = await readBody(req);
+        const cfg = setAlertConfig({ webhook: body.webhook, kinds: body.kinds });
+        audit(db, me.username, 'mc.alerts', cfg.webhook ? 'Discord-Webhook gesetzt' : 'Discord-Webhook entfernt', ip);
+        json(res, 200, { ...cfg, labels: ALERT_KINDS });
+        return true;
+      }
+    }
+    if (pathname === '/api/mc/alerts/test' && method === 'POST') {
+      if (!can('mc.settings') && !canCreate) return deny() || true;
+      await testAlert();
+      json(res, 200, { ok: true });
       return true;
     }
 
@@ -259,6 +324,10 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
         if (!can('mc.control')) return deny() || true;
         patch.restart_times = parseTimes(body.restartTimes).join(',');
       }
+      if (body.scheduledCmds !== undefined) {
+        if (!can('mc.control') || !can('mc.console')) return deny() || true;
+        patch.scheduled_cmds = JSON.stringify(parseCmds(body.scheduledCmds));
+      }
       if (body.port !== undefined && Number(body.port) !== inst.port) {
         if (isRunning(inst.id)) throw new Error('Port nur bei gestopptem Server änderbar.');
         const chk = await isPortAvailable(db, Number(body.port), inst.id);
@@ -304,6 +373,29 @@ export async function handleMinecraftApi({ req, res, url, method, pathname, me, 
       else throw new Error('Aktion muss start, stop, restart oder kill sein.');
       audit(db, me.username, `mc.${action}`, inst.name, ip);
       json(res, 200, { ok: true, status: mcStatus(getMcInstance(db, inst.id)) });
+      return true;
+    }
+    if (method === 'GET' && sub === '/monitor') {
+      json(res, 200, { lag: mcLag(inst), history: mcHistory(inst, 24), crash: lastCrash(inst), alerts: recentAlerts(inst.id).slice(0, 10) });
+      return true;
+    }
+    if (method === 'DELETE' && sub === '/crash') {
+      dismissCrash(inst);
+      json(res, 200, { ok: true });
+      return true;
+    }
+    if (method === 'GET' && sub === '/players/history') {
+      json(res, 200, playerHistory(inst, 7));
+      return true;
+    }
+    if (method === 'GET' && sub === '/mods/summary') {
+      json(res, 200, await modSummary(inst, url.searchParams.get('refresh') === '1'));
+      return true;
+    }
+    if (method === 'POST' && sub === '/mods/update-all') {
+      if (!can('mc.mods')) return deny() || true;
+      const job = updateAll(db, inst, me.username, ip);
+      json(res, 200, { job });
       return true;
     }
     if (method === 'GET' && sub === '/overview') {

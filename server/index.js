@@ -97,7 +97,7 @@ import {
 import { runRecipeInstall } from './recipeInstall.js';
 import { runRecipeYaml } from './recipeRunner.js';
 import { fetchRecommendedBuild, installArtifact } from './artifacts.js';
-import { ensureBackupTable, ensureMcTables, handleMinecraftApi, initMcBackups, initMcSchedule, initMinecraft } from './minecraft/mcApi.js';
+import { ensureBackupTable, ensureMcTables, handleMinecraftApi, initMcAlerts, initMcBackups, initMcMonitor, initMcSchedule, initMinecraft } from './minecraft/mcApi.js';
 import { ensureHostTables, handleHostApi, initHostStats } from './host/hostApi.js';
 import { auditQuery } from './auditQuery.js';
 import { handlePlatformApi, initPlatform } from './platformApi.js';
@@ -3902,9 +3902,11 @@ const boot = (async () => {
       ensureBackupTable(db);
       ensureHostTables(db);
       initHostStats(db);
+      initMcAlerts(db);
       initMinecraft(db, logLine);
       initMcBackups(db, logLine);
       initMcSchedule(db, logLine);
+      initMcMonitor(db);
     } catch (err) {
       auditSystem(db, 'mc.init.fail', err.message);
     }

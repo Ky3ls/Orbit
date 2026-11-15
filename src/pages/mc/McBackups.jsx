@@ -265,7 +265,7 @@ function JobCard({ job, onClose }) {
 function Schedule({ data, base, onSaved }) {
   const [form, setForm] = useState(data.cfg);
   const [saving, setSaving] = useState(false);
-  const keys = ['enabled', 'everyHours', 'at', 'scope', 'keep', 'onlyActive', 'announce'];
+  const keys = ['enabled', 'everyHours', 'at', 'scope', 'keep', 'maxAgeDays', 'maxTotalGb', 'minFreeGb', 'onlyActive', 'announce'];
   const dirty = keys.some((k) => form[k] !== data.cfg[k]);
   useEffect(() => { if (!dirty) setForm(data.cfg); }, [data.cfg]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -318,6 +318,33 @@ function Schedule({ data, base, onSaved }) {
               <div className="mcb-keep">
                 <input id="mcb-keep" type="number" min={1} max={100} className="input" value={form.keep} onChange={(e) => set('keep', Number(e.target.value))} />
                 <span className="muted">neueste automatische</span>
+              </div>
+            </div>
+          </div>
+          <div className="mcb-guard">
+            <b>Speicher-Wächter</b>
+            <small>Räumt alte automatische Backups auf, damit die Platte nicht vollläuft. 0 = aus.</small>
+          </div>
+          <div className="mcb-grid">
+            <div className="mcb-field">
+              <label htmlFor="mcb-age">Löschen nach</label>
+              <div className="mcb-keep">
+                <input id="mcb-age" type="number" min={0} max={365} className="input" value={form.maxAgeDays ?? 0} onChange={(e) => set('maxAgeDays', Number(e.target.value))} />
+                <span className="muted">Tagen</span>
+              </div>
+            </div>
+            <div className="mcb-field">
+              <label htmlFor="mcb-total">Höchstens</label>
+              <div className="mcb-keep">
+                <input id="mcb-total" type="number" min={0} max={100000} className="input" value={form.maxTotalGb ?? 0} onChange={(e) => set('maxTotalGb', Number(e.target.value))} />
+                <span className="muted">GB insgesamt</span>
+              </div>
+            </div>
+            <div className="mcb-field">
+              <label htmlFor="mcb-free">Mindestens frei</label>
+              <div className="mcb-keep">
+                <input id="mcb-free" type="number" min={0} max={10000} className="input" value={form.minFreeGb ?? 10} onChange={(e) => set('minFreeGb', Number(e.target.value))} />
+                <span className="muted">GB lassen</span>
               </div>
             </div>
           </div>

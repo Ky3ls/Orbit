@@ -18,6 +18,7 @@ const JOIN_LOGIN = /^([A-Za-z0-9_]{1,16})\[\/([0-9a-fA-F:.]+):\d+\] logged in wi
 const JOIN_MSG = /^([A-Za-z0-9_]{1,16}) joined the game$/;
 const LEAVE = /^([A-Za-z0-9_]{1,16}) (?:lost connection: |left the game$)/;
 const UUID_OF = /^UUID of player ([A-Za-z0-9_]{1,16}) is ([0-9a-fA-F-]{32,36})$/;
+const LAG = /^Can't keep up! Is the server overloaded\? Running (\d+)ms or (\d+) ticks behind/;
 const SERVER_DOWN = /^(?:Stopping server|Stopping the server|\[Orbit\] ─── (?:Start|Prozess beendet))/;
 
 export function lineLevel(t) {
@@ -43,6 +44,11 @@ class Tail {
     this.ips = new Map();
     this.watcher = null;
     this.pending = null;
+    /** erst nach dem ersten Einlesen sind Ereignisse „live“ (sonst Join/Lag aus altem Log) */
+    this.live = false;
+    this.mutes = [];
+    this.lag = [];
+    this.sessions = [];
     this.timer = setInterval(() => this.read(), 1000);
     this.timer.unref?.();
     this.read();
@@ -95,6 +101,7 @@ class Tail {
           const t = raw.replace(ANSI, '').replace(/\r$/, '');
           if (!t) continue;
           if (this.consume(t)) continue;
+          if (this.muted(t)) continue;
           if (this.track(t)) playersChanged = true;
           const line = { id: ++this.seq, t, level: lineLevel(t) };
           this.lines.push(line);
@@ -104,6 +111,12 @@ class Tail {
       }
     } catch { /* nächster Durchlauf */ } finally {
       if (fd != null) try { fs.closeSync(fd); } catch { /* */ }
+      this.live = true;
+    }
+    if (this.sessions.length) {
+      const ev = this.sessions;
+      this.sessions = [];
+      this.emit('session', { events: ev });
     }
     if (this.lines.length > RING) this.lines = this.lines.slice(-RING);
     if (fresh.length) this.emit('lines', { lines: fresh.length > RING ? fresh.slice(-RING) : fresh });
@@ -119,14 +132,31 @@ class Tail {
     return false;
   }
 
+  /** Zeilen einer internen Abfrage (z. B. TPS) für kurze Zeit ausblenden */
+  muted(t) {
+    if (!this.mutes.length) return false;
+    const now = Date.now();
+    this.mutes = this.mutes.filter((m) => m.until > now);
+    return this.mutes.some((m) => m.re.test(t));
+  }
+
   track(t) {
     if (SERVER_DOWN.test(t) || SERVER_DOWN.test(t.match(MSG)?.[1] || '')) {
       if (!this.online.size) return false;
+      if (this.live) for (const p of this.online.values()) this.sessions.push({ type: 'leave', name: p.name, uuid: this.uuids.get(p.name.toLowerCase()) || null, at: Date.now() });
       this.online.clear();
       return true;
     }
     const msg = t.match(MSG)?.[1];
     if (!msg) return false;
+    const lag = msg.match(LAG);
+    if (lag) {
+      if (this.live) {
+        this.lag.push({ at: Date.now(), ms: Number(lag[1]), ticks: Number(lag[2]) });
+        if (this.lag.length > 500) this.lag.splice(0, this.lag.length - 500);
+      }
+      return false;
+    }
     let m = msg.match(UUID_OF);
     if (m) { this.uuids.set(m[1].toLowerCase(), dash(m[2])); return false; }
     m = msg.match(JOIN_LOGIN) || msg.match(JOIN_MSG);
@@ -135,10 +165,14 @@ class Tail {
       if (m[2]) this.ips.set(k, m[2]);
       if (this.online.has(k)) return false;
       this.online.set(k, { name: m[1], since: Date.now() });
+      if (this.live) this.sessions.push({ type: 'join', name: m[1], uuid: this.uuids.get(k) || null, ip: this.ips.get(k) || null, at: Date.now() });
       return true;
     }
     m = msg.match(LEAVE);
-    if (m && this.online.delete(m[1].toLowerCase())) return true;
+    if (m && this.online.delete(m[1].toLowerCase())) {
+      if (this.live) this.sessions.push({ type: 'leave', name: m[1], uuid: this.uuids.get(m[1].toLowerCase()) || null, at: Date.now() });
+      return true;
+    }
     return false;
   }
 
@@ -238,4 +272,21 @@ export function awaitLine(inst, re, send, timeoutMs = 3000) {
 export function closeConsole(id) {
   tails.get(id)?.close();
   tails.delete(id);
+}
+
+/** Zeilen, die zu `re` passen, `ms` lang nicht in der Konsole zeigen (interne Abfragen) */
+export function muteLines(inst, re, ms = 3000) {
+  tail(inst).mutes.push({ re, until: Date.now() + ms });
+}
+
+/** „Can't keep up“-Meldungen seit `since` */
+export function lagEvents(inst, since = 0) {
+  return tail(inst).lag.filter((e) => e.at >= since);
+}
+
+/** Letzte Konsolenzeilen (für Absturzberichte) */
+export function recentLines(inst, n = 400) {
+  const t = tail(inst);
+  t.read();
+  return t.lines.slice(-n).map((l) => l.t);
 }

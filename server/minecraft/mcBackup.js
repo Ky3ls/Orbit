@@ -8,6 +8,7 @@ import { getMcInstance, listMcInstances } from './mcDb.js';
 import { chownForRun, isRunning, mcStatus, sendMc, startMc, stopMc } from './mcProcess.js';
 import { readProperties } from './mcProperties.js';
 import { awaitLine } from './mcConsole.js';
+import { mcAlert } from './mcAlerts.js';
 
 /*
  * Backups pro Minecraft-Instanz.
@@ -138,7 +139,7 @@ export function ensureBackupTable(db) {
   db.exec('CREATE TABLE IF NOT EXISTS mc_backup_cfg (instance_id INTEGER PRIMARY KEY, cfg TEXT NOT NULL)');
 }
 
-const DEFAULT_CFG = { enabled: false, everyHours: 24, at: '04:00', scope: 'full', keep: 7, onlyActive: false, announce: true, since: 0, lastActive: 0, lastSkip: 0 };
+const DEFAULT_CFG = { enabled: false, everyHours: 24, at: '04:00', scope: 'full', keep: 7, maxAgeDays: 0, maxTotalGb: 0, minFreeGb: 10, onlyActive: false, announce: true, since: 0, lastActive: 0, lastSkip: 0 };
 
 export function getBackupCfg(db, inst) {
   const row = db.prepare('SELECT cfg FROM mc_backup_cfg WHERE instance_id = ?').get(Number(inst.id));
@@ -173,6 +174,9 @@ export function setBackupCfg(db, inst, patch = {}) {
     next.scope = patch.scope;
   }
   if (patch.keep !== undefined) next.keep = Math.max(1, Math.min(100, Math.round(Number(patch.keep) || 7)));
+  if (patch.maxAgeDays !== undefined) next.maxAgeDays = Math.max(0, Math.min(365, Math.round(Number(patch.maxAgeDays) || 0)));
+  if (patch.maxTotalGb !== undefined) next.maxTotalGb = Math.max(0, Math.min(100_000, Math.round(Number(patch.maxTotalGb) || 0)));
+  if (patch.minFreeGb !== undefined) next.minFreeGb = Math.max(0, Math.min(10_000, Math.round(Number(patch.minFreeGb) || 0)));
   if (patch.onlyActive !== undefined) next.onlyActive = !!patch.onlyActive;
   if (patch.announce !== undefined) next.announce = !!patch.announce;
   saveCfg(db, inst, next);
@@ -303,10 +307,20 @@ export function createBackup(db, inst, opts = {}) {
       job.step = 'Größe berechnen';
       const total = await sizeOf(inst.path, entries);
       job.total = total;
-      const free = freeBytes(dir);
-      if (free != null && total && free < total * 0.8 + 1024 ** 3) {
-        throw new Error(`Zu wenig Speicher: bis zu ${(total / 1024 ** 3).toFixed(1)} GB nötig, ${(free / 1024 ** 3).toFixed(1)} GB frei.`);
+      // Speicher-Wächter: geschätzte Größe = letztes Backup gleichen Umfangs (sonst 80 % unkomprimiert)
+      const cfg = getBackupCfg(db, inst);
+      const prevSame = listBackups(inst).filter((b) => b.scope === scope).sort((a, b) => b.created - a.created)[0];
+      const need = (prevSame ? prevSame.size * 1.15 : total * 0.8) + (cfg.minFreeGb || 0) * 1024 ** 3 + 1024 ** 3;
+      let free = freeBytes(dir);
+      if (free != null && free < need) {
+        const freed = prune(inst, cfg, job, { needBytes: need - free });
+        if (freed) jlog(job, 'warn', `Platz geschaffen: ${(freed / 1024 ** 3).toFixed(1)} GB alte automatische Backups gelöscht.`);
+        free = freeBytes(dir);
       }
+      if (free != null && total && free < need - (cfg.minFreeGb || 0) * 1024 ** 3) {
+        throw new Error(`Zu wenig Speicher: etwa ${((need - (cfg.minFreeGb || 0) * 1024 ** 3) / 1024 ** 3).toFixed(1)} GB nötig, ${(free / 1024 ** 3).toFixed(1)} GB frei.`);
+      }
+      if (free != null && free < need) jlog(job, 'warn', `Wenig Platz: nach dem Backup bleiben weniger als ${cfg.minFreeGb} GB frei.`);
       jlog(job, 'info', `${entries.length} Einträge, ${(total / 1024 ** 2).toFixed(0)} MB unkomprimiert`);
       if (opts.announce && isRunning(inst.id)) await tell(inst, 'Backup startet — kurzer Ruckler möglich.');
       job.step = 'Welt speichern';
@@ -337,12 +351,13 @@ export function createBackup(db, inst, opts = {}) {
       jlog(job, 'ok', `Fertig: ${(size / 1024 ** 2).toFixed(1)} MB in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
       if (opts.announce && isRunning(inst.id)) await tell(inst, `Backup fertig (${(size / 1024 ** 2).toFixed(0)} MB).`);
       job.result = { file: name, size };
-      if (opts.auto && opts.reason === 'schedule') prune(inst, getBackupCfg(db, inst).keep, job);
+      if (opts.auto && opts.reason === 'schedule') prune(inst, getBackupCfg(db, inst), job);
       finish(job);
     } catch (e) {
       try { fs.rmSync(`${dest}.part`, { force: true }); } catch { /* */ }
       if (frozen) await thawWorld(inst);
       if (opts.announce && isRunning(inst.id)) await tell(inst, 'Backup fehlgeschlagen.');
+      mcAlert('backup', inst, 'Backup fehlgeschlagen', `${SCOPES[scope]}-Backup${opts.auto ? ' (automatisch)' : ''}: ${e.message || e}`, { minGapMs: 15 * 60_000 });
       finish(job, e);
     }
   })();
@@ -350,17 +365,53 @@ export function createBackup(db, inst, opts = {}) {
   return job;
 }
 
-/** Alte automatische Backups löschen (gesperrte bleiben) */
-function prune(inst, keep, job) {
-  const autos = listBackups(inst).filter((b) => b.auto && b.reason === 'schedule' && !b.locked);
-  for (const b of autos.slice(keep)) {
+/**
+ * Alte automatische Backups löschen (gesperrte und manuelle bleiben):
+ * mehr als `keep` · älter als `maxAgeDays` · Summe über `maxTotalGb` · und bei Platzmangel die ältesten.
+ * @returns {number} freigegebene Bytes
+ */
+function prune(inst, cfg, job, { needBytes = 0 } = {}) {
+  const all = listBackups(inst);
+  const autos = all.filter((b) => b.auto && !b.locked).sort((a, b) => b.created - a.created);
+  const sched = autos.filter((b) => b.reason === 'schedule');
+  const del = new Map();
+  for (const b of sched.slice(cfg.keep || 7)) del.set(b.file, `mehr als ${cfg.keep} Backups`);
+  if (cfg.maxAgeDays > 0) {
+    const cut = Date.now() - cfg.maxAgeDays * 86_400_000;
+    for (const b of autos) if (b.created < cut) del.set(b.file, `älter als ${cfg.maxAgeDays} Tage`);
+  }
+  // nie das neueste automatische Backup löschen
+  const newest = autos[0]?.file;
+  if (cfg.maxTotalGb > 0) {
+    let sum = all.reduce((a, b) => a + b.size, 0) - [...del.keys()].reduce((a, f) => a + (all.find((x) => x.file === f)?.size || 0), 0);
+    for (const b of [...autos].reverse()) {
+      if (sum <= cfg.maxTotalGb * 1024 ** 3) break;
+      if (del.has(b.file) || b.file === newest) continue;
+      del.set(b.file, `zusammen über ${cfg.maxTotalGb} GB`);
+      sum -= b.size;
+    }
+  }
+  if (needBytes > 0) {
+    let got = [...del.keys()].reduce((a, f) => a + (all.find((x) => x.file === f)?.size || 0), 0);
+    for (const b of [...autos].reverse()) {
+      if (got >= needBytes) break;
+      if (del.has(b.file) || b.file === newest) continue;
+      del.set(b.file, 'Platz für neues Backup');
+      got += b.size;
+    }
+  }
+  let freed = 0;
+  for (const [file, why] of del) {
     try {
-      const abs = path.join(backupDir(inst), b.file);
+      const abs = path.join(backupDir(inst), file);
+      const size = all.find((x) => x.file === file)?.size || 0;
       fs.rmSync(abs, { force: true });
       fs.rmSync(metaPath(abs), { force: true });
-      if (job) jlog(job, 'info', `Altes Backup entfernt: ${b.file}`);
+      freed += size;
+      if (job) jlog(job, 'info', `Altes Backup entfernt (${why}): ${file}`);
     } catch { /* */ }
   }
+  return freed;
 }
 
 /* ── Wiederherstellen ── */

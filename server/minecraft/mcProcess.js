@@ -207,6 +207,11 @@ export async function startMc(db, id, log = () => {}) {
   return { ok: true, pid: child.pid };
 }
 
+let exitHook = null;
+/** Wird bei jedem Prozessende aufgerufen (Absturzbericht, Benachrichtigung) */
+export function setMcExitHook(fn) { exitHook = fn; }
+const callExit = (inst, info) => { try { exitHook?.(inst, info); } catch { /* */ } };
+
 function onExit(db, id, code, signal, log) {
   const s = r(id);
   const inst = getMcInstance(db, id);
@@ -216,9 +221,11 @@ function onExit(db, id, code, signal, log) {
   s.ping = null;
   persist();
   if (!inst) return;
+  const startedAt = s.startedAt;
   appendLog(inst, `[Orbit] ─── Prozess beendet (${signal ? `Signal ${signal}` : `Code ${code}`}) ───`);
   if (s.manualStop) { s.manualStop = false; return; }
   const crashed = !(code === 0 && !signal);
+  callExit(inst, { code, signal, crashed, startedAt, loop: false });
   if (!crashed || !inst.auto_restart) return;
   const now = Date.now();
   s.crashes = s.crashes.filter((t) => now - t < CRASH_WINDOW_MS);
@@ -226,6 +233,7 @@ function onExit(db, id, code, signal, log) {
   if (s.crashes.length > MAX_CRASHES) {
     appendLog(inst, `[Orbit] Zu viele Abstürze in 10 Minuten — kein automatischer Neustart.`);
     log('warn', `[MC:${inst.slug}] Crash-Schleife — Auto-Restart pausiert`);
+    callExit(inst, { code, signal, crashed: true, startedAt, loop: true });
     s.phase = 'crashed';
     return;
   }

@@ -13,6 +13,7 @@ import McMods from './McMods.jsx';
 import McPlayers, { McPlayerPanel } from './McPlayers.jsx';
 import McWidgets from './McWidgets.jsx';
 import McRestartCard from './McRestartCard.jsx';
+import { CrashCard, HistoryCard, ModUpdateBanner, PlayerHistoryCard, lagTile, useMonitor } from './McMonitor.jsx';
 import McSettings from './McSettings.jsx';
 import './mc.css';
 
@@ -26,6 +27,25 @@ const TABS = [
   { id: 'instance', label: 'Instanz', icon: 'gear' },
 ];
 const QUICK = ['list', 'save-all', 'time set day', 'weather clear', 'tps'];
+const COMMANDS = ['advancement', 'ban', 'ban-ip', 'banlist', 'clear', 'difficulty', 'effect', 'enchant', 'execute', 'experience', 'fill', 'forceload', 'gamemode', 'gamerule', 'give', 'help', 'item', 'kick', 'kill', 'list', 'locate', 'loot', 'me', 'msg', 'op', 'deop', 'pardon', 'pardon-ip', 'particle', 'playsound', 'reload', 'save-all', 'save-off', 'save-on', 'say', 'scoreboard', 'seed', 'setblock', 'setworldspawn', 'spawnpoint', 'spreadplayers', 'stop', 'summon', 'tag', 'team', 'teleport', 'tell', 'tellraw', 'tick', 'time', 'title', 'tp', 'weather', 'whitelist', 'worldborder', 'xp', 'forge', 'tps', 'mspt', 'plugins', 'version'];
+const SELECTORS = ['@a', '@p', '@r', '@s', '@e'];
+const FILTERS = [{ id: 'all', label: 'Alle' }, { id: 'warn', label: 'Warnungen' }, { id: 'bad', label: 'Fehler' }];
+
+function Highlight({ text, q }) {
+  if (!q) return text;
+  const low = text.toLowerCase();
+  const out = [];
+  let i = 0;
+  let k = 0;
+  for (;;) {
+    const j = low.indexOf(q, i);
+    if (j < 0) break;
+    out.push(text.slice(i, j), <mark key={k += 1}>{text.slice(j, j + q.length)}</mark>);
+    i = j + q.length;
+  }
+  out.push(text.slice(i));
+  return out;
+}
 
 function greeting() {
   const h = new Date().getHours();
@@ -33,9 +53,9 @@ function greeting() {
 }
 
 /** Kachel wie in der FiveM-Übersicht */
-function Kpi({ icon, label, value, unit, sub, pct, to }) {
+function Kpi({ icon, label, value, unit, sub, pct, to, tone }) {
   return (
-    <Link to={to} className="kpi card">
+    <Link to={to} className="kpi card" style={tone ? { '--kpi': `var(--${tone === 'accent' ? 'accent' : tone})` } : undefined}>
       <div className="kpi-top">
         <span className="kpi-ico"><NavIcon name={icon} /></span>
         <span className="kpi-label">{label}</span>
@@ -56,6 +76,10 @@ function Console({ inst, onPlayers }) {
   const [hi, setHi] = useState(-1);
   const [follow, setFollow] = useState(true);
   const [live, setLive] = useState(false);
+  const [q, setQ] = useState('');
+  const [lvl, setLvl] = useState('all');
+  const [names, setNames] = useState([]);
+  const [tab, setTab] = useState(null); // { base, list, i }
   const box = useRef(null);
   const playersCb = useRef(onPlayers);
   playersCb.current = onPlayers;
@@ -71,13 +95,14 @@ function Console({ inst, onPlayers }) {
       setLive(true);
       setLines(d.lines || []);
       playersCb.current?.(d.players || []);
+      setNames((d.players || []).map((p) => p.name));
     });
     es.addEventListener('lines', (e) => {
       const d = parse(e);
       if (d?.lines?.length) setLines((prev) => (prev.length + d.lines.length > 1500 ? [...prev, ...d.lines].slice(-1500) : [...prev, ...d.lines]));
     });
     es.addEventListener('reset', () => setLines([]));
-    es.addEventListener('players', (e) => { const d = parse(e); if (d) playersCb.current?.(d.players || []); });
+    es.addEventListener('players', (e) => { const d = parse(e); if (d) { playersCb.current?.(d.players || []); setNames((d.players || []).map((p) => p.name)); } });
     es.onerror = () => setLive(false);
     return () => { es.close(); playersCb.current?.(null); };
   }, [inst.id]);
@@ -99,12 +124,44 @@ function Console({ inst, onPlayers }) {
     }
   }
 
+  const ql = q.trim().toLowerCase();
+  const shown = (ql || lvl !== 'all')
+    ? lines.filter((l) => (lvl === 'all' || (lvl === 'warn' ? l.level === 'warn' || l.level === 'bad' : l.level === 'bad')) && (!ql || l.t.toLowerCase().includes(ql)))
+    : lines;
+
+  /** Tab: Befehl bzw. Spielername vervollständigen, nochmal Tab = nächster Treffer */
+  function complete(e) {
+    e.preventDefault();
+    if (tab && tab.list.length > 1) {
+      const i = (tab.i + 1) % tab.list.length;
+      setTab({ ...tab, i });
+      setCmd(tab.base + tab.list[i]);
+      return;
+    }
+    const parts = cmd.split(' ');
+    const word = parts.pop();
+    const base = parts.length ? `${parts.join(' ')} ` : '';
+    const pool = parts.length ? [...names, ...SELECTORS] : COMMANDS;
+    const list = pool.filter((x) => x.toLowerCase().startsWith(word.toLowerCase())).sort();
+    if (!list.length) return;
+    setTab({ base, list, i: 0 });
+    setCmd(base + list[0] + (list.length === 1 ? ' ' : ''));
+  }
+
   return (
     <section className="mci-console dash-console card">
       <header>
         <span className={`lg-live${running ? '' : ' paused'}`}><i />{running ? 'Live' : 'Offline'}</span>
         <div className="mci-quick">
           {QUICK.map((q) => <button key={q} type="button" className="lc-chip" disabled={!running} onClick={() => send(q)}>{q}</button>)}
+        </div>
+        <div className="mci-search">
+          <NavIcon name="search" />
+          <input value={q} placeholder="Suchen…" onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setQ(''); }} />
+          {q ? <button type="button" title="Leeren" onClick={() => setQ('')}><NavIcon name="x" /></button> : null}
+        </div>
+        <div className="mci-seg" role="group" aria-label="Filter">
+          {FILTERS.map((f) => <button key={f.id} type="button" className={lvl === f.id ? 'on' : ''} onClick={() => setLvl(f.id)}>{f.label}</button>)}
         </div>
         <button type="button" className={`btn btn-sm${follow ? ' mci-on' : ''}`} onClick={() => setFollow((v) => !v)}>Auto-Scroll</button>
       </header>
@@ -118,9 +175,10 @@ function Console({ inst, onPlayers }) {
         }}
       >
         {lines.length === 0 ? <div className="lc-empty">{!live ? 'Verbinde…' : running ? 'Warte auf Ausgabe…' : 'Server ist offline. Starte ihn, um die Konsole zu sehen.'}</div> : null}
-        {lines.map((l, i) => (
+        {lines.length > 0 && shown.length === 0 ? <div className="lc-empty">Keine Zeile passt zu {ql ? `„${q}“` : 'dem Filter'}.</div> : null}
+        {shown.map((l, i) => (
           // eslint-disable-next-line react/no-array-index-key
-          <div key={l.id ?? i} className={`mci-line lvl-${l.level}`}>{l.t}</div>
+          <div key={l.id ?? i} className={`mci-line lvl-${l.level}`}><Highlight text={l.t} q={ql} /></div>
         ))}
       </div>
       <form className="lc-form" onSubmit={(e) => { e.preventDefault(); send(); }}>
@@ -128,9 +186,10 @@ function Console({ inst, onPlayers }) {
           className="mono"
           value={cmd}
           disabled={!running}
-          placeholder={running ? 'Befehl eingeben (ohne /) — ↑ für Verlauf' : 'Server ist offline'}
-          onChange={(e) => setCmd(e.target.value)}
+          placeholder={running ? 'Befehl eingeben (ohne /) — Tab ergänzt, ↑ für Verlauf' : 'Server ist offline'}
+          onChange={(e) => { setCmd(e.target.value); setTab(null); }}
           onKeyDown={(e) => {
+            if (e.key === 'Tab') { complete(e); return; }
             if (e.key === 'ArrowUp' && hist.length) { e.preventDefault(); const n = Math.min(hi + 1, hist.length - 1); setHi(n); setCmd(hist[n]); }
             if (e.key === 'ArrowDown' && hi >= 0) { e.preventDefault(); const n = hi - 1; setHi(n); setCmd(n < 0 ? '' : hist[n]); }
           }}
@@ -138,6 +197,9 @@ function Console({ inst, onPlayers }) {
           spellCheck={false}
         />
       </form>
+      {tab && tab.list.length > 1 ? (
+        <div className="mci-tabs">{tab.list.slice(0, 12).map((x, i) => <span key={x} className={i === tab.i ? 'on' : ''}>{x}</span>)}{tab.list.length > 12 ? <span>+{tab.list.length - 12}</span> : null}</div>
+      ) : null}
     </section>
   );
 }
@@ -230,6 +292,59 @@ function Reach({ inst }) {
 }
 
 /* ── Instanz-Einstellungen ── */
+/** Discord-Benachrichtigungen (gelten für alle Minecraft-Server) */
+function AlertSettings() {
+  const [cfg, setCfg] = useState(null);
+  const [hook, setHook] = useState('');
+  const [busy, setBusy] = useState('');
+  useEffect(() => {
+    api('/api/mc/alerts').then((d) => { setCfg(d); setHook(d.webhook || ''); }).catch(() => {});
+  }, []);
+  if (!cfg) return null;
+  async function save(body, msg) {
+    setBusy('save');
+    try {
+      const d = await api('/api/mc/alerts', { method: 'PUT', body });
+      setCfg((c) => ({ ...c, ...d }));
+      setHook(d.webhook || '');
+      if (msg) toast.ok(msg);
+    } catch (e) { toast.err(e.message); }
+    setBusy('');
+  }
+  async function test() {
+    setBusy('test');
+    try { await api('/api/mc/alerts/test', { method: 'POST' }); toast.ok('Testnachricht gesendet', { text: 'Schau in deinen Discord-Kanal.' }); } catch (e) { toast.err(e.message); }
+    setBusy('');
+  }
+  return (
+    <section className="sx-card">
+      <header className="sx-card-head"><div><h3>Discord-Benachrichtigungen</h3><p>Orbit meldet Probleme sofort in einen Discord-Kanal — für alle Minecraft-Server. Webhook anlegen: Kanal → Einstellungen → Integrationen → Webhooks.</p></div></header>
+      <div className="sx-card-body mci-alerts">
+        <div className="mci-alerts-row">
+          <input className="input mono" value={hook} placeholder="https://discord.com/api/webhooks/…" onChange={(e) => setHook(e.target.value)} />
+          <button type="button" className="btn btn-sm btn-primary" disabled={!!busy || hook === (cfg.webhook || '')} onClick={() => save({ webhook: hook }, hook ? 'Webhook gespeichert' : 'Webhook entfernt')}>Speichern</button>
+          <button type="button" className="btn btn-sm" disabled={!!busy || !cfg.webhook} onClick={test}>Test senden</button>
+        </div>
+        <div className="mci-alerts-kinds">
+          {Object.entries(cfg.labels || {}).map(([k, label]) => (
+            <label key={k} className="mci-alerts-kind">
+              <input type="checkbox" checked={cfg.kinds?.[k] !== false} disabled={!!busy} onChange={(e) => save({ kinds: { [k]: e.target.checked } })} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+        {cfg.recent?.length ? (
+          <ul className="mci-alerts-recent">
+            {cfg.recent.slice(0, 5).map((a) => (
+              <li key={`${a.at}-${a.kind}`}><b>{a.server ? `${a.server} · ` : ''}{a.title}</b><time>{new Date(a.at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</time></li>
+            ))}
+          </ul>
+        ) : <p className="muted mci-alerts-none">Noch keine Meldungen — alles ruhig.</p>}
+      </div>
+    </section>
+  );
+}
+
 function InstanceSettings({ inst, onChange }) {
   const navigate = useNavigate();
   const [ram, setRam] = useState(null);
@@ -270,6 +385,7 @@ function InstanceSettings({ inst, onChange }) {
   const max = Math.max(ram?.max || 16384, ramMb);
   return (
     <div className="sx-stack">
+      <AlertSettings />
       <section className="sx-card">
         <header className="sx-card-head"><div><h3>Arbeitsspeicher</h3><p>Orbit empfiehlt anhand von Typ, installierten {inst.modKind || 'Erweiterungen'}, Slots und Sichtweite.</p></div></header>
         <div className="sx-card-body mci-ram">
@@ -356,6 +472,7 @@ export default function McInstance() {
   const [busy, setBusy] = useState('');
   const [livePlayers, setLivePlayers] = useState(null);
   const [panel, setPanel] = useState(null);
+  const [mon, reloadMon] = useMonitor({ id });
 
   // Klick auf einen Online-Spieler: Profil direkt hier an der Seite öffnen
   async function openPlayer(name) {
@@ -435,13 +552,18 @@ export default function McInstance() {
           </section>
           <McRestartCard key={inst.id} inst={inst} onSaved={setInst} />
 
+          {mon?.crash ? <CrashCard inst={inst} crash={mon.crash} onDismiss={reloadMon} /> : null}
+          <ModUpdateBanner inst={inst} />
           {inst.state === 'failed' && <div className="err mci-span">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}
 
           <div className="dash-kpis">
             <Kpi icon="users" label="Spieler" value={st.pid ? (livePlayers ? livePlayers.length : st.players ?? 0) : '–'} unit={`/ ${st.maxPlayers ?? '–'}`} sub={st.version ? `Version ${st.version}` : null} pct={st.pid && st.maxPlayers ? ((livePlayers ? livePlayers.length : st.players || 0) / st.maxPlayers) * 100 : null} to={`/mc/${inst.id}/players`} />
             <Kpi icon="cpu" label="CPU" value={st.pid ? st.cpu : '–'} unit={st.pid ? '%' : ''} sub={st.pid ? `PID ${st.pid}` : null} pct={st.pid ? Math.min(100, st.cpu / 4) : null} to="/" />
             <Kpi icon="memory" label="RAM" value={st.pid ? fmtMb(st.rssMb) : '–'} sub={`Heap-Limit ${fmtMb(inst.ramMb)}`} pct={st.pid ? Math.min(100, (st.rssMb / (inst.ramMb * 1.35)) * 100) : null} to={`/mc/${inst.id}/instance`} />
-            <Kpi icon="clock" label="Uptime" value={st.startedAt ? fmtDur(Date.now() - st.startedAt) : '–'} sub={st.onlineAt ? `online seit ${new Date(st.onlineAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : null} to={`/mc/${inst.id}/backups`} />
+            {(() => {
+              const l = lagTile(mon?.lag, !!st.online);
+              return <Kpi icon="activity" label="Lag" value={l.value} unit={l.unit} sub={l.sub} pct={l.pct} tone={l.tone} to={`/mc/${inst.id}`} />;
+            })()}
           </div>
 
           <Console inst={inst} onPlayers={setLivePlayers} />
@@ -475,6 +597,8 @@ export default function McInstance() {
           </section>
 
           <McWidgets inst={inst} onPlayer={setPanel} />
+          <HistoryCard history={mon?.history} />
+          <PlayerHistoryCard inst={inst} onPlayer={setPanel} />
         </div>
       )}
       {tab !== 'console' && inst.state === 'failed' && <div className="err">Die Installation ist fehlgeschlagen. Lösche die Instanz unter „Instanz“ und lege sie neu an.</div>}

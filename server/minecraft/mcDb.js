@@ -26,6 +26,8 @@ export function ensureMcTables(db) {
   `);
   // geplante Neustarts „04:00,16:00“ (Europe/Berlin)
   try { db.exec('ALTER TABLE mc_instances ADD COLUMN restart_times TEXT'); } catch { /* existiert */ }
+  // geplante Befehle [{ at: 'HH:MM', cmd: 'say …' }]
+  try { db.exec('ALTER TABLE mc_instances ADD COLUMN scheduled_cmds TEXT'); } catch { /* existiert */ }
 }
 
 export const MC_ROOT = path.join(ORBIT_SERVERS_ROOT, 'minecraft');
@@ -74,7 +76,7 @@ export function insertMcInstance(db, row) {
 }
 
 export function updateMcInstance(db, id, patch) {
-  const allowed = ['name', 'loader_version', 'port', 'ram_mb', 'java_major', 'java_path', 'launch', 'autostart', 'auto_restart', 'state', 'restart_times'];
+  const allowed = ['name', 'loader_version', 'port', 'ram_mb', 'java_major', 'java_path', 'launch', 'autostart', 'auto_restart', 'state', 'restart_times', 'scheduled_cmds'];
   const keys = Object.keys(patch).filter((k) => allowed.includes(k));
   if (!keys.length) return getMcInstance(db, id);
   db.prepare(`UPDATE mc_instances SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`)
